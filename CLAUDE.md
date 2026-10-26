@@ -12,6 +12,7 @@ Read `PRD.md` and `ARCHITECTURE.md` first.
 2. **No payment processing** until explicitly scheduled (PRD Phase 3).
 3. **No invented business facts:** no real prices, artist names/bios, testimonials or statistics. Unknown prices are `null`.
 4. **Demo content is labelled.** Sample data lives only in `src/data/` with `isDemo: true` and a visible "نمونه" badge. Remove the banner/badges only when real data replaces it.
+   - **Real vs placeholder:** the only confirmed business facts are the brand name, slogan and Instagram account, kept in `src/lib/site.ts`. Real info uses plain styling (`InfoPanel`); anything unconfirmed uses `PlaceholderPanel`/`PlaceholderTag` (dashed border + "نمونه"). Unknown contact details stay `null` in `site.contact`; never invent phone numbers, addresses, prices, reviews, ratings, or shipping/return/guarantee promises.
 5. **Keep multi-vendor readiness:** new product/order code must carry `vendorId`; don't hard-code a single seller.
 6. **Static demo:** `output: "export"` is on. Do not add route handlers, middleware, server actions, dynamic APIs, `next/image` optimisation or DB access until the export is deliberately removed (see README "Static export limitations").
 7. Work on feature branches; open PRs; never push to the default branch directly.

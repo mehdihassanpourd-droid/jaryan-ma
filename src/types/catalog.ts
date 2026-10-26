@@ -1,8 +1,12 @@
 /** Colour tone used by the placeholder artwork (no real photography yet). */
 export type Tone = "ivory" | "sand" | "bark" | "olive";
 
+/** Abstract woven-art motif drawn by `ArtPlaceholder`. */
+export type Motif = "fringe" | "arch" | "diamond" | "stripes" | "waves" | "detail";
+
 export interface CatalogImage {
   tone: Tone;
+  motif: Motif;
   alt: string;
 }
 
@@ -11,6 +15,7 @@ export interface CatalogCategory {
   name: string;
   blurb: string;
   tone: Tone;
+  motif: Motif;
   /** True while the entry is sample content, not real catalogue data. */
   isDemo: boolean;
 }
