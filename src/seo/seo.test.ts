@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildCatalogSeo, imageAlt } from "./catalog-seo";
-import { seoSettings, resolveOrigin, type SeoSettings } from "./config";
+import { effectiveSettings, seoSettings, resolveOrigin, type SeoSettings } from "./config";
 import { breadcrumbJsonLd, categoryBreadcrumbJsonLd, productJsonLd, serializeJsonLd, siteJsonLd, tomanToRialString } from "./jsonld";
 import { buildRobots, buildSitemap } from "./sitemap";
 import { cleanText, truncate } from "./text";
@@ -281,6 +281,28 @@ describe("JSON-LD serialisation is safe inside a <script> tag", () => {
   });
 });
 
+describe("launching needs a real catalogue", () => {
+  it("the launch switch is ignored while only sample content is available", () => {
+    expect(effectiveSettings(LIVE, "demo")).toEqual({ origin: ORIGIN, indexing: false });
+    expect(effectiveSettings(LIVE, "snapshot")).toEqual(LIVE);
+    expect(effectiveSettings(CLOSED, "snapshot")).toEqual(CLOSED);
+  });
+
+  it("a sample-only catalogue stays fully closed even with the launch switch on", () => {
+    const sampleOnly = buildCatalogSeo(catalog([product({ slug: "demo-1", isDemo: true })], "demo"), LIVE, "جریان ما");
+    expect(sampleOnly.settings.indexing).toBe(false);
+    expect([...sampleOnly.products.values()].every((p) => !p.indexable)).toBe(true);
+    expect([...sampleOnly.categories.values()].every((c) => !c.indexable)).toBe(true);
+    expect(buildSitemap(sampleOnly)).toEqual([]);
+    expect(buildRobots(sampleOnly.settings.origin, sampleOnly.settings.indexing)).toEqual({ rules: { userAgent: "*", disallow: "/" } });
+  });
+
+  it("even a mislabelled sample-only catalogue cannot open the site (real products need source=snapshot)", () => {
+    const seo = buildCatalogSeo(catalog([product()], "demo"), LIVE, "جریان ما");
+    expect([...seo.products.values()].some((p) => p.indexable)).toBe(false);
+  });
+});
+
 describe("sitemap and robots", () => {
   it("lists the home page, categories with indexable products and every real product", () => {
     const products = [product(), product({ slug: "ماکرومه-قوسی", name: "ماکرومه قوسی", category: { slug: "ماکرومه", name: "ماکرومه" } })];
@@ -299,7 +321,7 @@ describe("sitemap and robots", () => {
   it("never lists sample content, unlaunched pages or invented dates", () => {
     const demo = product({ slug: "demo-1", isDemo: true, category: { slug: "d", name: "نمونه" } });
     expect(buildSitemap(build([demo])).map((e) => e.url)).toEqual([`${ORIGIN}/`]);
-    expect(buildSitemap(build([product()], CLOSED)).map((e) => e.url)).toEqual([`${ORIGIN}/`]);
+    expect(buildSitemap(build([product()], CLOSED))).toEqual([]); // closed: robots disallows everything, so no sitemap URLs
     for (const entry of buildSitemap(build())) {
       expect(entry).not.toHaveProperty("lastModified");
       expect(entry).not.toHaveProperty("priority");

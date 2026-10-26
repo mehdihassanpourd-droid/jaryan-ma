@@ -1,5 +1,5 @@
 import { formatNumber, formatToman } from "@/lib/format";
-import type { SeoSettings } from "./config";
+import { effectiveSettings, type SeoSettings } from "./config";
 import { cleanText, truncate } from "./text";
 import type { SeoCatalog, SeoImage, SeoProduct } from "./types";
 import { absoluteImageUrl, absoluteUrl, categoryPath, productPath } from "./urls";
@@ -117,7 +117,8 @@ function dedupe<T extends { slug: string }>(items: T[], get: (i: T) => string, s
   }
 }
 
-export function buildCatalogSeo(catalog: SeoCatalog, settings: SeoSettings, siteName: string): CatalogSeo {
+export function buildCatalogSeo(catalog: SeoCatalog, requested: SeoSettings, siteName: string): CatalogSeo {
+  const settings = effectiveSettings(requested, catalog.source);
   const products = new Map<string, ProductSeo>();
   const mutable = catalog.products.map((p) => {
     const total = p.images.length;

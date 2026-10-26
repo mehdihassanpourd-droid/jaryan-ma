@@ -3,7 +3,7 @@
 //   node scripts/seo/verify-build.mjs <out-dir> <origin> [--indexing]
 //
 // With --indexing the site is expected to be launched (robots allow, real products indexable); without it the
-// site must be fully closed. Sample ("demo") pages must never be indexable in either mode.
+// site must be fully closed (robots, noindex everywhere, empty sitemap). Sample ("demo") pages must never be indexable in either mode.
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -37,6 +37,7 @@ if (new Set(locs).size !== locs.length) fail("sitemap has duplicate URLs");
 if (locs.some((u) => !u.startsWith(`${origin}/`))) fail("sitemap has URLs outside the site origin");
 if (/<lastmod>|<priority>|<changefreq>/.test(sitemap)) fail("sitemap must not contain invented dates or priorities");
 if (locs.some((u) => /\/demo-/.test(u))) fail("sitemap lists sample content");
+if (!indexing && locs.length > 0) fail("a closed site must have an empty sitemap (robots.txt disallows everything)");
 
 // ---- pages
 const pages = [];

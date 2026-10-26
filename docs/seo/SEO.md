@@ -11,7 +11,7 @@ Status: **implemented and tested; closed to search engines until the owner launc
 | **Canonical URLs** | `<link rel="canonical">` on every page: absolute, percent-encoded, self-referencing (home, category, product). |
 | **Product JSON-LD** | `schema.org/Product` with name, description (only if the product has one), images, category, `sku` (single-variant products), and an `Offer` / `AggregateOffer` when a price is known. |
 | **Breadcrumbs** | Visible trail + `BreadcrumbList` JSON-LD: خانه › دسته › محصول. |
-| **Automatic XML sitemap** | `/sitemap.xml` generated at build time: home, categories that have indexable products, every real product. Sorted, no duplicates. |
+| **Automatic XML sitemap** | `/sitemap.xml` generated at build time: home, categories that have indexable products, every real product. Sorted, no duplicates. Empty while the site is closed (so it never contradicts `robots.txt`). |
 | **Image alt text** | The editor's alt text; if empty, `نام محصول (تصویر ۲ از ۳)`. Every `<img>` has alt (checked on the built HTML). |
 | **SEO-friendly Persian URLs** | `/products/دیوارکوب-بافته-پاییزی`, `/category/ماکرومه`. The backend already generates Persian slugs (`slugify`, `slugSchema` allows any letters/digits); URLs are percent-encoded in canonicals, sitemap and JSON-LD. |
 | **Indexable product pages** | Real products are `index, follow` once the site is launched; pages are plain pre-rendered HTML with all text, images and alt attributes in the source (no client rendering needed). |
@@ -36,7 +36,7 @@ The site is a static export, so SEO is generated when it is built:
 | `CATALOG_SNAPSHOT_DIR` | Same files on disk (tests, offline builds). |
 | *(neither)* | Built-in sample content (never indexable). This is today's production behaviour. |
 | `NEXT_PUBLIC_SITE_URL` | The public origin used for canonicals, sitemap and JSON-LD. **In production a missing or local address yields no canonical/sitemap URLs** instead of a guess. |
-| `SEO_ALLOW_INDEXING` | `true` = launched. Anything else keeps `robots.txt` at `Disallow: /`, every page `noindex`, and omits the sitemap reference. Requires a known origin. |
+| `SEO_ALLOW_INDEXING` | `true` = launched. Anything else keeps `robots.txt` at `Disallow: /`, every page `noindex`, and the sitemap empty. **Also requires a known origin and a real catalogue** (`CATALOG_SNAPSHOT_URL`/`_DIR`): with only the built-in sample content the switch is ignored, so a missing or mistyped catalogue variable can never open the site. |
 
 `robots.txt` is generated (`src/app/robots.ts`) and replaces the old static `public/robots.txt`; its default output is identical to the old one (`Disallow: /`).
 

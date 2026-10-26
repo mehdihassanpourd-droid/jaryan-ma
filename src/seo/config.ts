@@ -32,6 +32,15 @@ export interface SeoSettings {
   indexing: boolean;
 }
 
+/**
+ * Launching needs a REAL catalogue. With the launch switch on but only the built-in sample content available
+ * (the catalogue variable is missing or mistyped, or the workflow does not pass it), the site must stay closed:
+ * otherwise robots.txt would open up and a home page full of sample products would become indexable.
+ */
+export function effectiveSettings(settings: SeoSettings, source: "demo" | "snapshot"): SeoSettings {
+  return { origin: settings.origin, indexing: settings.indexing && source === "snapshot" };
+}
+
 export function seoSettings(env: SeoEnv = process.env): SeoSettings {
   const production = env.NODE_ENV === "production";
   const origin = resolveOrigin(env.NEXT_PUBLIC_SITE_URL, production);
