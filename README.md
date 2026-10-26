@@ -40,6 +40,7 @@ npm run db:studio
 | `npm run db:validate` | Validate Prisma schema |
 | `npm run db:generate` | Generate the Prisma client (runs automatically before test/typecheck/build) |
 | `npm run api:dev` / `api:build` / `api:start` | Admin API: dev server / bundle / run the bundle |
+| `npm run admin:build` / `admin:dev` / `admin:e2e` | Build the admin PWA into `dist/admin` (served at `/admin/` by the API server) / rebuild on change / browser tests against the real server (Chromium) |
 | `npm run admin -- <command>` | Administrator CLI (see docs/admin/SELF-HOSTING.md) |
 | `npm run ops -- <command>` | Operations CLI: health, security-check, backup, restore-test, backup-status, log-action (see docs/maintenance/MAINTENANCE.md) |
 | `npm run check` | lint + typecheck + test + schema validation |
@@ -109,6 +110,7 @@ A self-hostable admin API for managing hundreds or thousands of products from an
 - Design, decisions, security, costs, remaining questions: [docs/admin/ARCHITECTURE.md](docs/admin/ARCHITECTURE.md)
 - Running it on your own server: [docs/admin/SELF-HOSTING.md](docs/admin/SELF-HOSTING.md)
 - CSV import/export format: [docs/admin/CSV-FORMAT.md](docs/admin/CSV-FORMAT.md)
+- **Admin PWA** (mobile-first Persian RTL app for product management, installable, TOTP login, RBAC, camera/gallery uploads, SEO fields, CSV): [docs/admin/ADMIN-APP.md](docs/admin/ADMIN-APP.md) — served by the API server at `/admin/`, never deployed with the static site
 - Customer accounts (phone + SMS code, addresses, favourites, orders, export/deletion): [docs/customers/CUSTOMERS.md](docs/customers/CUSTOMERS.md) — **off in production until an SMS gateway is chosen; no paid service is active**
 - Customer support (tickets, notes, roles, abuse protection, Persian FAQ): [docs/support/SUPPORT.md](docs/support/SUPPORT.md)
 - Technical maintenance (health, incidents, security checks, error reports, encrypted backups with a verified restore test, free GitHub Actions monitoring): [docs/maintenance/MAINTENANCE.md](docs/maintenance/MAINTENANCE.md)

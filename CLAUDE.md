@@ -6,6 +6,7 @@ Read `PRD.md` and `ARCHITECTURE.md` first.
 - `npm run dev` — dev server · `npm run build` — production build
 - `npm run check` — lint + typecheck + tests + `prisma validate` (run before every commit)
 - `npm run db:generate` — regenerate Prisma client after schema edits (runs automatically before test/typecheck/build)
+- `npm run admin:build` — build the admin PWA (`admin/` → `dist/admin`, served at `/admin/` by the API server) · `npm run admin:e2e` — Playwright browser tests against the real server (not part of `check`; CI job "Admin PWA")
 - `npm run ops -- health|security-check|backup|restore-test|backup-status` — operations CLI (see docs/maintenance/MAINTENANCE.md)
 - `npm run api:dev` — admin API with embedded PostgreSQL · `TEST_DATABASE_URL=postgresql://… npm test` — run tests on a real PostgreSQL
 
@@ -23,7 +24,8 @@ Read `PRD.md` and `ARCHITECTURE.md` first.
 10. **Backups are "operational" only after a successful restore test.** Never write code, docs or PR text that calls backups working because a job ran; the state comes from `assessBackups` (`src/domain/maintenance/backup.ts`).
 11. **Personal data is minimal and deletable.** New personal fields must be covered by data export (`gatherExport`) and by `anonymize`; never log phone numbers, codes, tokens, message text or request bodies; internal staff notes live in `SupportNote` and are never selected by customer-facing queries.
 12. **SEO is derived from verified data only.** Titles, descriptions, alt text and JSON-LD come from the published catalogue snapshot (`src/seo/`), never from invented text: no ratings, reviews, brand, dates or prices that are not in the data. Sample (`isDemo`) content is never indexable or described as real. Raw HTML injection is allowed only in `src/seo/JsonLd.tsx`. Keep `npm run seo:verify` passing when touching pages, metadata or the snapshot format.
-13. Work on feature branches; open PRs; never push to the default branch directly.
+13. **Admin PWA (`admin/`) is browser code that talks only to `/api/v1`.** No imports of `server/`, Prisma or `node:*`; no web storage, cookies from JS, inline styles, `innerHTML` or `eval` (strict CSP, enforced by `server/invariants.test.ts`); the service worker caches the app shell only, never API or media; no mock logins. UI hides what a role cannot do, but the server stays authoritative. Prices are parsed as text with BigInt-exact rules (`admin/src/lib/money.ts`). Docs: `docs/admin/ADMIN-APP.md`.
+14. Work on feature branches; open PRs; never push to the default branch directly.
 
 ## Code conventions
 - TypeScript strict; no `any`; prefer Server Components, add `"use client"` only for interactivity.
