@@ -1,6 +1,9 @@
 // Jaryan Ma (جریان ما) — data model.
 // Multi-vendor ready: every sellable thing and every order line belongs to a Vendor.
 // Today exactly one Vendor exists (the gallery itself, kind = PLATFORM).
+// NOTE: the product catalogue is proposed to move to Cloudflare D1 (docs/admin/ARCHITECTURE.md).
+// This schema stays the reference model until that decision is approved.
+//
 // Payments are intentionally NOT modelled yet (see PRD.md, "Out of scope").
 
 generator client {

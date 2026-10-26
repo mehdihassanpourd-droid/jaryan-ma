@@ -15,7 +15,9 @@ Read `PRD.md` and `ARCHITECTURE.md` first.
    - **Real vs placeholder:** the only confirmed business facts are the brand name, slogan and Instagram account, kept in `src/lib/site.ts`. Real info uses plain styling (`InfoPanel`); anything unconfirmed uses `PlaceholderPanel`/`PlaceholderTag` (dashed border + "نمونه"). Unknown contact details stay `null` in `site.contact`; never invent phone numbers, addresses, prices, reviews, ratings, or shipping/return/guarantee promises.
 5. **Keep multi-vendor readiness:** new product/order code must carry `vendorId`; don't hard-code a single seller.
 6. **Static demo:** `output: "export"` is on. Do not add route handlers, middleware, server actions, dynamic APIs, `next/image` optimisation or DB access until the export is deliberately removed (see README "Static export limitations").
-7. Work on feature branches; open PRs; never push to the default branch directly.
+7. **Admin code stays private.** `workers/admin-api` is never deployed by the Pages workflow, and no admin function, credential or database access may be added to the public site. Never create a root `functions/` directory (Wrangler would bundle it into the Pages deploy). Admin authentication is Cloudflare Access plus JWT verification; never add passwords, mock logins or "dev bypass" flags.
+8. **No paid or new cloud service** (D1, R2, Access, Workers Paid, Images…) is created or enabled without the owner's explicit approval.
+9. Work on feature branches; open PRs; never push to the default branch directly.
 
 ## Code conventions
 - TypeScript strict; no `any`; prefer Server Components, add `"use client"` only for interactivity.

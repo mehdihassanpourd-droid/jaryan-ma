@@ -11,6 +11,8 @@
 | Tests | Vitest | Unit tests colocated as `*.test.ts` |
 | Lint | ESLint 9 + `eslint-config-next` | |
 
+> **Admin/product management:** see [docs/admin/ARCHITECTURE.md](docs/admin/ARCHITECTURE.md). It proposes Cloudflare D1 + R2 behind an Access-protected admin Worker, with the static storefront reading published JSON snapshots. Until that is approved, the Prisma/PostgreSQL model below remains the reference schema.
+
 ## 2. Layout
 ```
 prisma/schema.prisma      data model (multi-vendor ready)
@@ -21,6 +23,8 @@ src/components/layout/    Header, Footer, MobileNav, DemoBanner
 src/components/product/   ProductCard, ProductGallery, ArtPlaceholder
 src/components/home/      homepage sections
 src/data/                 DEMO content only (demo-catalog.ts)
+src/domain/               shared, framework-free logic (product rules, CSV, queries, snapshots)
+workers/admin-api/        admin API Worker (not deployed; separate from the Pages site)
 src/lib/                  site config, formatting helpers
 src/types/                UI-facing types mirroring Prisma models
 ```

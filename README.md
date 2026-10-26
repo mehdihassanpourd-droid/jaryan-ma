@@ -99,6 +99,9 @@ While `output: "export"` is enabled, these Next.js features cannot be used (the 
 
 Planned features that will need a server runtime (a Cloudflare Workers/`@opennextjs/cloudflare` deployment or a Node host) — see [ARCHITECTURE.md](ARCHITECTURE.md): database-backed catalogue, phone/OTP login, cart and orders, admin panel, payments, and vendor dashboards. Remove `output: "export"` when starting Phase 1/2.
 
+## Admin & product management (foundation)
+The groundwork for managing hundreds or thousands of products from an Android phone is in place but **not deployed**: tested domain logic in `src/domain`, an admin API Worker in `workers/admin-api`, and the design in [docs/admin](docs/admin/ARCHITECTURE.md) (architecture and Cloudflare D1/R2 evaluation, costs, security, CSV format, approval-gated setup). It needs no cloud credentials to build or test, and it does not change the public site or the Pages deployment.
+
 ## Project structure
 See [ARCHITECTURE.md](ARCHITECTURE.md#2-layout).
 
