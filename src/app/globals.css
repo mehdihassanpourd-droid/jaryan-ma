@@ -1,0 +1,59 @@
+@import "tailwindcss";
+@import "@fontsource-variable/vazirmatn";
+
+/* Design tokens: warm ivory / beige / natural brown / muted olive. */
+@theme {
+  --font-sans: "Vazirmatn Variable", "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
+
+  --color-ivory-50: #fdfbf6;
+  --color-ivory-100: #f8f3e8;
+  --color-ivory-200: #f0e8d6;
+
+  --color-sand-100: #ebe0cb;
+  --color-sand-200: #ddcdb0;
+  --color-sand-300: #c9b48f;
+  --color-sand-400: #b39a72;
+
+  --color-bark-500: #8a6a4a;
+  --color-bark-600: #6f5239;
+  --color-bark-700: #55402d;
+  --color-bark-900: #2e2318;
+
+  --color-olive-100: #e4e6d3;
+  --color-olive-300: #a9b085;
+  --color-olive-500: #7a8456;
+  --color-olive-700: #566040;
+
+  --shadow-soft: 0 1px 2px rgb(46 35 24 / 0.05), 0 8px 24px -8px rgb(46 35 24 / 0.12);
+}
+
+@layer base {
+  html {
+    background-color: var(--color-ivory-50);
+    color: var(--color-bark-900);
+    scroll-behavior: smooth;
+  }
+  body {
+    font-family: var(--font-sans);
+    line-height: 1.9;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background-color: var(--color-olive-300);
+    color: var(--color-bark-900);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-olive-500);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    * {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+}
