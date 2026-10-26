@@ -1,0 +1,24 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# build / test output
+/build
+/coverage
+*.tsbuildinfo
+
+# env files (never commit secrets; .env.example is the template)
+.env
+.env.*
+!.env.example
+
+# generated
+/src/generated
+
+# misc
+.DS_Store
+npm-debug.log*
