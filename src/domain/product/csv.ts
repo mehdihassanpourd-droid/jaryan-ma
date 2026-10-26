@@ -26,6 +26,9 @@ export const PRODUCT_CSV_COLUMNS = [
   "variant_options",
   "variant_price_toman",
   "variant_inventory",
+  // Appended (not inserted) so CSV files written before these columns existed keep their column positions.
+  "seo_title",
+  "seo_description",
 ] as const;
 type Column = (typeof PRODUCT_CSV_COLUMNS)[number];
 
@@ -156,6 +159,8 @@ const PRODUCT_LEVEL: Column[] = [
   "lead_time_days",
   "image_keys",
   "image_alts",
+  "seo_title",
+  "seo_description",
 ];
 
 /** Parses and validates a product CSV. Never throws; problems are reported as issues. */
@@ -287,6 +292,9 @@ export function parseProductCsv(
       name: f.name,
       description: f.description,
       categoryId,
+      // Optional columns: absent = leave the stored value alone; present but empty = clear it.
+      seoTitle: seenColumns.has("seo_title") ? f.seo_title : undefined,
+      seoDescription: seenColumns.has("seo_description") ? f.seo_description : undefined,
       status: f.status === "" ? "draft" : f.status,
       fulfillment: f.fulfillment,
       ...numbers,
@@ -321,6 +329,8 @@ export function productsToCsvRows(
       lead_time_days: num(p.leadTimeDays),
       image_keys: sortedImages.map((i) => i.key).join("|"),
       image_alts: sortedImages.map((i) => protectCell(i.alt)).join("|"),
+      seo_title: protectCell(p.seoTitle ?? ""),
+      seo_description: protectCell(p.seoDescription ?? ""),
     };
     const variants = [...p.variants].sort((a, b) => a.position - b.position);
     const lines = variants.length > 0 ? variants : [null];

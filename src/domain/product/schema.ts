@@ -68,10 +68,25 @@ export const variantInputSchema = z.object({
   inventory: stock.nullable().default(null),
 });
 
+/** Optional SEO text: blank clears the override (null); `undefined` means "leave as it is" on updates. */
+export const SEO_TITLE_MAX = 70;
+export const SEO_DESCRIPTION_MAX = 160;
+const seoText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform(fixPersianLetters)
+    .transform((v) => (v === "" ? null : v))
+    .nullable()
+    .optional();
+
 const baseProductSchema = z.object({
   slug: slugSchema.optional(),
   name: text(120, 2),
   description: text(5000).default(""),
+  seoTitle: seoText(SEO_TITLE_MAX),
+  seoDescription: seoText(SEO_DESCRIPTION_MAX),
   categoryId: z.string().min(1).max(64).nullable().default(null),
   status: z.enum(PRODUCT_STATUSES).default("draft"),
   fulfillment: z.enum(FULFILLMENTS),

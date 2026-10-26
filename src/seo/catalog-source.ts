@@ -67,6 +67,9 @@ const publicProductSchema = z.object({
   slug,
   name: z.string().trim().min(1).max(200),
   description: z.string().max(10_000),
+  // Older snapshot files predate these fields: absent = generated automatically.
+  seoTitle: z.string().max(200).nullish().transform((v) => v ?? null),
+  seoDescription: z.string().max(400).nullish().transform((v) => v ?? null),
   category: z.object({ slug, name: z.string().trim().min(1).max(200) }).nullable(),
   fulfillment: z.enum(["unique", "stocked", "made_to_order"]),
   priceToman: toman,
@@ -153,6 +156,8 @@ export function demoSeoCatalog(): SeoCatalog {
       slug: p.slug,
       name: p.title,
       description: "",
+      seoTitle: null,
+      seoDescription: null,
       category: { slug: p.categorySlug, name: categoryName.get(p.categorySlug) ?? p.categorySlug },
       fulfillment: p.isUnique ? "unique" : "stocked",
       priceToman: p.priceToman,

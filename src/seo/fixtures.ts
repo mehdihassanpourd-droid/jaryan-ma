@@ -6,6 +6,8 @@ export function product(over: Partial<SeoProduct> = {}): SeoProduct {
     slug: "دیوارکوب-بافته-پاییزی",
     name: "دیوارکوب بافته پاییزی",
     description: "",
+    seoTitle: null,
+    seoDescription: null,
     category: { slug: "دیوارکوب", name: "دیوارکوب" },
     fulfillment: "unique",
     priceToman: 4_500_000,

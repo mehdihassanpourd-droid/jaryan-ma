@@ -7,6 +7,8 @@ export function storedProduct(overrides: Partial<StoredProduct> = {}): StoredPro
     slug: "demo-wall-hanging",
     name: "دیوارکوب نمونه",
     description: "توضیح نمونه",
+    seoTitle: null,
+    seoDescription: null,
     categoryId: "c1",
     status: "published",
     fulfillment: "unique",

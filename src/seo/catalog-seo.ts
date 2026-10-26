@@ -85,6 +85,9 @@ function factsSentence(p: SeoProduct, siteName: string): string {
 }
 
 function baseTitle(p: SeoProduct): string {
+  // An editor-chosen title wins over the generated one (still cleaned and limited; uniqueness is enforced later).
+  const chosen = p.seoTitle ? cleanText(p.seoTitle) : "";
+  if (chosen) return truncate(chosen, TITLE_MAX);
   const name = cleanText(p.name);
   const category = p.category ? cleanText(p.category.name) : "";
   if (!category || name.includes(category)) return truncate(name, TITLE_MAX);
@@ -93,6 +96,8 @@ function baseTitle(p: SeoProduct): string {
 }
 
 function baseDescription(p: SeoProduct, siteName: string): string {
+  const chosen = p.seoDescription ? cleanText(p.seoDescription) : "";
+  if (chosen) return truncate(chosen, DESCRIPTION_MAX);
   const own = cleanText(p.description);
   const facts = factsSentence(p, siteName);
   if (own.length >= 80) return truncate(own, DESCRIPTION_MAX);

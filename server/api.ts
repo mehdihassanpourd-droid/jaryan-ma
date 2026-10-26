@@ -15,7 +15,7 @@ import {
 import { PRODUCT_STATUSES, type ProductStatus } from "../src/domain/product/types";
 import { AuthFailure, type AuthService } from "./auth/auth-service";
 import type { Authenticator, Principal } from "./auth/ports";
-import { can, type Action } from "./auth/rbac";
+import { ACTIONS, can, type Action } from "./auth/rbac";
 import { clearedSessionCookie, safeEqual, sessionCookie, type CookieSettings } from "./auth/session";
 import type { CatalogService } from "./catalog/service";
 import type { SnapshotPublisher, SyncOptions, SyncTarget } from "./catalog/snapshot-publisher";
@@ -51,6 +51,8 @@ export interface ApiDeps {
   sessionMaxAgeSeconds: number;
   /** Comma separated allow-list of origins for state-changing requests. Empty = all writes refused. */
   adminOrigins: string;
+  /** Public base URL of the media bucket; the admin UI builds image URLs from it. */
+  mediaBaseUrl?: string;
   importChunkMax: number;
   /** Runs work after the response is sent (snapshot publishing). Errors are logged, never thrown. */
   background: (task: Promise<unknown>) => void;
@@ -80,6 +82,13 @@ export function createApi(deps: ApiDeps) {
   const sync = (targets: SyncTarget[], options: SyncOptions = {}) =>
     deps.background(deps.publisher.sync(targets, options).catch((error) => log("snapshot_sync_failed", { error: error instanceof Error ? error.name : "unknown" })));
 
+  /** What the admin UI may know about the signed-in user: role plus the exact actions it may perform. */
+  const sessionView = (role: Principal["role"]) => ({
+    role,
+    permissions: ACTIONS.filter((action) => can(role, action)),
+    mediaBaseUrl: deps.mediaBaseUrl ?? "",
+  });
+
   async function login(request: Request): Promise<Response> {
     const body = loginSchema.safeParse(await readJson(request, MAX_JSON_BYTES));
     if (!body.success) return errorResponse("validation_failed", 422);
@@ -90,7 +99,7 @@ export function createApi(deps: ApiDeps) {
         userAgent: request.headers.get("user-agent"),
       });
       return json(
-        { email: result.account.email, role: result.account.role, csrfToken: result.csrfToken, expiresAt: result.expiresAt.toISOString() },
+        { email: result.account.email, ...sessionView(result.account.role), csrfToken: result.csrfToken, expiresAt: result.expiresAt.toISOString() },
         200,
         { "set-cookie": sessionCookie(deps.cookie, result.token, deps.sessionMaxAgeSeconds) },
       );
@@ -120,7 +129,7 @@ export function createApi(deps: ApiDeps) {
       const require = (action: Action) => (can(principal.role, action) ? null : errorResponse("forbidden", 403));
       const actor = principal.email;
 
-      if (path === "/auth/session" && method === "GET") return json({ email: principal.email, role: principal.role, csrfToken: principal.csrfToken });
+      if (path === "/auth/session" && method === "GET") return json({ email: principal.email, ...sessionView(principal.role), csrfToken: principal.csrfToken });
       if (path === "/auth/logout" && method === "POST") {
         await deps.auth.logout(principal);
         return json({ ok: true }, 200, { "set-cookie": clearedSessionCookie(deps.cookie) });

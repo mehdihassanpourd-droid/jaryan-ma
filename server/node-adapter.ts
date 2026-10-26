@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { CLIENT_IP_HEADER } from "./api";
+import type { AdminUiHandler } from "./admin-ui";
 import type { LocalDiskStorage } from "./storage/local-disk";
 
 export interface AdapterOptions {
@@ -8,6 +9,8 @@ export interface AdapterOptions {
   maxBodyBytes: number;
   /** Development only: serves stored files at /media/* when local disk storage is used. */
   media?: LocalDiskStorage;
+  /** Serves the built admin PWA under /admin/ (static files only). */
+  adminUi?: AdminUiHandler;
 }
 
 /** Real client address: the socket's, or (behind a trusted proxy) the last X-Forwarded-For entry. */
@@ -47,6 +50,14 @@ export function createNodeHandler(handle: (request: Request) => Promise<Response
         url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
       } catch {
         return send(res, 400, '{"error":"bad_request"}');
+      }
+
+      if (options.adminUi) {
+        const page = await options.adminUi(method, url.pathname);
+        if (page) {
+          res.writeHead(page.status, page.headers);
+          return void res.end(page.body ?? undefined);
+        }
       }
 
       if (options.media && method === "GET" && url.pathname.startsWith("/media/")) {
