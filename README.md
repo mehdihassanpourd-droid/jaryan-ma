@@ -112,6 +112,7 @@ A self-hostable admin API for managing hundreds or thousands of products from an
 - Customer accounts (phone + SMS code, addresses, favourites, orders, export/deletion): [docs/customers/CUSTOMERS.md](docs/customers/CUSTOMERS.md) — **off in production until an SMS gateway is chosen; no paid service is active**
 - Customer support (tickets, notes, roles, abuse protection, Persian FAQ): [docs/support/SUPPORT.md](docs/support/SUPPORT.md)
 - Technical maintenance (health, incidents, security checks, error reports, encrypted backups with a verified restore test, free GitHub Actions monitoring): [docs/maintenance/MAINTENANCE.md](docs/maintenance/MAINTENANCE.md)
+- Automated SEO (metadata, canonical URLs, Product/Breadcrumb JSON-LD, sitemap, Persian URLs; closed to search engines until launch): [docs/seo/SEO.md](docs/seo/SEO.md) — verify with `npm run seo:verify`
 - Prices are exact integer Toman up to 10¹⁵ (PostgreSQL `BIGINT`): [price model](docs/admin/ARCHITECTURE.md#price-model-bigint-reviewed)
 
 The server-side code (`server/`) is never part of the static site; `npm run check` includes tests that fail if storefront code imports it. To also run the server tests against a real PostgreSQL: `TEST_DATABASE_URL=postgresql://user:pw@127.0.0.1:5432/db npm test` (each test file gets its own throw-away schema).

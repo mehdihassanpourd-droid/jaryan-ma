@@ -1,0 +1,43 @@
+# Builds the static site against a catalogue created through the real backend (PostgreSQL via Prisma + snapshot
+# publisher, embedded database, no cloud service) in both modes (closed pre-launch, launched) and audits the exported
+# HTML: titles, descriptions, canonicals, JSON-LD, breadcrumbs, sitemap, robots, alt text, noindex on sample content.
+# It builds into the runner's own workspace only; it does not deploy anything.
+name: SEO
+
+on:
+  push:
+    branches: [main]
+    paths: ["src/**", "scripts/seo/**", "server/catalog/**", "server/storage/**", "next.config.ts", "package-lock.json", ".github/workflows/seo.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["src/**", "scripts/seo/**", "server/catalog/**", "server/storage/**", "next.config.ts", "package-lock.json", ".github/workflows/seo.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seo-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: SEO output
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and audit
+        run: npm run seo:verify

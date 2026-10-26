@@ -45,9 +45,11 @@ describe("the public storefront stays separate from the server", () => {
     expect(walk("src/app", (f) => /(route|middleware)\.(ts|js)$/.test(f))).toEqual([]);
   });
 
-  it("does not use dangerouslySetInnerHTML (user text is only ever rendered as text)", () => {
-    const offenders = walk("src", (f) => /\.(ts|tsx)$/.test(f)).filter((f) => read(f).includes("dangerouslySetInnerHTML"));
-    expect(offenders).toEqual([]);
+  it("injects raw markup in exactly one audited place (JSON-LD), which escapes its payload", () => {
+    const users = walk("src", (f) => /\.(ts|tsx)$/.test(f) && !/\.test\./.test(f)).filter((f) => read(f).includes("dangerouslySetInnerHTML"));
+    expect(users).toEqual([join("src", "seo", "JsonLd.tsx")]);
+    expect(read("src/seo/JsonLd.tsx")).toContain("serializeJsonLd(");
+    expect(read("src/seo/jsonld.ts")).toMatch(/replace\(\/<\/g, "\\\\u003c"\)/);
   });
 });
 
