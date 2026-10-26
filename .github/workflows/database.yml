@@ -57,6 +57,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # `npm test` does this through its pretest hook; calling vitest directly does not.
+      - name: Generate Prisma client
+        run: npm run db:generate
+
       - name: Apply migrations (as production does)
         run: npx prisma migrate deploy
         env:
