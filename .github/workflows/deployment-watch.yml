@@ -1,0 +1,51 @@
+# Deployment failure detection (free, GitHub Actions only).
+#
+# Watches the "Cloudflare Pages" workflow. When a run on main fails, it opens a GitHub issue labelled
+# "deployment-failure" (only one at a time); when a later run on main succeeds it comments and closes it.
+# It never touches the deployment itself and only reads workflow metadata (no untrusted text is copied).
+name: Deployment watch
+
+on:
+  workflow_run:
+    workflows: ["Cloudflare Pages"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  report:
+    name: Report deployment result
+    if: github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Open or close the deployment issue
+        run: |
+          gh label create deployment-failure --repo "$REPO" --color D93F0B --description "Automated: the production pipeline failed" 2>/dev/null || true
+          open=$(gh issue list --repo "$REPO" --label deployment-failure --state open --json number --jq '.[0].number // empty')
+          case "$CONCLUSION" in
+            failure|timed_out)
+              if [ -z "$open" ]; then
+                gh issue create --repo "$REPO" --label deployment-failure --title "Deployment failed on main" \
+                  --body "$(printf 'The Cloudflare Pages workflow failed for commit %s.\n\nRun: %s\n\nThe previous production deployment stays live. This issue closes automatically after the next successful run.' "$SHA" "$RUN_URL")"
+              else
+                gh issue comment "$open" --repo "$REPO" --body "Failed again for commit $SHA: $RUN_URL"
+              fi
+              ;;
+            success)
+              if [ -n "$open" ]; then
+                gh issue comment "$open" --repo "$REPO" --body "Recovered: commit $SHA deployed successfully ($RUN_URL). Closing."
+                gh issue close "$open" --repo "$REPO" --reason completed
+              fi
+              ;;
+            *) echo "Conclusion '$CONCLUSION': nothing to do." ;;
+          esac

@@ -1,0 +1,83 @@
+# Free uptime monitoring using GitHub Actions only (no third-party service, no secrets).
+#
+# Every two hours it requests the public storefront and, optionally, the API health endpoint. If a check fails
+# it opens (once) a GitHub issue labelled "site-down"; when the checks pass again it comments and closes it.
+#
+# Configure with repository *variables* (Settings -> Secrets and variables -> Actions -> Variables):
+#   SITE_URL          public storefront address, e.g. https://jaryan-ma.pages.dev
+#   API_HEALTH_URL    optional, e.g. https://api.example.ir/health   (the endpoint reveals only ok/degraded/down)
+# With neither set the workflow does nothing. Note: GitHub pauses scheduled workflows in a repository that has
+# had no activity for 60 days; re-enable them from the Actions tab.
+name: Site health
+
+on:
+  schedule:
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: site-health
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE_URL: ${{ vars.SITE_URL }}
+      API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Check endpoints
+        id: check
+        run: |
+          failures=""
+          if [ -z "$SITE_URL" ] && [ -z "$API_HEALTH_URL" ]; then
+            echo "::notice::SITE_URL and API_HEALTH_URL are not set; nothing to check."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$SITE_URL" ]; then
+            body=$(curl --silent --show-error --fail --location --max-time 20 --retry 2 --retry-delay 5 --retry-all-errors "$SITE_URL" 2>/dev/null) || body=""
+            if [ -z "$body" ]; then failures="${failures}- storefront did not answer with HTTP 200\n"
+            elif ! printf '%s' "$body" | grep -q 'جریان ما'; then failures="${failures}- storefront answered but the page content is not the expected site\n"; fi
+          fi
+          if [ -n "$API_HEALTH_URL" ]; then
+            status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 20 --retry 2 --retry-delay 5 --retry-all-errors "$API_HEALTH_URL" || true)
+            if [ "$status" != "200" ]; then failures="${failures}- API health endpoint answered HTTP ${status:-none} (200 expected)\n"; fi
+          fi
+          {
+            echo "failures<<EOF"
+            printf '%b' "$failures"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open or close the incident issue
+        if: steps.check.outputs.configured == 'true'
+        env:
+          FAILURES: ${{ steps.check.outputs.failures }}
+        run: |
+          gh label create site-down --repo "$REPO" --color B60205 --description "Automated: the site health check is failing" 2>/dev/null || true
+          open=$(gh issue list --repo "$REPO" --label site-down --state open --json number --jq '.[0].number // empty')
+          if [ -n "$FAILURES" ]; then
+            echo "::error::Health check failed"
+            printf '%s\n' "$FAILURES"
+            if [ -z "$open" ]; then
+              gh issue create --repo "$REPO" --label site-down --title "Site health check failing" \
+                --body "$(printf 'The scheduled health check failed:\n\n%s\n\nRun: %s\n\nThis issue closes automatically when the check passes again.' "$FAILURES" "$RUN_URL")"
+            fi
+            exit 1
+          fi
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$REPO" --body "The health check passes again ($RUN_URL). Closing."
+            gh issue close "$open" --repo "$REPO" --reason completed
+          fi

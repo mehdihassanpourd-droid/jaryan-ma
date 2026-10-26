@@ -1,0 +1,38 @@
+# Dependency security audit (free; uses the npm registry's advisory database).
+#   - blocks on HIGH/CRITICAL advisories in production dependencies
+#   - reports (does not block on) advisories in development-only tooling
+# Runs weekly, on dependency changes, and on demand.
+name: Security audit
+
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  pull_request:
+    paths: [package.json, package-lock.json]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Production dependencies (blocking)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Development tooling (report only)
+        continue-on-error: true
+        run: npm audit --audit-level=high

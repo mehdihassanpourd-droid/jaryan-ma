@@ -1,0 +1,75 @@
+# Runs the server test-suite against a REAL PostgreSQL 16 (service container, no cost), including the
+# pg_dump -> encrypted backup -> pg_restore -> verify cycle, and checks that prisma/schema.prisma has no drift
+# from the SQL migrations. (The main workflow's tests use an embedded PostgreSQL.)
+name: Database
+
+on:
+  push:
+    branches: [main]
+    paths: ["server/**", "prisma/**", "src/domain/**", "package-lock.json", ".github/workflows/database.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["server/**", "prisma/**", "src/domain/**", "package-lock.json", ".github/workflows/database.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres:
+    name: Tests on PostgreSQL 16
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-only-throwaway
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      # pg_dump / pg_restore must match the server's major version.
+      - name: Install PostgreSQL 16 client tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16
+          pg_dump --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `npm test` does this through its pretest hook; calling vitest directly does not.
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Apply migrations (as production does)
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      - name: Schema and migrations are in sync
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      - name: Server tests on PostgreSQL
+        run: npx vitest run server src/domain

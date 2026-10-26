@@ -38,6 +38,10 @@ npm run db:studio
 | `npm run typecheck` | TypeScript |
 | `npm test` | Vitest |
 | `npm run db:validate` | Validate Prisma schema |
+| `npm run db:generate` | Generate the Prisma client (runs automatically before test/typecheck/build) |
+| `npm run api:dev` / `api:build` / `api:start` | Admin API: dev server / bundle / run the bundle |
+| `npm run admin -- <command>` | Administrator CLI (see docs/admin/SELF-HOSTING.md) |
+| `npm run ops -- <command>` | Operations CLI: health, security-check, backup, restore-test, backup-status, log-action (see docs/maintenance/MAINTENANCE.md) |
 | `npm run check` | lint + typecheck + test + schema validation |
 
 ## Automated deployment (GitHub Actions)
@@ -97,7 +101,26 @@ While `output: "export"` is enabled, these Next.js features cannot be used (the 
 - `next/image` optimisation (`images.unoptimized` is set; use pre-optimised files) and runtime rewrites/redirects/`headers()` in `next.config.ts` (use `public/_headers` and `public/_redirects`)
 - Any use of Prisma/PostgreSQL at request time. Prisma is installed for later phases but is not imported by the app.
 
-Planned features that will need a server runtime (a Cloudflare Workers/`@opennextjs/cloudflare` deployment or a Node host) — see [ARCHITECTURE.md](ARCHITECTURE.md): database-backed catalogue, phone/OTP login, cart and orders, admin panel, payments, and vendor dashboards. Remove `output: "export"` when starting Phase 1/2.
+Planned features that will need a server runtime (the Node.js admin API in `server/`, or a Node host for the storefront) — see [ARCHITECTURE.md](ARCHITECTURE.md): database-backed catalogue, phone/OTP login, cart and orders, admin panel, payments, and vendor dashboards. Remove `output: "export"` when starting Phase 1/2.
+
+## Admin & product management (foundation)
+A self-hostable admin API for managing hundreds or thousands of products from an Android phone: Node.js + **PostgreSQL (Prisma)** + **S3-compatible** image storage, with built-in authentication (password + TOTP, server-side sessions). It is designed to run on a server in Iran, has **no dependency on any cloud service**, and is **not deployed** yet. The public storefront and its Cloudflare Pages deployment are unchanged.
+
+- Design, decisions, security, costs, remaining questions: [docs/admin/ARCHITECTURE.md](docs/admin/ARCHITECTURE.md)
+- Running it on your own server: [docs/admin/SELF-HOSTING.md](docs/admin/SELF-HOSTING.md)
+- CSV import/export format: [docs/admin/CSV-FORMAT.md](docs/admin/CSV-FORMAT.md)
+- Customer accounts (phone + SMS code, addresses, favourites, orders, export/deletion): [docs/customers/CUSTOMERS.md](docs/customers/CUSTOMERS.md) — **off in production until an SMS gateway is chosen; no paid service is active**
+- Customer support (tickets, notes, roles, abuse protection, Persian FAQ): [docs/support/SUPPORT.md](docs/support/SUPPORT.md)
+- Technical maintenance (health, incidents, security checks, error reports, encrypted backups with a verified restore test, free GitHub Actions monitoring): [docs/maintenance/MAINTENANCE.md](docs/maintenance/MAINTENANCE.md)
+- Prices are exact integer Toman up to 10¹⁵ (PostgreSQL `BIGINT`): [price model](docs/admin/ARCHITECTURE.md#price-model-bigint-reviewed)
+
+The server-side code (`server/`) is never part of the static site; `npm run check` includes tests that fail if storefront code imports it. To also run the server tests against a real PostgreSQL: `TEST_DATABASE_URL=postgresql://user:pw@127.0.0.1:5432/db npm test` (each test file gets its own throw-away schema).
+
+```bash
+npm test               # 224 tests on an embedded PostgreSQL: no database, cloud account or credentials needed
+npm run api:dev        # admin API on http://127.0.0.1:3001 (embedded PostgreSQL in .data/, local media storage)
+npm run admin -- list  # administrator management CLI (create / reset-password / reset-totp / disable)
+```
 
 ## Project structure
 See [ARCHITECTURE.md](ARCHITECTURE.md#2-layout).

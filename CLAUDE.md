@@ -5,7 +5,9 @@ Read `PRD.md` and `ARCHITECTURE.md` first.
 ## Commands
 - `npm run dev` — dev server · `npm run build` — production build
 - `npm run check` — lint + typecheck + tests + `prisma validate` (run before every commit)
-- `npm run db:generate` — regenerate Prisma client after schema edits
+- `npm run db:generate` — regenerate Prisma client after schema edits (runs automatically before test/typecheck/build)
+- `npm run ops -- health|security-check|backup|restore-test|backup-status` — operations CLI (see docs/maintenance/MAINTENANCE.md)
+- `npm run api:dev` — admin API with embedded PostgreSQL · `TEST_DATABASE_URL=postgresql://… npm test` — run tests on a real PostgreSQL
 
 ## Hard rules
 1. **No secrets in git.** Never commit `.env*` (except `.env.example` with placeholders), keys, tokens, or DB URLs with real credentials.
@@ -15,14 +17,20 @@ Read `PRD.md` and `ARCHITECTURE.md` first.
    - **Real vs placeholder:** the only confirmed business facts are the brand name, slogan and Instagram account, kept in `src/lib/site.ts`. Real info uses plain styling (`InfoPanel`); anything unconfirmed uses `PlaceholderPanel`/`PlaceholderTag` (dashed border + "نمونه"). Unknown contact details stay `null` in `site.contact`; never invent phone numbers, addresses, prices, reviews, ratings, or shipping/return/guarantee promises.
 5. **Keep multi-vendor readiness:** new product/order code must carry `vendorId`; don't hard-code a single seller.
 6. **Static demo:** `output: "export"` is on. Do not add route handlers, middleware, server actions, dynamic APIs, `next/image` optimisation or DB access until the export is deliberately removed (see README "Static export limitations").
-7. Work on feature branches; open PRs; never push to the default branch directly.
+7. **Admin code stays private and portable.** `server/` is never deployed by the Pages workflow, and no admin function, credential or database access may be added to the public site. Never create a root `functions/` directory (Wrangler would bundle it into the Pages deploy). Application code depends on the ports (`CatalogRepository`, `AdminStore`, `ObjectStorage`, `Authenticator`), not on a vendor: do not import Cloudflare/AWS/vendor SDKs outside the adapter files. Authentication is built in (scrypt + mandatory TOTP + server-side sessions); never add default accounts, mock logins or "dev bypass" flags to production paths.
+8. **No paid or new cloud service, and no AI API.** Do not create or enable cloud resources, paid plans or AI-API features without the owner's explicit approval; the project has no cloud budget and only a Claude Pro subscription. Everything must run and be testable locally (embedded PostgreSQL, local disk, in-memory fakes).
+9. **Customer authentication is real or absent.** Customers sign in only with an SMS one-time code through the `SmsProvider` port. No paid SMS service is activated by default; `console` SMS is development-only and refused in production; never add test codes, bypass flags or fake sessions to production paths. Customer sign-in stays off in production (`CUSTOMER_ACCOUNTS_ENABLED`) until a gateway is configured.
+10. **Backups are "operational" only after a successful restore test.** Never write code, docs or PR text that calls backups working because a job ran; the state comes from `assessBackups` (`src/domain/maintenance/backup.ts`).
+11. **Personal data is minimal and deletable.** New personal fields must be covered by data export (`gatherExport`) and by `anonymize`; never log phone numbers, codes, tokens, message text or request bodies; internal staff notes live in `SupportNote` and are never selected by customer-facing queries.
+12. Work on feature branches; open PRs; never push to the default branch directly.
 
 ## Code conventions
 - TypeScript strict; no `any`; prefer Server Components, add `"use client"` only for interactivity.
 - Components: one per file, PascalCase, named exports, props typed inline or via `interface`. Generic primitives in `components/ui`, domain parts in `components/<domain>`.
 - Components never import Prisma; go through `src/server/*` repositories (once present).
-- Money: integer Toman, format with `formatToman`/`formatNumber`.
-- Add or update a Vitest test for any non-trivial logic in `src/lib` or `src/server`.
+- Money: integer Toman. DB columns are `BIGINT`; app values are `number` within `0…MAX_TOMAN` (10¹⁵, exact in JSON) from `src/domain/money.ts`; convert only at the repository boundary (`tomanToDb`/`tomanFromDb`); compute order totals with `lineTotal`/`sumToman` (BigInt); never put a `BigInt` into JSON. Format with `formatToman`/`formatNumber`.
+- Add or update a Vitest test for any non-trivial logic in `src/lib`, `src/domain` or `server/`. `server/invariants.test.ts` guards the architecture (storefront never imports `server/`, no tracked secrets, pinned workflows): keep it green.
+- Schema changes need a migration in `prisma/migrations` (generate, review, and check `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code` against a migrated database).
 
 ## UI / RTL / Persian
 - Pages are `lang="fa" dir="rtl"`. Use logical utilities (`ms-/me-/ps-/pe-/start-/end-/text-start`), never `left/right/ml/mr` for layout direction.
