@@ -40,7 +40,30 @@ npm run db:studio
 | `npm run db:validate` | Validate Prisma schema |
 | `npm run check` | lint + typecheck + test + schema validation |
 
+## Automated deployment (GitHub Actions)
+`.github/workflows/cloudflare-pages.yml` checks, builds and deploys the static export to the Cloudflare Pages project **`jaryan-ma`** without the Cloudflare Git integration:
+
+| Event | What runs |
+|---|---|
+| Pull request to `main` | `npm run check`, `npm run build`, then a **preview** deployment at `https://pr-<number>.jaryan-ma.pages.dev` (the exact URL is in the run's summary) |
+| Push / merge to `main` | `npm run check`, `npm run build`, then a **production** deployment |
+| PR from a fork | checks and build only (forks cannot read secrets) |
+
+Deployment is skipped (with a notice, not a failure) until both repository secrets exist. Nothing is deployed from an unconfigured repo.
+
+### One-time activation
+1. **Cloudflare project.** The project `jaryan-ma` must be a *Direct Upload* project with production branch `main`. Create it once from any machine with a token (or in the dashboard: Workers & Pages → Create → Pages → Upload assets): `npx wrangler pages project create jaryan-ma --production-branch main`. A project created through "Connect to Git" cannot receive Wrangler deployments.
+2. **API token.** Cloudflare dashboard → My Profile → API Tokens → Create Custom Token. Permission: **Account → Cloudflare Pages → Edit**, scoped to your account only.
+3. **Account ID.** Shown under Workers & Pages in the dashboard sidebar.
+4. **GitHub secrets.** Repository → Settings → Secrets and variables → Actions → **New repository secret**, add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Enter them only in that GitHub form; never in chat, issues, commits or workflow files.
+5. **(Optional) public site URL.** Same page, **Variables** tab: `NEXT_PUBLIC_SITE_URL` = e.g. `https://jaryan-ma.pages.dev`. It is public and used only for page metadata.
+6. **Run it.** Re-run the latest workflow (Actions → Cloudflare Pages → Re-run all jobs) or open/merge a PR. The deployment URL appears in the run summary.
+
+Notes: third-party actions are pinned to commit SHAs. Credentials are passed only to the Cloudflare deploy step, and GitHub masks secret values in logs. Rotate the token under My Profile → API Tokens if it is ever exposed. Pull requests are never merged automatically.
+
 ## Deploying the static demo to Cloudflare Pages
+(The GitHub Actions flow above is the recommended route; the options below are alternatives.)
+
 The demo is a fully static export (`output: "export"` in `next.config.ts`). It has no server, database or secrets.
 
 **Dashboard (Git integration):**

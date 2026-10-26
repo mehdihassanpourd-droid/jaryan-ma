@@ -47,10 +47,10 @@ Prices are integer Toman (`Int`), never floats. `null` means "not announced". Di
 - Baseline security headers ship in `public/_headers` (Cloudflare Pages); add a CSP before launch.
 
 ## 7. Quality gates
-`npm run check` (lint, typecheck, tests, `prisma validate`) plus `npm run build`. CI should run the same on every PR.
+`npm run check` (lint, typecheck, tests, `prisma validate`) plus `npm run build`. The Cloudflare Pages workflow runs the same on every PR and push to `main`.
 
 ## 8. Deployment
-**Current demo:** static export (`output: "export"`) hosted on Cloudflare Pages (build `npm run build`, output `out`); see README. Server features are unavailable in this mode and `output: "export"` must be removed before Phase 1 DB-backed pages (and `ISR` in section 3) can work.
+**Current demo:** static export (`output: "export"`) hosted on Cloudflare Pages (build `npm run build`, output `out`); deployed by GitHub Actions (`.github/workflows/cloudflare-pages.yml`: checks, build, production on `main`, previews on PRs); see README. Server features are unavailable in this mode and `output: "export"` must be removed before Phase 1 DB-backed pages (and `ISR` in section 3) can work.
 
 **Target (proposed):**
 Node 20+ host (container or Node PaaS) + managed PostgreSQL; object storage + CDN for images. Region choice depends on payment/SMS providers **[TBC]**.
