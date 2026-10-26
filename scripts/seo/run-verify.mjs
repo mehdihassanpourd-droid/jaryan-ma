@@ -26,6 +26,11 @@ rmSync("out", { recursive: true, force: true });
 run("npm", ["run", "build", "--silent"], { NEXT_PUBLIC_SITE_URL: ORIGIN, CATALOG_SNAPSHOT_DIR: "", SEO_ALLOW_INDEXING: "" });
 run("node", ["scripts/seo/verify-build.mjs", "out", ORIGIN]);
 
+console.log("\n2b/3 Launch switch ON but no real catalogue (misconfiguration): must STILL be fully closed ...");
+rmSync("out", { recursive: true, force: true });
+run("npm", ["run", "build", "--silent"], { NEXT_PUBLIC_SITE_URL: ORIGIN, CATALOG_SNAPSHOT_DIR: "", SEO_ALLOW_INDEXING: "true" });
+run("node", ["scripts/seo/verify-build.mjs", "out", ORIGIN]);
+
 console.log("\n3/3 Launched build with the real snapshot: indexable products, sitemap, canonicals, structured data ...");
 rmSync("out", { recursive: true, force: true });
 run("npm", ["run", "build", "--silent"], { NEXT_PUBLIC_SITE_URL: ORIGIN, CATALOG_SNAPSHOT_DIR: dir, SEO_ALLOW_INDEXING: "true" });

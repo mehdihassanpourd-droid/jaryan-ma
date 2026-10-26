@@ -9,7 +9,8 @@ import type { CatalogSeo } from "./catalog-seo";
  */
 export function buildSitemap(seo: CatalogSeo): MetadataRoute.Sitemap {
   const origin = seo.settings.origin;
-  if (!origin) return [];
+  // Closed (pre-launch, or no real catalogue): robots.txt disallows everything, so a sitemap would contradict it.
+  if (!origin || !seo.settings.indexing) return [];
   const urls = [
     absoluteUrl(origin, "/"),
     ...[...seo.categories.values()].filter((c) => c.indexable && c.canonical).map((c) => c.canonical as string),

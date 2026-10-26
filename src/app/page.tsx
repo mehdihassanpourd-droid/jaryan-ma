@@ -7,19 +7,20 @@ import { Spotlight } from "@/components/home/Spotlight";
 import { TrustSection } from "@/components/home/TrustSection";
 import type { Metadata } from "next";
 import { site } from "@/lib/site";
-import { seoSettings } from "@/seo/config";
+import { loadSeo } from "@/seo";
 import { JsonLd } from "@/seo/JsonLd";
 import { siteJsonLd } from "@/seo/jsonld";
 
-export function generateMetadata(): Metadata {
-  const { origin } = seoSettings();
+export async function generateMetadata(): Promise<Metadata> {
+  const { origin } = (await loadSeo()).seo.settings;
   return origin ? { alternates: { canonical: `${origin}/` } } : {};
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const { origin } = (await loadSeo()).seo.settings;
   return (
     <>
-      <JsonLd data={siteJsonLd(seoSettings().origin, site.name, site.instagramUrl)} />
+      <JsonLd data={siteJsonLd(origin, site.name, site.instagramUrl)} />
       <Hero />
       <CategoryGrid />
       <FeaturedProducts />
