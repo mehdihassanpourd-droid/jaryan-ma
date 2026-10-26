@@ -44,10 +44,13 @@ Prices are integer Toman (`Int`), never floats. `null` means "not announced". Di
 ## 6. Security & config
 - Secrets only via environment variables; `.env*` is git-ignored, `.env.example` holds placeholders.
 - Validate all input server-side (planned: zod) ; auth by phone OTP with rate limiting (Phase 2); role checks on every server action/route handler.
-- `poweredByHeader` disabled; add CSP and security headers before launch.
+- Baseline security headers ship in `public/_headers` (Cloudflare Pages); add a CSP before launch.
 
 ## 7. Quality gates
 `npm run check` (lint, typecheck, tests, `prisma validate`) plus `npm run build`. CI should run the same on every PR.
 
-## 8. Deployment (proposed)
+## 8. Deployment
+**Current demo:** static export (`output: "export"`) hosted on Cloudflare Pages (build `npm run build`, output `out`); see README. Server features are unavailable in this mode and `output: "export"` must be removed before Phase 1 DB-backed pages (and `ISR` in section 3) can work.
+
+**Target (proposed):**
 Node 20+ host (container or Node PaaS) + managed PostgreSQL; object storage + CDN for images. Region choice depends on payment/SMS providers **[TBC]**.

@@ -13,7 +13,8 @@ Read `PRD.md` and `ARCHITECTURE.md` first.
 3. **No invented business facts:** no real prices, artist names/bios, testimonials or statistics. Unknown prices are `null`.
 4. **Demo content is labelled.** Sample data lives only in `src/data/` with `isDemo: true` and a visible "نمونه" badge. Remove the banner/badges only when real data replaces it.
 5. **Keep multi-vendor readiness:** new product/order code must carry `vendorId`; don't hard-code a single seller.
-6. Work on feature branches; open PRs; never push to the default branch directly.
+6. **Static demo:** `output: "export"` is on. Do not add route handlers, middleware, server actions, dynamic APIs, `next/image` optimisation or DB access until the export is deliberately removed (see README "Static export limitations").
+7. Work on feature branches; open PRs; never push to the default branch directly.
 
 ## Code conventions
 - TypeScript strict; no `any`; prefer Server Components, add `"use client"` only for interactivity.
