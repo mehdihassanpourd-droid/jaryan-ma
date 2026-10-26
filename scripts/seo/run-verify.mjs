@@ -15,6 +15,9 @@ const run = (cmd, args, env = {}) => {
   }
 };
 
+// A fresh checkout has no generated Prisma client yet (it is gitignored).
+run("npm", ["run", "db:generate", "--silent"]);
+
 console.log("1/3 Creating a catalogue through the real backend (PostgreSQL via Prisma) and publishing its snapshot ...");
 run("npx", ["tsx", "scripts/seo/generate-fixture.ts", dir]);
 
