@@ -1,27 +1,47 @@
 import { Container } from "@/components/ui/Container";
-import { site } from "@/lib/site";
+import { InstagramIcon } from "@/components/ui/InstagramIcon";
+import { WovenDivider } from "@/components/ui/WovenDivider";
+import { navLinks, site } from "@/lib/site";
 
 export function Footer() {
   return (
-    <footer className="mt-24 border-t border-sand-200 bg-ivory-100 py-12">
-      <Container className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+    <footer className="bg-bark-900 pb-28 text-sand-100 md:pb-0">
+      <WovenDivider className="text-bark-600" />
+      <Container className="grid gap-10 py-14 md:grid-cols-3">
         <div>
-          <p className="text-lg font-bold text-bark-900">{site.name}</p>
-          <p className="mt-1 text-sm text-bark-600">{site.slogan}</p>
+          <p className="text-2xl font-extrabold text-ivory-50">{site.name}</p>
+          <p className="mt-2 text-sand-300">{site.slogan}</p>
         </div>
-        <div className="text-sm text-bark-600">
+        <nav aria-label="پیوندهای پایین صفحه">
+          <p className="mb-3 text-sm font-medium text-sand-300">دسترسی سریع</p>
+          <ul className="space-y-2">
+            {navLinks.map((l) => (
+              <li key={l.href}>
+                <a href={l.href} className="hover:text-ivory-50">
+                  {l.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <div>
+          <p className="mb-3 text-sm font-medium text-sand-300">ما را دنبال کنید</p>
           <a
             href={site.instagramUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-bark-900"
-            dir="ltr"
+            className="inline-flex items-center gap-2 hover:text-ivory-50"
           >
-            @{site.instagramHandle}
+            <InstagramIcon />
+            <span dir="ltr">@{site.instagramHandle}</span>
           </a>
-          <p className="mt-1 text-xs text-bark-500">© {site.name} — همه حقوق محفوظ است.</p>
         </div>
       </Container>
+      <div className="border-t border-bark-700">
+        <Container className="py-5 text-xs leading-6 text-sand-300">
+          نسخه نمایشی؛ محصولات، تصاویر و متن‌های دارای برچسب «نمونه» واقعی نیستند. © {site.name}
+        </Container>
+      </div>
     </footer>
   );
 }

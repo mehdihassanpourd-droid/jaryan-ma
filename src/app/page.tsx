@@ -1,9 +1,10 @@
 import { BrandStory } from "@/components/home/BrandStory";
 import { CategoryGrid } from "@/components/home/CategoryGrid";
+import { ContactSection } from "@/components/home/ContactSection";
 import { FeaturedProducts } from "@/components/home/FeaturedProducts";
 import { Hero } from "@/components/home/Hero";
-import { InstagramCta } from "@/components/home/InstagramCta";
 import { Spotlight } from "@/components/home/Spotlight";
+import { TrustSection } from "@/components/home/TrustSection";
 
 export default function HomePage() {
   return (
@@ -13,7 +14,8 @@ export default function HomePage() {
       <FeaturedProducts />
       <Spotlight />
       <BrandStory />
-      <InstagramCta />
+      <TrustSection />
+      <ContactSection />
     </>
   );
 }
