@@ -90,6 +90,8 @@ describe("product validation: input hygiene", () => {
   it("rejects bad prices, keys and text", () => {
     expect(codes({ ...base, priceToman: 1.5 })).not.toEqual([]);
     expect(codes({ ...base, priceToman: -1 })).not.toEqual([]);
+    expect(codes({ ...base, priceToman: 2_000_000_000 })).toEqual([]);
+    expect(codes({ ...base, priceToman: 2_000_000_001 })).not.toEqual([]); // PostgreSQL INTEGER ceiling
     expect(codes({ ...base, images: [{ key: "../../etc/passwd", alt: "" }] })).not.toEqual([]);
     expect(codes({ ...base, images: [{ key: "images/p1/a.svg", alt: "" }] })).not.toEqual([]);
     expect(codes({ ...base, name: "x" })).not.toEqual([]);

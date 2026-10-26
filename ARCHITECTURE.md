@@ -6,12 +6,12 @@
 | Framework | Next.js 16 (App Router), React 19, TypeScript strict | Server Components by default |
 | Styling | Tailwind CSS v4, tokens in `src/app/globals.css` (`@theme`) | Logical properties for RTL |
 | Font | Vazirmatn Variable via `@fontsource-variable` | Self-hosted; no CDN dependency |
-| Database | PostgreSQL | Connection via `DATABASE_URL` |
+| Database | PostgreSQL | Connection via `DATABASE_URL`; embedded PostgreSQL for dev/tests |
 | ORM | Prisma 7 (`prisma-client` generator → `src/generated/prisma`) | Connection URL in `prisma.config.ts`; Prisma 7 needs a driver adapter (`@prisma/adapter-pg`) at runtime — to be added with the first DB-backed page |
 | Tests | Vitest | Unit tests colocated as `*.test.ts` |
 | Lint | ESLint 9 + `eslint-config-next` | |
 
-> **Admin/product management:** see [docs/admin/ARCHITECTURE.md](docs/admin/ARCHITECTURE.md). It proposes Cloudflare D1 + R2 behind an Access-protected admin Worker, with the static storefront reading published JSON snapshots. Until that is approved, the Prisma/PostgreSQL model below remains the reference schema.
+> **Admin/product management:** see [docs/admin/ARCHITECTURE.md](docs/admin/ARCHITECTURE.md): Node.js API + PostgreSQL (Prisma) + S3-compatible storage, self-hosted (Iran), behind portable interfaces. The Prisma schema in `prisma/` is the production data model.
 
 ## 2. Layout
 ```
@@ -24,7 +24,8 @@ src/components/product/   ProductCard, ProductGallery, ArtPlaceholder
 src/components/home/      homepage sections
 src/data/                 DEMO content only (demo-catalog.ts)
 src/domain/               shared, framework-free logic (product rules, CSV, queries, snapshots)
-workers/admin-api/        admin API Worker (not deployed; separate from the Pages site)
+server/                   admin API (Node.js; not deployed; separate from the Pages site)
+prisma/                   PostgreSQL schema and migrations (production data model)
 src/lib/                  site config, formatting helpers
 src/types/                UI-facing types mirroring Prisma models
 ```

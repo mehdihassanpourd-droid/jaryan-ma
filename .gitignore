@@ -22,3 +22,7 @@ next-env.d.ts
 # misc
 .DS_Store
 npm-debug.log*
+
+# local development data (embedded database, uploaded media, dev key) and server bundle
+/.data/
+/dist/

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { escapeLike, fixPersianLetters, normalizeForSearch, parseToman, slugify, toLatinDigits } from "./persian";
+import { fixPersianLetters, normalizeForSearch, parseToman, slugify, toLatinDigits } from "./persian";
 
 describe("toLatinDigits", () => {
   it("converts Persian and Arabic-Indic digits", () => {
@@ -57,11 +57,5 @@ describe("slugify", () => {
     expect(slugify("  Hello, World!! ")).toBe("hello-world");
     expect(slugify("---")).toBe("");
     expect(slugify("a".repeat(200), 10)).toHaveLength(10);
-  });
-});
-
-describe("escapeLike", () => {
-  it("escapes wildcard characters", () => {
-    expect(escapeLike("50%_off\\")).toBe("50\\%\\_off\\\\");
   });
 });

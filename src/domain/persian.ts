@@ -1,6 +1,6 @@
 /**
  * Persian text helpers shared by the storefront, the admin UI (browser) and the
- * admin API (Worker). Pure functions only: no DOM, Node or Workers APIs.
+ * admin API. Pure functions only: no DOM or Node APIs.
  */
 
 const PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
@@ -57,9 +57,4 @@ export function slugify(input: string, maxLength = 80): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, maxLength)
     .replace(/-+$/g, "");
-}
-
-/** Escapes `%`, `_` and `\` so user text can be used inside a SQL LIKE pattern. */
-export function escapeLike(input: string): string {
-  return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }

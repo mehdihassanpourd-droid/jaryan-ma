@@ -30,7 +30,7 @@
 Project scaffold, design system, responsive RTL homepage, demo catalogue, Prisma schema, docs.
 
 ### Phase 1 — Catalogue
-> Admin/product-management design and tested foundation: [docs/admin/ARCHITECTURE.md](docs/admin/ARCHITECTURE.md).
+> Admin/product-management design and tested foundation (self-hosted in Iran, PostgreSQL + S3-compatible storage): [docs/admin/ARCHITECTURE.md](docs/admin/ARCHITECTURE.md).
 - Category listing and product detail pages (gallery, description, dimensions, materials, uniqueness/stock).
 - Search and filters (category, price range, availability).
 - SEO: Persian metadata, sitemap, structured data.

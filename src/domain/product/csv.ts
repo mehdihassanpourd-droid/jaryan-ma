@@ -4,7 +4,7 @@ import type { StoredProduct } from "./types";
 
 /**
  * CSV import/export for products. Designed to run in the admin's browser (CPU-heavy
- * parsing stays off the Worker) and again, per small chunk, on the server.
+ * parsing stays off the server) and again, per small chunk, on the server.
  *
  * One product = one or more rows. Rows sharing a `slug` belong to one product; the
  * first row carries the product fields and every row with a `variant_sku` adds a variant.

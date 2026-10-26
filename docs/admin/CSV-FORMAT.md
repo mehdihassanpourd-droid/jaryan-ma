@@ -12,7 +12,7 @@ One product = one or more rows. Rows with the same `slug` are one product: the *
 | `category_slug` | no (yes to publish) | Must exist, otherwise `unknown_category`. |
 | `status` | no | `draft` (default), `published`, `archived`. |
 | `fulfillment` | yes | `unique`, `stocked`, `made_to_order`. |
-| `price_toman` | no (yes to publish) | Whole Toman. Persian digits and separators are fine (`۱٬۲۰۰٬۰۰۰`); decimals/negatives are rejected. |
+| `price_toman` | no (yes to publish) | Whole Toman, at most 2,000,000,000. Persian digits and separators are fine (`۱٬۲۰۰٬۰۰۰`); decimals/negatives are rejected. |
 | `inventory` | by type | `unique`: 0 or 1 (default 1). `stocked` without variants: required. Empty for made-to-order or when variants carry stock. |
 | `lead_time_days` | made-to-order | 1–365; empty otherwise. |
 | `image_keys` | no | Keys of images **already uploaded** (`images/<productId>/<id>.webp`), separated by `\|`. CSV does not upload files. |
@@ -37,7 +37,7 @@ demo-runner,رانر نمونه,,home-decor,draft,made_to_order,,,14,,,,,,
 ## How import works
 
 1. The admin app parses and validates the whole file **in the browser** (same code as the server) and shows every problem with its row number and a Persian message.
-2. Valid products are sent in chunks (default 10 per request; the server enforces `IMPORT_CHUNK_MAX`). Each chunk is **all-or-nothing** in one database transaction and creates or updates by `slug`.
+2. Valid products are sent in chunks (default up to 50 per request; the server enforces `IMPORT_CHUNK_MAX`, max 200). Each chunk is **all-or-nothing** in one database transaction and creates or updates by `slug`.
 3. Chunks are sent with `?defer=1`, and one final `POST /api/v1/catalog/resync` rebuilds the public category files and manifest once.
 4. Importing as `published` requires the publish right and the usual publish rules.
 

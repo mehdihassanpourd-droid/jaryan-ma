@@ -5,7 +5,8 @@ Read `PRD.md` and `ARCHITECTURE.md` first.
 ## Commands
 - `npm run dev` — dev server · `npm run build` — production build
 - `npm run check` — lint + typecheck + tests + `prisma validate` (run before every commit)
-- `npm run db:generate` — regenerate Prisma client after schema edits
+- `npm run db:generate` — regenerate Prisma client after schema edits (runs automatically before test/typecheck/build)
+- `npm run api:dev` — admin API with embedded PostgreSQL · `TEST_DATABASE_URL=postgresql://… npm test` — run tests on a real PostgreSQL
 
 ## Hard rules
 1. **No secrets in git.** Never commit `.env*` (except `.env.example` with placeholders), keys, tokens, or DB URLs with real credentials.
@@ -15,8 +16,8 @@ Read `PRD.md` and `ARCHITECTURE.md` first.
    - **Real vs placeholder:** the only confirmed business facts are the brand name, slogan and Instagram account, kept in `src/lib/site.ts`. Real info uses plain styling (`InfoPanel`); anything unconfirmed uses `PlaceholderPanel`/`PlaceholderTag` (dashed border + "نمونه"). Unknown contact details stay `null` in `site.contact`; never invent phone numbers, addresses, prices, reviews, ratings, or shipping/return/guarantee promises.
 5. **Keep multi-vendor readiness:** new product/order code must carry `vendorId`; don't hard-code a single seller.
 6. **Static demo:** `output: "export"` is on. Do not add route handlers, middleware, server actions, dynamic APIs, `next/image` optimisation or DB access until the export is deliberately removed (see README "Static export limitations").
-7. **Admin code stays private.** `workers/admin-api` is never deployed by the Pages workflow, and no admin function, credential or database access may be added to the public site. Never create a root `functions/` directory (Wrangler would bundle it into the Pages deploy). Admin authentication is Cloudflare Access plus JWT verification; never add passwords, mock logins or "dev bypass" flags.
-8. **No paid or new cloud service** (D1, R2, Access, Workers Paid, Images…) is created or enabled without the owner's explicit approval.
+7. **Admin code stays private and portable.** `server/` is never deployed by the Pages workflow, and no admin function, credential or database access may be added to the public site. Never create a root `functions/` directory (Wrangler would bundle it into the Pages deploy). Application code depends on the ports (`CatalogRepository`, `AdminStore`, `ObjectStorage`, `Authenticator`), not on a vendor: do not import Cloudflare/AWS/vendor SDKs outside the adapter files. Authentication is built in (scrypt + mandatory TOTP + server-side sessions); never add default accounts, mock logins or "dev bypass" flags to production paths.
+8. **No paid or new cloud service, and no AI API.** Do not create or enable cloud resources, paid plans or AI-API features without the owner's explicit approval; the project has no cloud budget and only a Claude Pro subscription. Everything must run and be testable locally (embedded PostgreSQL, local disk, in-memory fakes).
 9. Work on feature branches; open PRs; never push to the default branch directly.
 
 ## Code conventions

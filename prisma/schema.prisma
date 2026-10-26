@@ -1,8 +1,10 @@
-// Jaryan Ma (جریان ما) — data model.
-// Multi-vendor ready: every sellable thing and every order line belongs to a Vendor.
-// Today exactly one Vendor exists (the gallery itself, kind = PLATFORM).
-// NOTE: the product catalogue is proposed to move to Cloudflare D1 (docs/admin/ARCHITECTURE.md).
-// This schema stays the reference model until that decision is approved.
+// Jaryan Ma (جریان ما) — PostgreSQL data model (production, self-hosted in Iran).
+//
+// Multi-vendor ready: every product and order line belongs to a Vendor. Today exactly one
+// Vendor exists (the gallery itself, kind = PLATFORM), created by the server at startup.
+// The catalogue models mirror src/domain/product exactly (same enums, same rules); the domain
+// layer validates, the database enforces the invariants that must never be broken
+// (see prisma/migrations/*_constraints).
 //
 // Payments are intentionally NOT modelled yet (see PRD.md, "Out of scope").
 
@@ -32,10 +34,23 @@ enum VendorStatus {
   SUSPENDED
 }
 
+/// Lower-case values on purpose: they are the same strings the domain layer and the API use.
 enum ProductStatus {
-  DRAFT
-  PUBLISHED
-  ARCHIVED
+  draft
+  published
+  archived
+}
+
+enum Fulfillment {
+  unique
+  stocked
+  made_to_order
+}
+
+enum AdminRole {
+  owner
+  editor
+  viewer
 }
 
 enum OrderStatus {
@@ -61,16 +76,146 @@ model User {
   orders            Order[]
 }
 
+model Category {
+  id        String     @id @default(uuid())
+  slug      String     @unique
+  name      String
+  parentId  String?
+  position  Int        @default(0)
+  createdAt DateTime   @default(now())
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[] @relation("CategoryTree")
+  products  Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id           String        @id @default(uuid())
+  vendorId     String
+  slug         String        @unique
+  name         String
+  description  String        @default("")
+  categoryId   String?
+  status       ProductStatus @default(draft)
+  fulfillment  Fulfillment
+  /// Integer Toman (32-bit: max about 2.1 billion Toman). Null = price not announced.
+  priceToman   Int?
+  /// unique: 0 or 1. stocked: stock (null when variants carry it). made_to_order: always null.
+  inventory    Int?
+  leadTimeDays Int?
+  /// Normalised name + description + SKUs for search (see normalizeForSearch).
+  searchText   String        @default("")
+  /// Optimistic concurrency: updates must present the version they read.
+  version      Int           @default(1)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @default(now())
+  publishedAt  DateTime?
+
+  vendor     Vendor           @relation(fields: [vendorId], references: [id])
+  category   Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  images     ProductImage[]
+  variants   ProductVariant[]
+  orderItems OrderItem[]
+
+  @@index([status, updatedAt(sort: Desc)])
+  @@index([categoryId, status])
+  @@index([fulfillment, status])
+  @@index([vendorId])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(uuid())
+  productId String
+  /// Object key in the S3-compatible bucket, e.g. images/<productId>/<uuid>.webp
+  key       String
+  alt       String  @default("")
+  position  Int     @default(0)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, position])
+  @@map("product_images")
+}
+
+model ProductVariant {
+  id         String  @id @default(uuid())
+  productId  String
+  sku        String  @unique
+  options    Json
+  priceToman Int?
+  inventory  Int?
+  position   Int     @default(0)
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, position])
+  @@map("product_variants")
+}
+
+/// Administrators. Authentication is implemented by the server itself (scrypt password +
+/// TOTP, server-side sessions); there is no external identity provider dependency.
+model AdminUser {
+  id                String         @id @default(uuid())
+  /// Always stored lower-case.
+  email             String         @unique
+  passwordHash      String
+  role              AdminRole
+  /// AES-256-GCM encrypted TOTP secret (null = 2FA not enrolled).
+  totpSecretEnc     String?
+  /// Time step of the last accepted code: a code can never be replayed.
+  totpLastStep      Int?
+  disabled          Boolean        @default(false)
+  failedLogins      Int            @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime       @default(now())
+  passwordChangedAt DateTime       @default(now())
+  sessions          AdminSession[]
+
+  @@map("admin_users")
+}
+
+model AdminSession {
+  id         String    @id @default(uuid())
+  userId     String
+  /// SHA-256 of the session token; the token itself is never stored.
+  tokenHash  String    @unique
+  csrfToken  String
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  ip         String?
+  userAgent  String?
+  user       AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("admin_sessions")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  at         DateTime @default(now())
+  actorEmail String
+  action     String
+  entity     String
+  entityId   String
+  detail     Json     @default("{}")
+
+  @@index([at(sort: Desc)])
+  @@index([entity, entityId])
+  @@map("audit_log")
+}
+
 model Vendor {
-  id          String       @id @default(cuid())
-  slug        String       @unique
-  name        String
-  kind        VendorKind   @default(INDEPENDENT)
-  status      VendorStatus @default(PENDING)
-  bio         String?
-  instagram   String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id        String       @id @default(cuid())
+  slug      String       @unique
+  name      String
+  kind      VendorKind   @default(INDEPENDENT)
+  status    VendorStatus @default(PENDING)
+  bio       String?
+  instagram String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
   members    VendorMember[]
   products   Product[]
@@ -86,54 +231,8 @@ model VendorMember {
   @@id([vendorId, userId])
 }
 
-model Category {
-  id       String     @id @default(cuid())
-  slug     String     @unique
-  name     String
-  parentId String?
-  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
-  children Category[] @relation("CategoryTree")
-  products Product[]
-}
-
-model Product {
-  id          String        @id @default(cuid())
-  vendorId    String
-  categoryId  String?
-  slug        String        @unique
-  title       String
-  description String?
-  // Price in Toman as an integer. Null = "price not announced".
-  priceToman  Int?
-  stock       Int           @default(1) // handmade: often one-of-a-kind
-  isUnique    Boolean       @default(true)
-  status      ProductStatus @default(DRAFT)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  vendor     Vendor         @relation(fields: [vendorId], references: [id])
-  category   Category?      @relation(fields: [categoryId], references: [id])
-  images     ProductImage[]
-  orderItems OrderItem[]
-
-  @@index([vendorId])
-  @@index([categoryId])
-  @@index([status])
-}
-
-model ProductImage {
-  id        String  @id @default(cuid())
-  productId String
-  url       String
-  alt       String
-  position  Int     @default(0)
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@index([productId])
-}
-
 model Address {
-  id         String  @id @default(cuid())
+  id         String @id @default(cuid())
   userId     String
   recipient  String
   phone      String
@@ -141,7 +240,7 @@ model Address {
   city       String
   street     String
   postalCode String
-  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -163,16 +262,16 @@ model Order {
 }
 
 model OrderItem {
-  id                String  @id @default(cuid())
-  orderId           String
-  productId         String
-  vendorId          String // denormalised so payouts/fulfilment can be split per vendor
-  titleSnapshot     String
-  unitPriceToman    Int
-  quantity          Int     @default(1)
-  order             Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product           Product @relation(fields: [productId], references: [id])
-  vendor            Vendor  @relation(fields: [vendorId], references: [id])
+  id             String  @id @default(cuid())
+  orderId        String
+  productId      String
+  vendorId       String // denormalised so payouts/fulfilment can be split per vendor
+  titleSnapshot  String
+  unitPriceToman Int
+  quantity       Int     @default(1)
+  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product @relation(fields: [productId], references: [id])
+  vendor         Vendor  @relation(fields: [vendorId], references: [id])
 
   @@index([orderId])
   @@index([vendorId])
