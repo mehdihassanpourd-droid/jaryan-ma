@@ -6,22 +6,12 @@ import { readMigrations } from "./migrations";
 
 export interface TestDatabase {
   db: Db;
+  /** PostgreSQL schema holding the test tables (raw SQL is not scoped by Prisma's schema option; qualify explicitly). */
+  schema: string;
   /** Removes all rows (keeps the schema) so each test starts clean. */
   reset(): Promise<void>;
   close(): Promise<void>;
 }
-
-const TABLES = [
-  '"audit_log"',
-  '"admin_sessions"',
-  '"admin_users"',
-  '"product_variants"',
-  '"product_images"',
-  '"products"',
-  '"categories"',
-  '"VendorMember"',
-  '"Vendor"',
-];
 
 /**
  * Database for tests. By default an in-process embedded PostgreSQL (no services, runs anywhere,
@@ -54,12 +44,18 @@ export async function createTestDatabase(): Promise<TestDatabase> {
 }
 
 function finish(db: Db, schema: string, close: () => Promise<void>): TestDatabase {
-  // Raw SQL is not covered by Prisma's schema option, so qualify the tables explicitly.
-  const qualified = TABLES.map((t) => `"${schema}".${t}`).join(", ");
   return {
     db,
+    schema,
     async reset() {
-      await db.$executeRawUnsafe(`TRUNCATE ${qualified} CASCADE`);
+      // Discover tables instead of listing them, so new models never need a helper change. Raw SQL is not covered
+      // by Prisma's schema option, so tables are schema-qualified explicitly. RESTART IDENTITY makes ticket/order
+      // numbers deterministic. Tables starting with "_" (migration bookkeeping) are left alone.
+      const tables = await db.$queryRawUnsafe<Array<{ tablename: string }>>(
+        `SELECT tablename FROM pg_tables WHERE schemaname = '${schema}' AND tablename NOT LIKE '\\_%'`,
+      );
+      if (tables.length === 0) return;
+      await db.$executeRawUnsafe(`TRUNCATE ${tables.map((t) => `"${schema}"."${t.tablename}"`).join(", ")} RESTART IDENTITY CASCADE`);
     },
     close,
   };

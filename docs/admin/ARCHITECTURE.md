@@ -71,11 +71,27 @@ prisma/            schema + SQL migrations (the production data model)
 * **Kept (unchanged behaviour, tests preserved):** product model and validation, Persian utilities, CSV import/export, query parsing, public snapshot format, image validation.
 * **Replaced:** the D1/SQLite repository → Prisma/PostgreSQL; the R2 bucket interface → S3 interface; Cloudflare Access JWT verification → built-in authentication; the Worker router → a Node HTTP server with the same routes.
 * **Removed:** `workers/`, the Wrangler template and the Cloudflare setup guide. Nothing in the repository depends on a Cloudflare service except the already-existing Pages deployment.
-* **Improved on the way** (found by the tests): a search bug where a lone `_` or `%` matched every product (ORMs do not escape LIKE wildcards; they are now stripped from search terms), and the price ceiling is now 2,000,000,000 Toman so it fits PostgreSQL's 32-bit integer.
+* **Improved on the way** (found by the tests): a search bug where a lone `_` or `%` matched every product (ORMs do not escape LIKE wildcards; they are now stripped from search terms), and prices were first limited to 2,000,000,000 Toman (PostgreSQL `INTEGER`); that limit has since been replaced by the BIGINT model in §3.
 
 ## 3. Product model
 
-Prices are integer **Toman** (never floats; max 2,000,000,000, the PostgreSQL `INTEGER` limit). `null` price = "not announced".
+### Price model (BIGINT, reviewed)
+
+Prices are integer **Toman** (never floats). `null` price = "not announced".
+
+**Review of the earlier 2,000,000,000 Toman limit.** It came from PostgreSQL's 32-bit `INTEGER`, not from any business rule. It is too low for the long run: with inflation, a handmade carpet, a set of orders or an order *total* can exceed 2 billion Toman, and rial-denominated imports (×10) would hit it immediately. The limit was therefore removed:
+
+| Layer | Representation | Why |
+|---|---|---|
+| Database (`priceToman`, `unitPriceToman`, `totalToman`) | **`BIGINT`** (Prisma `BigInt`) | no practical ceiling; `CHECK` constraints keep prices within `0 … 10¹⁵` and make a negative value impossible even if the application is bypassed |
+| Application / API / JSON / snapshots | JavaScript `number`, validated as a safe integer in `0 … MAX_TOMAN = 1,000,000,000,000,000` (10¹⁵ Toman) | 10¹⁵ < 2⁵³ ≈ 9.007×10¹⁵, so every allowed price is represented **exactly** in JSON and by `JSON.parse` in any browser; no `BigInt` ever reaches `JSON.stringify` (which would throw) |
+| Order totals | computed in `BigInt` (`lineTotal`, `sumToman` in `src/domain/money.ts`), then converted back with a range check | `price × quantity` and the sum of many lines can exceed 2⁵³ before they exceed the limit; an out-of-range total is rejected (`order_total_out_of_range`) instead of silently losing precision |
+| Conversion | only at the repository boundary (`tomanToDb`, `tomanFromDb`) | one place to audit; a value above `MAX_TOMAN` coming from the database (manual edit) raises an error rather than being shown wrong |
+| Display | `formatToman` / `formatNumber` accept `number | bigint` and use `Intl.NumberFormat("fa-IR")`, which is exact for both | tested up to 2⁶³−1 |
+
+10¹⁵ Toman is far beyond any handmade-goods price; if a real need ever appears, raising `MAX_TOMAN` requires representing money as strings or `BigInt` end-to-end in the API and snapshots (a deliberate, versioned change) — the database already allows it.
+
+Where it is enforced and tested: product/variant schemas, list-filter bounds (`minPrice`/`maxPrice`), CSV import/export (large values, Persian digits and separators, quoting), the HTTP API end to end (create → read → list/filter → public snapshot with a 10¹⁵ price), the repository (`BIGINT` round-trip, database `CHECK`), orders (exact totals above 2⁵³ in intermediate steps), and `formatToman`.
 
 | Fulfilment | Meaning | Inventory | Lead time | Variants |
 |---|---|---|---|---|
@@ -92,8 +108,8 @@ Prices are integer **Toman** (never floats; max 2,000,000,000, the PostgreSQL `I
 
 ## 4. PostgreSQL + Prisma
 
-* **Schema** (`prisma/schema.prisma`) mirrors the domain model: `Product`, `ProductImage`, `ProductVariant`, `Category`, plus `AdminUser`, `AdminSession`, `AuditLog`, and the earlier `Vendor`/`User`/`Order` models kept for the multi-vendor and orders phases. Enums are lower-case so the API and database share the same strings.
-* **Migrations** (`prisma/migrations`): `…_init` is generated from the schema; `…_constraints` adds the `CHECK` constraints Prisma cannot express. Production applies them with `npx prisma migrate deploy` (verified on a real PostgreSQL 16).
+* **Schema** (`prisma/schema.prisma`) mirrors the domain model: `Product`, `ProductImage`, `ProductVariant`, `Category`, `AdminUser`, `AdminSession`, `AuditLog`, `Vendor` (multi-vendor ready), and — added in the second foundation step — customers (`Customer`, `CustomerOtp`, `CustomerSession`, `Address`, `Favorite`, `CustomerDataRequest`), orders (`Order`, `OrderItem`), support (`SupportTicket`, `SupportMessage`, `SupportNote`, `FaqCategory`, `FaqItem`) and maintenance (`Incident`, `IncidentUpdate`, `BackupRecord`, `ErrorReport`, `MaintenanceLog`). The old placeholder `User`/`VendorMember` models were dropped (no data existed). Enums are lower-case so the API and database share the same strings.
+* **Migrations** (`prisma/migrations`): `…_init` is generated from the schema; `…_constraints` adds `CHECK` constraints Prisma cannot express; `…_customers_support_maintenance` (hand-ordered after generation) and `…_constraints_v2` add the BIGINT prices, the new tables, their `CHECK`s and the partial unique index that allows one default address per customer. `prisma migrate diff` reports no drift between schema and migrations (also checked in CI). Production applies them with `npx prisma migrate deploy` (verified on a real PostgreSQL 16).
 * **Driver:** Prisma 7's `pg` adapter, so any PostgreSQL works (self-hosted, managed, embedded). Connection pooling by `pg`; use PgBouncer only if you ever run many instances.
 * **Search:** normalised Persian text in `searchText` with `contains` (SQL `LIKE`). Comfortable into the tens of thousands of products. Beyond that add a trigram index (not applied automatically):
   ```sql
@@ -159,6 +175,16 @@ For a first administrator in development: `DEV_ADMIN_EMAIL=you@example.com DEV_A
 
 Optional: run the same tests against a real PostgreSQL by setting `TEST_DATABASE_URL` (each test file uses its own throw-away schema).
 
+## 8b. Customers, support and maintenance (second foundation step)
+
+Same ports-and-adapters style; each area is documented on its own:
+
+* [Customer accounts](../customers/CUSTOMERS.md) — phone + one-time-code sign-in, sessions, addresses, favourites, order history, export, deletion; pluggable SMS (none active).
+* [Customer support](../support/SUPPORT.md) — tickets, conversations, internal notes, roles, abuse protection, Persian FAQ.
+* [Technical maintenance](../maintenance/MAINTENANCE.md) — health, incidents, security checks, error reports, encrypted backups with a *verified* restore test, maintenance audit log, free CI automation.
+
+Code layout added: `src/domain/{money,phone}.ts`, `src/domain/{customer,support,maintenance}/` (pure rules and Zod schemas, shared with the browser), `server/customers/`, `server/support/`, `server/maintenance/`, `server/sms/`, `server/routes/` (admin route modules plugged into `createApi({ adminRoutes })`), `server/customer-api.ts` (separate public/customer handler: own cookie, CORS allow-list, CSRF), `server/services.ts` (wiring shared by the server, the CLIs and the tests), `server/cli/ops.ts`. Administrator RBAC gained support, FAQ, customer and maintenance actions (`server/auth/rbac.ts`).
+
 ## 9. Costs and constraints
 
 | Item | Cost | Note |
@@ -167,6 +193,8 @@ Optional: run the same tests against a real PostgreSQL by setting `TEST_DATABASE
 | TLS certificate | free options exist | issuance depends on what is reachable from Iran |
 | GitHub Actions + Cloudflare Pages (existing deployment) | free tier, unchanged | |
 | **Server in Iran** | the only recurring cost | A small VPS is enough to start (2 vCPU, 4 GB RAM): scrypt uses ~128 MiB per concurrent login and PostgreSQL a few hundred MB. Storage grows with images (≈ 1.5 GB per 1,000 products at ~250 KB × 6 photos). |
+| SMS gateway (customer sign-in) | **not activated** | The only new cost driver. Bounded by `SMS_DAILY_LIMIT` (default 300 codes/day for the whole site). Customer sign-in is off in production until the owner chooses and configures a provider. |
+| Monitoring and security automation | free | GitHub Actions workflows only; no paid service. |
 | AI services | **none** | The product never calls an AI API. |
 
 ## 10. Security considerations
@@ -194,4 +222,7 @@ Optional: run the same tests against a real PostgreSQL by setting `TEST_DATABASE
 5. **Administrators:** names, roles, and who holds the authenticator devices; password-manager policy.
 6. **Backup and recovery policy:** frequency, retention, off-server copy, restore drill.
 7. **Product data:** final categories and attributes (dimensions, materials), and the first real catalogue.
-8. **Next build step:** the mobile-first admin UI (a separate PR once the above is decided).
+8. **SMS provider:** which Iranian gateway, its API format and price; sender number/regulatory registration; the daily limit you accept.
+9. **Legal text and retention:** terms and privacy policy wording; how long order/accounting data must be kept after an account is deleted.
+10. **Customer-facing policies** for the FAQ: delivery times, returns, made-to-order lead times (the FAQ drafts are empty on purpose).
+11. **Next build steps:** the mobile-first admin UI, then the customer UI (sign-in, account, support), then checkout/payment (PRD Phase 3) — separate PRs.

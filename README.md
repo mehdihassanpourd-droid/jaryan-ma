@@ -41,6 +41,7 @@ npm run db:studio
 | `npm run db:generate` | Generate the Prisma client (runs automatically before test/typecheck/build) |
 | `npm run api:dev` / `api:build` / `api:start` | Admin API: dev server / bundle / run the bundle |
 | `npm run admin -- <command>` | Administrator CLI (see docs/admin/SELF-HOSTING.md) |
+| `npm run ops -- <command>` | Operations CLI: health, security-check, backup, restore-test, backup-status, log-action (see docs/maintenance/MAINTENANCE.md) |
 | `npm run check` | lint + typecheck + test + schema validation |
 
 ## Automated deployment (GitHub Actions)
@@ -108,6 +109,12 @@ A self-hostable admin API for managing hundreds or thousands of products from an
 - Design, decisions, security, costs, remaining questions: [docs/admin/ARCHITECTURE.md](docs/admin/ARCHITECTURE.md)
 - Running it on your own server: [docs/admin/SELF-HOSTING.md](docs/admin/SELF-HOSTING.md)
 - CSV import/export format: [docs/admin/CSV-FORMAT.md](docs/admin/CSV-FORMAT.md)
+- Customer accounts (phone + SMS code, addresses, favourites, orders, export/deletion): [docs/customers/CUSTOMERS.md](docs/customers/CUSTOMERS.md) — **off in production until an SMS gateway is chosen; no paid service is active**
+- Customer support (tickets, notes, roles, abuse protection, Persian FAQ): [docs/support/SUPPORT.md](docs/support/SUPPORT.md)
+- Technical maintenance (health, incidents, security checks, error reports, encrypted backups with a verified restore test, free GitHub Actions monitoring): [docs/maintenance/MAINTENANCE.md](docs/maintenance/MAINTENANCE.md)
+- Prices are exact integer Toman up to 10¹⁵ (PostgreSQL `BIGINT`): [price model](docs/admin/ARCHITECTURE.md#price-model-bigint-reviewed)
+
+The server-side code (`server/`) is never part of the static site; `npm run check` includes tests that fail if storefront code imports it. To also run the server tests against a real PostgreSQL: `TEST_DATABASE_URL=postgresql://user:pw@127.0.0.1:5432/db npm test` (each test file gets its own throw-away schema).
 
 ```bash
 npm test               # 224 tests on an embedded PostgreSQL: no database, cloud account or credentials needed

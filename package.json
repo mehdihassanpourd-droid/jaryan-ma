@@ -22,10 +22,12 @@
     "pretest": "npm run db:generate",
     "db:migrate:deploy": "prisma migrate deploy",
     "api:dev": "tsx server/main.ts",
-    "api:build": "esbuild server/main.ts server/cli/admin.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outbase=server --outdir=dist/server --out-extension:.js=.mjs --log-level=warning",
+    "api:build": "esbuild server/main.ts server/cli/admin.ts server/cli/ops.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outbase=server --outdir=dist/server --out-extension:.js=.mjs --log-level=warning",
     "api:start": "node dist/server/main.mjs",
     "admin": "tsx server/cli/admin.ts",
-    "admin:prod": "node dist/server/cli/admin.mjs"
+    "admin:prod": "node dist/server/cli/admin.mjs",
+    "ops": "tsx server/cli/ops.ts",
+    "ops:prod": "node dist/server/cli/ops.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1157.0",

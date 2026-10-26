@@ -129,6 +129,45 @@ describe("parseProductCsv", () => {
   });
 });
 
+describe("large prices in CSV", () => {
+  const row = (price: string, variantPrice = "") =>
+    `big,محصول گران,,wall-hangings,draft,stocked,"${price}",${variantPrice ? "" : "2"},,,,${variantPrice ? "V1" : ""},${variantPrice ? "size=L" : ""},${variantPrice},${variantPrice ? "1" : ""}`;
+
+  it.each([
+    ["5000000000000", 5_000_000_000_000],
+    ["۹۹۹٬۹۹۹٬۹۹۹٬۹۹۹٬۹۹۹", 999_999_999_999_999],
+    ["1,000,000,000,000,000", 1_000_000_000_000_000],
+    ["۵۰۰۰۰۰۰۰۰۰۰۰۰ تومان", 5_000_000_000_000],
+  ])("imports %s exactly", (text, expected) => {
+    const r = importCsv(row(text));
+    expect(r.issues).toEqual([]);
+    expect(r.products[0]?.priceToman).toBe(expected);
+  });
+
+  it("imports large variant prices exactly", () => {
+    const r = importCsv(row("", "999999999999999"));
+    expect(r.issues).toEqual([]);
+    expect(r.products[0]?.variants[0]?.priceToman).toBe(999_999_999_999_999);
+  });
+
+  it("rejects amounts that are too big or would silently lose precision, with a row-numbered issue", () => {
+    for (const text of ["1000000000000001", "9007199254740993", "99999999999999999999", "1e15", "12.5"]) {
+      const r = importCsv(row(text));
+      expect(r.products, text).toEqual([]);
+      expect(r.issues[0], text).toMatchObject({ row: 2, field: expect.stringMatching(/price/i) });
+    }
+  });
+
+  it("round-trips large prices through export and import", () => {
+    const products = [storedProduct({ slug: "big", priceToman: 999_999_999_999_999 }), storedProduct({ id: "p2", slug: "bigger", priceToman: 1_000_000_000_000_000 })];
+    const csv = toCsv(productsToCsvRows(products, new Map([["c1", "wall-hangings"]])));
+    expect(csv).toContain("999999999999999");
+    const r = parseProductCsv(csv, { categoryIdBySlug: categories });
+    expect(r.issues).toEqual([]);
+    expect(r.products.map((p) => p.priceToman)).toEqual([999_999_999_999_999, 1_000_000_000_000_000]);
+  });
+});
+
 describe("export -> import round trip", () => {
   it("preserves products, variants and images, and protects formulas on export", () => {
     const products = [

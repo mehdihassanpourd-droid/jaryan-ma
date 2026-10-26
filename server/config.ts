@@ -39,6 +39,22 @@ const schema = z.object({
   DEV_DATA_DIR: z.string().default(".data"),
   DEV_ADMIN_EMAIL: z.string().optional(),
   DEV_ADMIN_PASSWORD: z.string().optional(),
+  // ---- customers, SMS, support, maintenance
+  CUSTOMER_ACCOUNTS_ENABLED: bool(),
+  /** Storefront origin(s) allowed to call the customer API with credentials. */
+  CUSTOMER_ORIGINS: z.string().optional(),
+  SMS_PROVIDER: z.enum(["disabled", "console", "http"]).optional(),
+  SMS_HTTP_URL: z.string().url().optional(),
+  /** Value of the Authorization header (or similar) for the gateway. A secret: environment only. */
+  SMS_HTTP_AUTH_HEADER: z.string().optional(),
+  SMS_HTTP_AUTH_HEADER_NAME: z.string().default("authorization"),
+  /** JSON body with {{to}} and {{text}} placeholders. */
+  SMS_HTTP_BODY_TEMPLATE: z.string().optional(),
+  SMS_HTTP_ID_FIELD: z.string().optional(),
+  /** Hard ceiling of verification SMS per 24 h for the whole site (cost protection). */
+  SMS_DAILY_LIMIT: z.coerce.number().int().min(1).max(100_000).default(300),
+  RELEASE: z.string().max(64).optional(),
+  SCHEDULER_ENABLED: bool(true),
 });
 
 export interface S3Config {
@@ -48,6 +64,12 @@ export interface S3Config {
   accessKeyId: string;
   secretAccessKey: string;
   forcePathStyle: boolean;
+}
+
+export interface SmsConfig {
+  provider: "disabled" | "console" | "http";
+  http: { url: string; authHeaderName: string; authHeader: string | null; bodyTemplate: string; idField: string | null } | null;
+  dailyLimit: number;
 }
 
 export interface Config {
@@ -70,6 +92,11 @@ export interface Config {
   scryptLogN: number;
   devDataDir: string;
   devAdmin: { email: string; password: string } | null;
+  customerAccountsEnabled: boolean;
+  customerOrigins: string;
+  sms: SmsConfig;
+  release: string | null;
+  schedulerEnabled: boolean;
 }
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
@@ -100,6 +127,31 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     if (e.COOKIE_SECURE === false) problems.push("COOKIE_SECURE=false is not allowed in production");
     if (e.DEV_ADMIN_EMAIL || e.DEV_ADMIN_PASSWORD) problems.push("DEV_ADMIN_* must not be set in production (create administrators with the admin CLI)");
     if (e.DATABASE_URL?.startsWith("pglite")) problems.push("DATABASE_URL must point to a PostgreSQL server in production");
+  }
+  const accounts = e.CUSTOMER_ACCOUNTS_ENABLED ?? !production;
+  const smsProvider = e.SMS_PROVIDER ?? (production ? "disabled" : "console");
+  if (production && smsProvider === "console") problems.push("SMS_PROVIDER=console prints sign-in codes to the log and is not allowed in production");
+  if (smsProvider === "http") {
+    need("SMS_HTTP_URL", e.SMS_HTTP_URL);
+    need("SMS_HTTP_BODY_TEMPLATE", e.SMS_HTTP_BODY_TEMPLATE);
+    if (e.SMS_HTTP_BODY_TEMPLATE && (!e.SMS_HTTP_BODY_TEMPLATE.includes("{{to}}") || !e.SMS_HTTP_BODY_TEMPLATE.includes("{{text}}"))) {
+      problems.push("SMS_HTTP_BODY_TEMPLATE must contain {{to}} and {{text}}");
+    }
+    if (e.SMS_HTTP_BODY_TEMPLATE) {
+      try {
+        JSON.parse(e.SMS_HTTP_BODY_TEMPLATE.replace(/\{\{(to|text)\}\}/g, "x"));
+      } catch {
+        problems.push("SMS_HTTP_BODY_TEMPLATE must be valid JSON once the placeholders are filled in");
+      }
+    }
+    if (e.SMS_HTTP_URL && production && !e.SMS_HTTP_URL.startsWith("https://")) problems.push("SMS_HTTP_URL must use https in production");
+  }
+  if (production && accounts) {
+    need("CUSTOMER_ORIGINS", e.CUSTOMER_ORIGINS);
+    if (smsProvider !== "http") problems.push("CUSTOMER_ACCOUNTS_ENABLED=true needs a real SMS gateway (SMS_PROVIDER=http); customers could not receive codes otherwise");
+  }
+  if (e.CUSTOMER_ORIGINS && e.CUSTOMER_ORIGINS.split(",").some((o) => o.includes("*") || (production && !o.trim().startsWith("https://")))) {
+    problems.push("CUSTOMER_ORIGINS must list explicit origins (https:// in production, no wildcards)");
   }
   if (e.APP_ENCRYPTION_KEY && Buffer.from(e.APP_ENCRYPTION_KEY, "base64").length !== 32) {
     problems.push("APP_ENCRYPTION_KEY must be 32 random bytes, base64-encoded (generate with: openssl rand -base64 32)");
@@ -140,6 +192,18 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     requireTotp: e.REQUIRE_TOTP ?? production,
     scryptLogN: e.SCRYPT_LOG_N,
     devDataDir: e.DEV_DATA_DIR,
+    customerAccountsEnabled: accounts,
+    customerOrigins: e.CUSTOMER_ORIGINS ?? (production ? "" : "http://127.0.0.1:3000,http://localhost:3000"),
+    sms: {
+      provider: smsProvider,
+      http:
+        smsProvider === "http" && e.SMS_HTTP_URL && e.SMS_HTTP_BODY_TEMPLATE
+          ? { url: e.SMS_HTTP_URL, authHeaderName: e.SMS_HTTP_AUTH_HEADER_NAME, authHeader: e.SMS_HTTP_AUTH_HEADER ?? null, bodyTemplate: e.SMS_HTTP_BODY_TEMPLATE, idField: e.SMS_HTTP_ID_FIELD ?? null }
+          : null,
+      dailyLimit: e.SMS_DAILY_LIMIT,
+    },
+    release: e.RELEASE ?? null,
+    schedulerEnabled: e.SCHEDULER_ENABLED ?? true,
     devAdmin: !production && e.DEV_ADMIN_EMAIL && e.DEV_ADMIN_PASSWORD ? { email: e.DEV_ADMIN_EMAIL, password: e.DEV_ADMIN_PASSWORD } : null,
   };
 }

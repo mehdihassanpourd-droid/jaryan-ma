@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_TOMAN } from "../money";
 import { fixPersianLetters } from "../persian";
 import { FULFILLMENTS, PRODUCT_STATUSES } from "./types";
 
@@ -25,8 +26,6 @@ export type ProductIssueCode = (typeof PRODUCT_ISSUE_CODES)[number];
 
 export const MAX_IMAGES_PER_PRODUCT = 12;
 export const MAX_VARIANTS_PER_PRODUCT = 50;
-/** PostgreSQL INTEGER is 32-bit: about 2.1 billion Toman is the ceiling. */
-export const MAX_TOMAN = 2_000_000_000;
 
 const toman = z.number().int().min(0).max(MAX_TOMAN);
 const stock = z.number().int().min(0).max(100_000);

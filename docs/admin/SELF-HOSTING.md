@@ -51,6 +51,16 @@ PUBLIC_MEDIA_URL=https://media.example.ir
 ADMIN_ORIGINS=https://admin.example.ir
 APP_ENCRYPTION_KEY=...        # openssl rand -base64 32 ; back it up: without it TOTP seeds cannot be decrypted
 TRUST_PROXY=true              # only because nginx on this host sets X-Forwarded-For
+RELEASE=2026-03-01            # optional label attached to error reports
+
+# --- customers / support (leave CUSTOMER_ACCOUNTS_ENABLED unset or false until an SMS gateway is chosen) ---
+CUSTOMER_ACCOUNTS_ENABLED=false
+# CUSTOMER_ORIGINS=https://shop.example.ir          # storefront origin(s); must share a registrable domain with the API
+# SMS_PROVIDER=http                                  # disabled (default) | http ; "console" is refused in production
+# SMS_HTTP_URL=https://sms-gateway.example.ir/send
+# SMS_HTTP_AUTH_HEADER=Bearer ...                    # secret
+# SMS_HTTP_BODY_TEMPLATE={"receiver":"{{to}}","message":"{{text}}"}
+# SMS_DAILY_LIMIT=300                                # hard ceiling of codes per 24 h for the whole site
 ```
 The server refuses to start in production if anything required is missing, and never prints secret values. `REQUIRE_TOTP=false`, `COOKIE_SECURE=false` and `DEV_ADMIN_*` are rejected in production.
 
@@ -111,11 +121,32 @@ server {
 ```
 Firewall: only 80/443 (and SSH) public. PostgreSQL, MinIO's API/console and the Node port stay on localhost.
 
-## 6. Backups and recovery
+## 6. Backups, restore tests and monitoring
 
-* Database: `pg_dump -Fc jaryan > /var/backups/jaryan-$(date +%F).dump` daily (cron/systemd timer), keep ≥ 14 days, copy **off the server**.
-* Media: mirror the bucket (`mc mirror` for MinIO, or the provider's tools) to a second location.
-* Secrets: keep `APP_ENCRYPTION_KEY` and the env file in a password manager. **Test a restore** (`pg_restore` into a scratch database) at least once before relying on it.
+Full procedure, states and runbooks: [MAINTENANCE.md](../maintenance/MAINTENANCE.md). Short version:
+
+```ini
+# /etc/jaryan-ma/backup.env   (chmod 600)
+BACKUP_DIR=/var/backups/jaryan
+BACKUP_ENCRYPTION_KEY=...            # openssl rand -base64 32 ; ALSO store it in a password manager, NOT only on this server
+BACKUP_KEEP_DAYS=30
+RESTORE_TEST_ADMIN_URL=postgresql://restore_admin:...@scratch-host:5432/postgres   # a SCRATCH PostgreSQL server with CREATEDB
+```
+```bash
+set -a; . /etc/jaryan-ma/api.env; . /etc/jaryan-ma/backup.env; set +a
+node dist/server/cli/ops.mjs backup          # encrypted pg_dump + manifest; registered as "taken", NOT as verified
+node dist/server/cli/ops.mjs restore-test    # restores into a scratch DB, compares every table; records pass/fail
+node dist/server/cli/ops.mjs backup-status   # exit 0 only when a recent backup AND a recent successful restore test exist
+node dist/server/cli/ops.mjs health          # database, migrations, storage, backups, errors, security configuration
+node dist/server/cli/ops.mjs security-check
+```
+
+* Schedule `backup` daily and `restore-test` weekly with systemd timers (examples in MAINTENANCE.md §4), and copy `BACKUP_DIR` **off the server**.
+* **Do not consider backups working until `backup-status` says `operational`.** The first drill is a checklist in MAINTENANCE.md §9.
+* Media (the S3 bucket): mirror it with `mc mirror`/`rclone` to a second location and register it (`POST /api/v1/maintenance/backups`, `kind: "media"`).
+* Secrets: keep `APP_ENCRYPTION_KEY`, `BACKUP_ENCRYPTION_KEY` and the env files in a password manager. Losing `BACKUP_ENCRYPTION_KEY` makes every backup unreadable.
+* The server runs its own housekeeping (health cycle every 5 min, expired sessions/codes, account erasure after the grace period, closing resolved tickets, pruning). Disable with `SCHEDULER_ENABLED=false` if you prefer to run `ops purge` / `ops run-deletions` from timers.
+* Monitoring: point an external probe (or the repository's `site-health` workflow) at `https://<api host>/health` (status only, 503 when down).
 * If a phone is lost: `npm run admin:prod -- reset-totp --email …`; forgotten password: `reset-password`; compromised account: `disable` (also signs out every session).
 
 ## 7. Updating
@@ -125,7 +156,7 @@ cd /opt/jaryan-ma && sudo -u jaryan git pull && sudo -u jaryan npm ci && sudo -u
 set -a; . /etc/jaryan-ma/api.env; set +a; npx prisma migrate deploy
 sudo systemctl restart jaryan-api
 ```
-Take a database backup before applying migrations. Logs are JSON lines on stdout (`journalctl -u jaryan-api`); they contain error names and events, never secrets.
+Take a database backup (`ops backup`) before applying migrations and record the deployment: `ops log-action --action deploy --outcome success --target release:<id>`. Logs are JSON lines on stdout (`journalctl -u jaryan-api`); they contain error names and events, never secrets.
 
 ## 8. Local development (no server needed)
 

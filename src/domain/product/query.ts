@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_TOMAN } from "../money";
 import { normalizeForSearch } from "../persian";
 import { FULFILLMENTS, PRODUCT_STATUSES } from "./types";
 
@@ -21,8 +22,8 @@ export const productListQuerySchema = z.object({
   categoryId: z.string().min(1).max(64).optional(),
   fulfillment: z.enum(FULFILLMENTS).optional(),
   availability: z.enum(["in_stock", "out_of_stock"]).optional(),
-  minPrice: int(0, 2_000_000_000).optional(),
-  maxPrice: int(0, 2_000_000_000).optional(),
+  minPrice: int(0, MAX_TOMAN).optional(),
+  maxPrice: int(0, MAX_TOMAN).optional(),
   sort: z.enum(SORT_KEYS).default("updated_desc"),
   page: int(1, 10_000).default(1),
   pageSize: int(1, MAX_PAGE_SIZE).default(20),

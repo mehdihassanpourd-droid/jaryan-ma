@@ -91,3 +91,40 @@ describe("validation", () => {
     expect(problems({ SCRYPT_LOG_N: "5" }).join()).toContain("SCRYPT_LOG_N");
   });
 });
+
+describe("customer accounts and SMS", () => {
+  const http = { SMS_PROVIDER: "http", SMS_HTTP_URL: "https://sms.example.ir/send", SMS_HTTP_BODY_TEMPLATE: '{"to":"{{to}}","text":"{{text}}"}' };
+
+  it("are off in production by default and need nothing else to stay off", () => {
+    const c = loadConfig(prod);
+    expect(c).toMatchObject({ customerAccountsEnabled: false, sms: { provider: "disabled", http: null, dailyLimit: 300 } });
+  });
+
+  it("are on in development with the console SMS provider", () => {
+    expect(loadConfig({})).toMatchObject({ customerAccountsEnabled: true, sms: { provider: "console" } });
+  });
+
+  it("refuse the console provider in production, even when accounts are off", () => {
+    expect(problems({ ...prod, SMS_PROVIDER: "console" }).join()).toContain("not allowed in production");
+  });
+
+  it("cannot be enabled in production without a real gateway and explicit storefront origins", () => {
+    const list = problems({ ...prod, CUSTOMER_ACCOUNTS_ENABLED: "true" }).join("\n");
+    expect(list).toContain("CUSTOMER_ORIGINS");
+    expect(list).toContain("SMS_PROVIDER=http");
+    const ok = loadConfig({ ...prod, CUSTOMER_ACCOUNTS_ENABLED: "true", CUSTOMER_ORIGINS: "https://shop.example.ir", ...http, SMS_HTTP_AUTH_HEADER: "Bearer placeholder" });
+    expect(ok).toMatchObject({ customerAccountsEnabled: true, sms: { provider: "http", http: { url: "https://sms.example.ir/send", authHeader: "Bearer placeholder" } } });
+  });
+
+  it("validates the gateway settings", () => {
+    expect(problems({ ...prod, SMS_PROVIDER: "http" }).join("\n")).toMatch(/SMS_HTTP_URL[\s\S]*SMS_HTTP_BODY_TEMPLATE/);
+    expect(problems({ ...prod, ...http, SMS_HTTP_BODY_TEMPLATE: '{"to":"{{to}}"}' }).join()).toContain("{{to}} and {{text}}");
+    expect(problems({ ...prod, ...http, SMS_HTTP_BODY_TEMPLATE: "{{to}} {{text}}" }).join()).toContain("valid JSON");
+    expect(problems({ ...prod, ...http, SMS_HTTP_URL: "http://sms.example.ir/send" }).join()).toContain("https");
+  });
+
+  it("rejects wildcard or non-HTTPS customer origins", () => {
+    expect(problems({ ...prod, CUSTOMER_ORIGINS: "*" }).join()).toContain("explicit origins");
+    expect(problems({ ...prod, CUSTOMER_ORIGINS: "http://shop.example.ir" }).join()).toContain("explicit origins");
+  });
+});

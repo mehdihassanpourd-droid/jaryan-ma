@@ -1,4 +1,5 @@
 import { ConflictError, NotFoundError, ValidationError } from "../../src/domain/errors";
+import { tomanFromDbOrNull, tomanToDbOrNull } from "../../src/domain/money";
 import { normalizeForSearch } from "../../src/domain/persian";
 import type {
   CatalogRepository,
@@ -16,7 +17,7 @@ import type { Db } from "../db/client";
 type Tx = Prisma.TransactionClient;
 
 const FULL = { images: { orderBy: { position: "asc" } }, variants: { orderBy: { position: "asc" } } } satisfies Prisma.ProductInclude;
-const LIST_SELECT = {
+export const LIST_SELECT = {
   id: true,
   slug: true,
   name: true,
@@ -34,7 +35,7 @@ const LIST_SELECT = {
 } satisfies Prisma.ProductSelect;
 
 type FullRow = Prisma.ProductGetPayload<{ include: typeof FULL }>;
-type ListRow = Prisma.ProductGetPayload<{ select: typeof LIST_SELECT }>;
+export type ListRow = Prisma.ProductGetPayload<{ select: typeof LIST_SELECT }>;
 
 const ORDER_BY: Record<ProductListQuery["sort"], Prisma.ProductOrderByWithRelationInput[]> = {
   updated_desc: [{ updatedAt: "desc" }, { id: "desc" }],
@@ -56,7 +57,7 @@ function toStored(p: FullRow): StoredProduct {
     categoryId: p.categoryId,
     status: p.status,
     fulfillment: p.fulfillment,
-    priceToman: p.priceToman,
+    priceToman: tomanFromDbOrNull(p.priceToman),
     inventory: p.inventory,
     leadTimeDays: p.leadTimeDays,
     images: p.images.map((i) => ({ id: i.id, key: i.key, alt: i.alt, position: i.position })),
@@ -64,7 +65,7 @@ function toStored(p: FullRow): StoredProduct {
       id: v.id,
       sku: v.sku,
       options: v.options as Record<string, string>,
-      priceToman: v.priceToman,
+      priceToman: tomanFromDbOrNull(v.priceToman),
       inventory: v.inventory,
       position: v.position,
     })),
@@ -75,8 +76,9 @@ function toStored(p: FullRow): StoredProduct {
   };
 }
 
-function toListRow(p: ListRow): ProductListRow {
-  const effective = p.variants.map((v) => v.priceToman ?? p.priceToman).filter((n): n is number => n !== null);
+export function toListRow(p: ListRow): ProductListRow {
+  const productPrice = tomanFromDbOrNull(p.priceToman);
+  const effective = p.variants.map((v) => tomanFromDbOrNull(v.priceToman) ?? productPrice).filter((n): n is number => n !== null);
   const cover = p.images[0];
   return {
     id: p.id,
@@ -85,7 +87,7 @@ function toListRow(p: ListRow): ProductListRow {
     status: p.status,
     fulfillment: p.fulfillment,
     categoryId: p.categoryId,
-    priceToman: p.priceToman,
+    priceToman: productPrice,
     inventory: p.inventory,
     leadTimeDays: p.leadTimeDays,
     coverKey: cover?.key ?? null,
@@ -126,7 +128,7 @@ const variantRows = (input: ProductInput) =>
   input.variants.map((v, position) => ({
     sku: v.sku,
     options: v.options as Prisma.InputJsonValue,
-    priceToman: v.priceToman,
+    priceToman: tomanToDbOrNull(v.priceToman),
     inventory: v.inventory,
     position,
   }));
@@ -148,8 +150,8 @@ export class PrismaCatalogRepository implements CatalogRepository {
     ];
     if (q.categoryId) and.push({ categoryId: q.categoryId });
     if (q.fulfillment) and.push({ fulfillment: q.fulfillment });
-    if (q.minPrice !== undefined) and.push({ priceToman: { gte: q.minPrice } });
-    if (q.maxPrice !== undefined) and.push({ priceToman: { lte: q.maxPrice } });
+    if (q.minPrice !== undefined) and.push({ priceToman: { gte: BigInt(q.minPrice) } });
+    if (q.maxPrice !== undefined) and.push({ priceToman: { lte: BigInt(q.maxPrice) } });
     // Stock lives on variants for variant products, so inventory is NULL there: express both
     // sides with explicit NULL handling instead of relying on NOT(NULL > 0).
     if (q.availability === "in_stock") {
@@ -211,7 +213,7 @@ export class PrismaCatalogRepository implements CatalogRepository {
         categoryId: input.categoryId,
         status: input.status,
         fulfillment: input.fulfillment as Fulfillment,
-        priceToman: input.priceToman,
+        priceToman: tomanToDbOrNull(input.priceToman),
         inventory: input.inventory,
         leadTimeDays: input.leadTimeDays,
         searchText: searchText(input),
@@ -239,7 +241,7 @@ export class PrismaCatalogRepository implements CatalogRepository {
         categoryId: input.categoryId,
         status: input.status,
         fulfillment: input.fulfillment as Fulfillment,
-        priceToman: input.priceToman,
+        priceToman: tomanToDbOrNull(input.priceToman),
         inventory: input.inventory,
         leadTimeDays: input.leadTimeDays,
         searchText: searchText(input),

@@ -1,7 +1,7 @@
 import { Writable } from "node:stream";
 import { createInterface } from "node:readline";
 import { AuthFailure } from "../auth/auth-service";
-import type { Role } from "../auth/rbac";
+import { ROLES, type Role } from "../auth/rbac";
 import { generateTotpSecret, verifyTotp } from "../auth/totp";
 import { ConfigError, loadConfig } from "../config";
 import { createAuthServices, openDatabase } from "../runtime";
@@ -81,7 +81,7 @@ async function run() {
   const [command, ...args] = process.argv.slice(2);
   const email = option(args, "email");
   if (!command || (command !== "list" && !email)) {
-    console.error("Usage: admin <create|list|reset-password|reset-totp|disable|enable> --email <address> [--role owner|editor|viewer]");
+    console.error("Usage: admin <create|list|reset-password|reset-totp|disable|enable> --email <address> [--role owner|editor|support|viewer]");
     process.exit(2);
   }
   const config = loadConfig(process.env);
@@ -91,7 +91,7 @@ async function run() {
     switch (command) {
       case "create": {
         const role = (option(args, "role") ?? "editor") as Role;
-        if (!["owner", "editor", "viewer"].includes(role)) throw new Error("invalid_role");
+        if (!ROLES.includes(role)) throw new Error("invalid_role");
         const password = await newPassword();
         const totpSecret = config.requireTotp ? await enrollTotp((s) => service.provisioningUri(email!, s)) : null;
         const account = await service.createAccount({ email: email!, password, role, totpSecret });

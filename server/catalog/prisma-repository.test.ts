@@ -267,4 +267,40 @@ describe("database safety net", () => {
     await expect(db.product.create({ data: { ...base, slug: "a4", fulfillment: "stocked", inventory: -1 } })).rejects.toThrow();
     expect(await db.product.count()).toBe(0);
   });
+
+  it("stores prices as BIGINT and refuses amounts beyond the supported range even without the application", async () => {
+    const columns = await db.$queryRawUnsafe<Array<{ table_name: string; data_type: string }>>(
+      `SELECT table_name, data_type FROM information_schema.columns WHERE column_name = 'priceToman' AND table_schema = '${testDb.schema}'`,
+    );
+    // sorted here, not in SQL: ORDER BY follows the server's collation, which differs between PostgreSQL installations
+    expect(columns.sort((a, b) => (a.table_name < b.table_name ? -1 : 1))).toEqual([
+      { table_name: "product_variants", data_type: "bigint" },
+      { table_name: "products", data_type: "bigint" },
+    ]);
+    const vendor = await db.vendor.findFirstOrThrow();
+    const base = { vendorId: vendor.id, name: "x", searchText: "x", fulfillment: "stocked" as const, inventory: 1 };
+    await expect(db.product.create({ data: { ...base, slug: "ok", priceToman: 1_000_000_000_000_000n } })).resolves.toBeTruthy();
+    await expect(db.product.create({ data: { ...base, slug: "too-big", priceToman: 1_000_000_000_000_001n } })).rejects.toThrow();
+    await expect(db.product.create({ data: { ...base, slug: "huge", priceToman: 9_223_372_036_854_775_807n } })).rejects.toThrow();
+  });
+});
+
+describe("large prices", () => {
+  it("round-trip exactly through create, read, update, import and list", async () => {
+    const big = 999_999_999_999_999;
+    const p = await service.create(input({ name: "گران قیمت", fulfillment: "stocked", inventory: 1, priceToman: big, variants: undefined }), ACTOR);
+    expect(p.priceToman).toBe(big);
+    expect((await repo.getProduct(p.id))?.priceToman).toBe(big);
+    const updated = await service.update(p.id, input({ name: "گران قیمت", slug: p.slug, fulfillment: "stocked", inventory: 1, priceToman: 1_000_000_000_000_000 }), 1, ACTOR);
+    expect(updated.priceToman).toBe(1_000_000_000_000_000);
+    await service.importChunk([forImport({ slug: "imp-big", name: "وارد شده", fulfillment: "stocked", inventory: 1, priceToman: 5_000_000_000_000 })], ACTOR);
+    const sorted = (await list("sort=price_desc")).items.map((i) => i.priceToman);
+    expect(sorted).toEqual([1_000_000_000_000_000, 5_000_000_000_000]);
+  });
+
+  it("applies large variant prices to the list summary", async () => {
+    await service.create(input({ name: "تنوع گران", fulfillment: "stocked", priceToman: 7_000_000_000_000, variants: [{ sku: "B1", options: { s: "1" }, inventory: 1, priceToman: 3_000_000_000_000 }, { sku: "B2", options: { s: "2" }, inventory: 1 }] }), ACTOR);
+    const row = (await list("")).items[0];
+    expect(row).toMatchObject({ priceToman: 7_000_000_000_000, variantMinPriceToman: 3_000_000_000_000 });
+  });
 });

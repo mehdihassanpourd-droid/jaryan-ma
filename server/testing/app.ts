@@ -14,10 +14,20 @@ import { SnapshotPublisher } from "../catalog/snapshot-publisher";
 import type { TestDatabase } from "../db/test-database";
 import { ensureDefaultVendor } from "../db/vendor";
 import { MemoryStorage } from "../storage/memory";
+import { createCustomerApi } from "../customer-api";
+import { MemorySmsProvider } from "../sms/provider";
+import { createPlatformServices, type PlatformServices } from "../services";
+import type { SecurityFacts } from "../../src/domain/maintenance/security-checks";
 
 export const ORIGIN = "https://admin.example.test";
 export const PASSWORD = "rain-over-the-woven-hills-92";
 export const COOKIE_NAME = "jm_session";
+export const STORE_ORIGIN = "https://shop.example.test";
+export const CUSTOMER_COOKIE = "jm_c";
+export const SECURITY_FACTS: SecurityFacts = {
+  production: true, encryptionKeyConfigured: true, cookieSecure: true, requireTotp: true, adminOrigins: [ORIGIN], storageDriver: "s3", databaseIsEmbedded: false,
+  trustProxy: true, customerAccountsEnabled: true, smsProvider: "http", publicMediaUrl: "https://media.example.test", devAdminConfigured: false,
+};
 
 export interface Session {
   cookie: string;
@@ -32,6 +42,10 @@ export interface TestApp {
   auth: AuthService;
   adminStore: PrismaAdminStore;
   deps: ApiDeps;
+  /** Customers, support and maintenance (present when built with `platform: true`). */
+  platform: PlatformServices;
+  sms: MemorySmsProvider;
+  customerApi: (request: Request) => Promise<Response>;
   /** Creates (once per role) an account and signs in over HTTP; returns cookie + CSRF token. */
   session(role: Role): Promise<Session>;
   /** Waits for background snapshot work. */
@@ -43,7 +57,7 @@ export interface TestApp {
 }
 
 /** Builds the whole server (without HTTP sockets) on a test database. */
-export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string } = {}): Promise<TestApp> {
+export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string; customerAccountsEnabled?: boolean } = {}): Promise<TestApp> {
   await testDb.reset();
   const vendorId = await ensureDefaultVendor(testDb.db);
   let clock = new Date("2026-03-01T10:00:00.000Z");
@@ -66,11 +80,29 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
     background: (task) => void pending.push(task),
     log: (event, detail) => void logs.push({ event, detail }),
   };
+  const limiter = new RateLimiter(() => clock.getTime());
+  const sms = new MemorySmsProvider();
+  const platform = createPlatformServices({
+    db: testDb.db, masterKey: randomBytes(32), sms, limiter, customerCookie: { name: CUSTOMER_COOKIE, secure: true }, clock: () => clock,
+    probes: {
+      database: async () => void (await testDb.db.$queryRaw`SELECT 1`),
+      migrations: async () => ({ name: "migrations", status: "ok", message: "all migrations applied" }),
+      storage: async () => undefined,
+      security: () => SECURITY_FACTS,
+    },
+  });
+  deps.adminRoutes = platform.adminRoutes;
+  const customerApi = createCustomerApi({
+    enabled: overrides.customerAccountsEnabled ?? true, customers: platform.customerStore, auth: platform.customerAuth, authenticator: platform.customerAuthenticator,
+    accounts: platform.accounts, support: platform.support, maintenance: platform.maintenance, cookie: { name: CUSTOMER_COOKIE, secure: true },
+    sessionMaxAgeSeconds: 30 * 24 * 3600, customerOrigins: STORE_ORIGIN, environment: "test", limiter, clock: () => clock, healthCacheMs: 0,
+    log: (event, detail) => void logs.push({ event, detail }),
+  });
   const handle = createApi(deps);
   const sessions = new Map<Role, Session>();
 
   return {
-    handle: (request) => handle(request), storage, catalog, repo, auth, adminStore, deps, logs,
+    handle: (request) => handle(request), platform, sms, customerApi, storage, catalog, repo, auth, adminStore, deps, logs,
     now: () => clock,
     advance: (ms) => void (clock = new Date(clock.getTime() + ms)),
     async settle() {

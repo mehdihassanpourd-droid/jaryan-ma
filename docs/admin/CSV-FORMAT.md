@@ -12,7 +12,7 @@ One product = one or more rows. Rows with the same `slug` are one product: the *
 | `category_slug` | no (yes to publish) | Must exist, otherwise `unknown_category`. |
 | `status` | no | `draft` (default), `published`, `archived`. |
 | `fulfillment` | yes | `unique`, `stocked`, `made_to_order`. |
-| `price_toman` | no (yes to publish) | Whole Toman, at most 2,000,000,000. Persian digits and separators are fine (`۱٬۲۰۰٬۰۰۰`); decimals/negatives are rejected. |
+| `price_toman` | no (yes to publish) | Whole Toman, at most 1,000,000,000,000,000 (10¹⁵; stored as BIGINT and always exact). Quote cells that contain thousands separators (`"1,200,000"`) so the comma is not read as a column break. Persian digits and separators are fine (`۱٬۲۰۰٬۰۰۰`); decimals/negatives are rejected. |
 | `inventory` | by type | `unique`: 0 or 1 (default 1). `stocked` without variants: required. Empty for made-to-order or when variants carry stock. |
 | `lead_time_days` | made-to-order | 1–365; empty otherwise. |
 | `image_keys` | no | Keys of images **already uploaded** (`images/<productId>/<id>.webp`), separated by `\|`. CSV does not upload files. |

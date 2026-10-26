@@ -39,7 +39,8 @@ Project scaffold, design system, responsive RTL homepage, demo catalogue, Prisma
 ### Phase 2 — Ordering (no online payment)
 - Cart, address capture, order creation with status `PENDING`.
 - Manual order confirmation by admin (phone / Instagram follow-up) **[TBC]**.
-- Phone-number (OTP) login. SMS provider **[TBC]**.
+- Phone-number (OTP) login. SMS provider **[TBC]** — the account, session, address, favourites, history, export and deletion foundation is built behind a pluggable `SmsProvider` ([docs/customers/CUSTOMERS.md](docs/customers/CUSTOMERS.md)); no SMS service is active.
+- Customer support: tickets, internal notes, Persian FAQ ([docs/support/SUPPORT.md](docs/support/SUPPORT.md)) — foundation built, UI pending.
 - Admin panel: products, categories, orders.
 
 ### Phase 3 — Payments

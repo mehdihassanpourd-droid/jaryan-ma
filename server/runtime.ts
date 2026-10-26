@@ -2,6 +2,13 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createApi } from "./api";
+import { DEFAULT_OTP_POLICY } from "../src/domain/customer/otp-policy";
+import { createCustomerApi, isCustomerApiPath } from "./customer-api";
+import { createPlatformServices } from "./services";
+import { ConsoleSmsProvider, DisabledSmsProvider, HttpSmsProvider, type SmsProvider } from "./sms/provider";
+import type { CheckResult } from "../src/domain/maintenance/health";
+import type { SecurityFacts } from "../src/domain/maintenance/security-checks";
+import { readMigrations } from "./db/migrations";
 import { AuthService, DEFAULT_AUTH_SETTINGS } from "./auth/auth-service";
 import { ScryptHasher } from "./auth/password";
 import { PrismaAdminStore } from "./auth/prisma-store";
@@ -54,8 +61,8 @@ export async function openDatabase(config: Config, log: Logger = jsonLogger): Pr
 }
 
 /** Production key comes from the environment; development generates one once and keeps it in .data/. */
-export function resolveSecretBox(config: Config): SecretBox {
-  if (config.encryptionKey) return SecretBox.fromBase64(config.encryptionKey);
+export function resolveMasterKey(config: Config): Buffer {
+  if (config.encryptionKey) return Buffer.from(config.encryptionKey, "base64");
   if (config.production) throw new Error("APP_ENCRYPTION_KEY is required in production");
   mkdirSync(config.devDataDir, { recursive: true });
   const file = join(config.devDataDir, "dev-encryption.key");
@@ -63,8 +70,10 @@ export function resolveSecretBox(config: Config): SecretBox {
     writeFileSync(file, randomBytes(32).toString("base64"), { mode: 0o600 });
     chmodSync(file, 0o600);
   }
-  return SecretBox.fromBase64(readFileSync(file, "utf8").trim());
+  return Buffer.from(readFileSync(file, "utf8").trim(), "base64");
 }
+
+export const resolveSecretBox = (config: Config): SecretBox => new SecretBox(resolveMasterKey(config));
 
 export function createAuthServices(config: Config, db: Db) {
   const store = new PrismaAdminStore(db);
@@ -73,6 +82,65 @@ export function createAuthServices(config: Config, db: Db) {
   const cookie = { name: config.cookieSecure ? "__Host-jm_session" : "jm_session", secure: config.cookieSecure };
   const authenticator = new SessionAuthenticator(store, cookie, { idleMs: config.sessionIdleMinutes * 60_000, absoluteMs: settings.sessionAbsoluteMs });
   return { store, service, cookie, authenticator, settings };
+}
+
+export function createStorage(config: Config, log: Logger = jsonLogger): { storage: ObjectStorage; media?: LocalDiskStorage } {
+  if (config.storage.driver === "s3") {
+    const s3 = config.storage.s3;
+    return { storage: new S3Storage(createS3Client(s3), s3.bucket) };
+  }
+  const media = new LocalDiskStorage(join(config.devDataDir, "media"));
+  log("warn", "local_media_storage", { note: "development only; configure STORAGE_DRIVER=s3 for production" });
+  return { storage: media, media };
+}
+
+export function createSmsProvider(config: Config): SmsProvider {
+  const sms = config.sms;
+  if (sms.provider === "console") return new ConsoleSmsProvider();
+  if (sms.provider === "http" && sms.http) {
+    const headers: Record<string, string> = sms.http.authHeader ? { [sms.http.authHeaderName]: sms.http.authHeader } : {};
+    return new HttpSmsProvider({ url: sms.http.url, headers, bodyTemplate: sms.http.bodyTemplate, idField: sms.http.idField ?? undefined });
+  }
+  return new DisabledSmsProvider();
+}
+
+/** The facts the security review needs; never the secret values themselves. */
+export function securityFacts(config: Config, embedded: boolean): SecurityFacts {
+  return {
+    production: config.production,
+    encryptionKeyConfigured: config.encryptionKey !== null,
+    cookieSecure: config.cookieSecure,
+    requireTotp: config.requireTotp,
+    adminOrigins: config.adminOrigins.split(",").map((o) => o.trim()).filter(Boolean),
+    storageDriver: config.storage.driver,
+    databaseIsEmbedded: embedded,
+    trustProxy: config.trustProxy,
+    customerAccountsEnabled: config.customerAccountsEnabled,
+    smsProvider: config.sms.provider === "disabled" ? "disabled" : config.sms.provider,
+    publicMediaUrl: config.publicMediaUrl,
+    devAdminConfigured: config.devAdmin !== null,
+  };
+}
+
+/** Every migration file is recorded as finished in Prisma's history table. */
+export async function checkMigrations(db: Db, production: boolean): Promise<CheckResult> {
+  let rows: Array<{ migration_name: string; finished_at: Date | null; rolled_back_at: Date | null }>;
+  try {
+    rows = await db.$queryRaw`SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations`;
+  } catch {
+    return production
+      ? { name: "migrations", status: "fail", message: "migration history table not found: run `prisma migrate deploy`" }
+      : { name: "migrations", status: "ok", message: "development database (migration history not tracked)" };
+  }
+  if (rows.some((r) => r.finished_at === null && r.rolled_back_at === null)) return { name: "migrations", status: "fail", message: "a migration started but did not finish" };
+  try {
+    const applied = new Set(rows.filter((r) => r.finished_at !== null).map((r) => r.migration_name));
+    const missing = readMigrations().filter((m) => !applied.has(m.name));
+    if (missing.length > 0) return { name: "migrations", status: "fail", message: `${missing.length} migration(s) not applied` };
+  } catch {
+    // migration files are not shipped next to the bundle: the history check above is all we can do
+  }
+  return { name: "migrations", status: "ok", message: "all migrations applied" };
 }
 
 export interface Runtime {
@@ -87,16 +155,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
   const vendorId = await ensureDefaultVendor(db);
   const repo = new PrismaCatalogRepository(db, vendorId);
 
-  let storage: ObjectStorage;
-  let media: LocalDiskStorage | undefined;
-  if (config.storage.driver === "s3") {
-    const s3 = config.storage.s3;
-    storage = new S3Storage(createS3Client(s3), s3.bucket);
-  } else {
-    media = new LocalDiskStorage(join(config.devDataDir, "media"));
-    storage = media;
-    log("warn", "local_media_storage", { note: "development only; configure STORAGE_DRIVER=s3 for production" });
-  }
+  const { storage, media } = createStorage(config, log);
 
   const auth = createAuthServices(config, db);
   if (config.devAdmin && !(await auth.store.findByEmail(config.devAdmin.email.toLowerCase()))) {
@@ -104,8 +163,31 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     log("warn", "dev_admin_created", { email: config.devAdmin.email });
   }
 
+  const limiter = new RateLimiter();
+  const customerCookie = { name: config.cookieSecure ? "__Host-jm_c" : "jm_c", secure: config.cookieSecure };
+  const platform = createPlatformServices({
+    db,
+    masterKey: resolveMasterKey(config),
+    sms: createSmsProvider(config),
+    limiter,
+    customerCookie,
+    log: (event, detail) => log("warn", event, detail),
+    otpPolicy: { ...DEFAULT_OTP_POLICY, dailyBudget: config.sms.dailyLimit },
+    probes: {
+      database: async () => void (await db.$queryRaw`SELECT 1`),
+      migrations: () => checkMigrations(db, config.production),
+      storage: async () => {
+        const key = `_health/probe-${randomBytes(6).toString("hex")}`;
+        await storage.put(key, "ok", { contentType: "text/plain" });
+        await storage.delete([key]);
+      },
+      security: () => securityFacts(config, database.embedded),
+    },
+  });
+
   const pending = new Set<Promise<unknown>>();
-  const handle = createApi({
+  const adminApi = createApi({
+    adminRoutes: platform.adminRoutes,
     catalog: new CatalogService(repo),
     storage,
     publisher: new SnapshotPublisher(repo, storage, config.publicMediaUrl ?? ""),
@@ -119,17 +201,53 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
       pending.add(task);
       void task.finally(() => pending.delete(task));
     },
-    log: (event, detail) => log("error", event, detail),
+    log: (event, detail) => {
+      log("error", event, detail);
+      // Unhandled server errors become de-duplicated, sanitised error reports (no request data is attached).
+      if (event === "unhandled_error") {
+        void platform.maintenance.reportError({ source: "server", environment: config.production ? "production" : "development", release: config.release, name: String(detail?.error ?? "Error"), message: event }).catch(() => undefined);
+      }
+    },
   });
 
-  const purge = setInterval(() => void auth.store.purgeExpired(new Date()).catch(() => undefined), 3600_000);
-  purge.unref();
+  const customerApi = createCustomerApi({
+    enabled: config.customerAccountsEnabled,
+    customers: platform.customerStore,
+    auth: platform.customerAuth,
+    authenticator: platform.customerAuthenticator,
+    accounts: platform.accounts,
+    support: platform.support,
+    maintenance: platform.maintenance,
+    cookie: customerCookie,
+    sessionMaxAgeSeconds: 30 * 24 * 3600,
+    customerOrigins: config.customerOrigins,
+    environment: config.production ? "production" : "development",
+    limiter,
+    log: (event, detail) => log("error", event, detail),
+  });
+  const handle = (request: Request) => (isCustomerApiPath(new URL(request.url).pathname) ? customerApi(request) : adminApi(request));
+
+  // Scheduled housekeeping. Each job is independent and failures are logged, never fatal.
+  const timers: NodeJS.Timeout[] = [];
+  const every = (name: string, ms: number, job: () => Promise<unknown>) => {
+    const timer = setInterval(() => void job().catch((error: unknown) => log("error", "job_failed", { job: name, error: error instanceof Error ? error.name : "unknown" })), ms);
+    timer.unref();
+    timers.push(timer);
+  };
+  every("purge_admin_sessions", 3600_000, () => auth.store.purgeExpired(new Date()));
+  if (config.schedulerEnabled) {
+    every("health_cycle", 5 * 60_000, () => platform.maintenance.healthCycle());
+    every("purge_customer_data", 3600_000, () => platform.customerAuth.purge());
+    every("account_deletions", 3600_000, () => platform.accounts.runDeletions());
+    every("close_resolved_tickets", 6 * 3600_000, () => platform.support.autoCloseResolved());
+    every("prune_maintenance", 24 * 3600_000, () => platform.maintenance.prune());
+  }
 
   return {
     handle,
     media,
     async shutdown() {
-      clearInterval(purge);
+      for (const timer of timers) clearInterval(timer);
       await Promise.allSettled([...pending]);
       await database.stop();
     },

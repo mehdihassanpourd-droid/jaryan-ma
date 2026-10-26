@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAX_TOMAN } from "../money";
 import { messageFa, productIssueMessagesFa } from "./messages.fa";
 import { PRODUCT_ISSUE_CODES, validateProductInput } from "./schema";
 
@@ -90,8 +91,9 @@ describe("product validation: input hygiene", () => {
   it("rejects bad prices, keys and text", () => {
     expect(codes({ ...base, priceToman: 1.5 })).not.toEqual([]);
     expect(codes({ ...base, priceToman: -1 })).not.toEqual([]);
-    expect(codes({ ...base, priceToman: 2_000_000_000 })).toEqual([]);
-    expect(codes({ ...base, priceToman: 2_000_000_001 })).not.toEqual([]); // PostgreSQL INTEGER ceiling
+    expect(codes({ ...base, priceToman: MAX_TOMAN })).toEqual([]);
+    expect(codes({ ...base, priceToman: MAX_TOMAN + 1 })).not.toEqual([]);
+    expect(codes({ ...base, priceToman: "1500000" })).not.toEqual([]); // amounts are numbers, never strings
     expect(codes({ ...base, images: [{ key: "../../etc/passwd", alt: "" }] })).not.toEqual([]);
     expect(codes({ ...base, images: [{ key: "images/p1/a.svg", alt: "" }] })).not.toEqual([]);
     expect(codes({ ...base, name: "x" })).not.toEqual([]);
@@ -106,6 +108,29 @@ describe("product validation: input hygiene", () => {
   it("limits images and variants", () => {
     const images = Array.from({ length: 13 }, (_, i) => ({ key: `images/p1/a${i}.webp`, alt: "" }));
     expect(codes({ ...base, images })).not.toEqual([]);
+  });
+});
+
+describe("large prices", () => {
+  const priced = (price: number | null, variantPrice: number | null = null) =>
+    validateProductInput({ ...base, fulfillment: "stocked", inventory: variantPrice === null ? 1 : null, priceToman: price, variants: variantPrice === null ? [] : [{ sku: "A", options: { s: "1" }, inventory: 1, priceToman: variantPrice }] });
+
+  it.each([2_147_483_647, 2_147_483_648, 5_000_000_000_000, 999_999_999_999_999, MAX_TOMAN])("accepts %i exactly", (price) => {
+    const r = priced(price);
+    expect(r.ok && r.value.priceToman).toBe(price);
+  });
+
+  it("rejects what could be silently corrupted or does not fit the database", () => {
+    expect(priced(MAX_TOMAN + 1).ok).toBe(false);
+    expect(priced(9_007_199_254_740_993).ok).toBe(false); // above 2^53: JSON.parse would already have rounded it
+    expect(priced(1e21).ok).toBe(false);
+    expect(priced(1_500_000.5).ok).toBe(false);
+  });
+
+  it("applies the same bound to variant prices and publish rules still work on large values", () => {
+    expect(priced(null, MAX_TOMAN).ok).toBe(true);
+    expect(priced(null, MAX_TOMAN + 1).ok).toBe(false);
+    expect(validateProductInput({ ...base, categoryId: "c", images: [IMG], status: "published", priceToman: MAX_TOMAN }).ok).toBe(true);
   });
 });
 

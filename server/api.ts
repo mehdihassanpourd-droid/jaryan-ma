@@ -19,13 +19,29 @@ import { can, type Action } from "./auth/rbac";
 import { clearedSessionCookie, safeEqual, sessionCookie, type CookieSettings } from "./auth/session";
 import type { CatalogService } from "./catalog/service";
 import type { SnapshotPublisher, SyncOptions, SyncTarget } from "./catalog/snapshot-publisher";
+import { domainErrorResponse } from "./routes/common";
 import { BodyError, errorResponse, isMutating, json, originAllowed, readBytes, readJson } from "./http";
 
 export const CSRF_HEADER = "x-csrf-token";
 /** Set by the Node adapter (never trusted from the client) so rate limiting sees the real address. */
 export const CLIENT_IP_HEADER = "x-jm-client-ip";
 
+/** What an admin route module receives: an authenticated, CSRF-checked, origin-checked request. */
+export interface AdminRouteContext {
+  request: Request;
+  url: URL;
+  method: string;
+  /** Path below /api/v1, e.g. "/support/tickets/7". */
+  path: string;
+  principal: Principal;
+}
+
+/** Returns a response when it handles the route, or null to let the next module (or a 404) answer. */
+export type AdminRouter = (ctx: AdminRouteContext) => Promise<Response | null>;
+
 export interface ApiDeps {
+  /** Additional authenticated route modules (support, FAQ, maintenance). */
+  adminRoutes?: AdminRouter[];
   catalog: CatalogService;
   storage: ObjectStorage;
   publisher: SnapshotPublisher;
@@ -119,6 +135,11 @@ export function createApi(deps: ApiDeps) {
           throw error;
         }
         return json({ ok: true });
+      }
+
+      for (const route of deps.adminRoutes ?? []) {
+        const response = await route({ request, url, method, path, principal });
+        if (response) return response;
       }
 
       if (path === "/categories") {
@@ -256,6 +277,8 @@ export function createApi(deps: ApiDeps) {
       if (error instanceof ValidationError) return errorResponse("validation_failed", 422, { issues: error.issues });
       if (error instanceof ConflictError) return errorResponse(error.code, 409);
       if (error instanceof NotFoundError) return errorResponse("not_found", 404);
+      const known = domainErrorResponse(error);
+      if (known) return known;
       log("unhandled_error", { error: error instanceof Error ? error.name : "unknown" });
       return errorResponse("internal_error", 500);
     }

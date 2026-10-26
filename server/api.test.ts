@@ -162,11 +162,12 @@ describe("product lifecycle", () => {
     expect((await api({ method: "PUT", path: `/api/v1/products/${id}`, body: { product: publishable() } })).status).toBe(422);
   });
 
-  it("returns validation issues the UI can translate, and rejects prices beyond the database range", async () => {
+  it("returns validation issues the UI can translate, and rejects prices beyond the supported range", async () => {
     const bad = await api({ method: "POST", path: "/api/v1/products", body: { name: "رانر سفارشی", fulfillment: "made_to_order" } });
     expect(bad.status).toBe(422);
     expect(bad.body.issues).toContainEqual({ path: "leadTimeDays", code: "lead_time_required" });
-    expect((await api({ method: "POST", path: "/api/v1/products", body: draft({ priceToman: 2_000_000_001 }) })).status).toBe(422);
+    expect((await api({ method: "POST", path: "/api/v1/products", body: draft({ priceToman: 1_000_000_000_000_001 }) })).status).toBe(422);
+    expect((await api({ method: "POST", path: "/api/v1/products", body: draft({ priceToman: "1500000" }) })).status).toBe(422);
     expect((await api({ method: "POST", path: "/api/v1/products", body: draft({ categoryId: "nope" }) })).body.issues).toContainEqual({ path: "categoryId", code: "unknown_category" });
   });
 
@@ -191,6 +192,46 @@ describe("product lifecycle", () => {
     await api({ method: "POST", path: "/api/v1/products", body: draft() });
     const log = await testDb.db.auditLog.findMany({ where: { action: "product.create" } });
     expect(log.map((l) => l.actorEmail)).toEqual(["owner@example.test"]);
+  });
+});
+
+describe("large prices end to end", () => {
+  const prices = [2_147_483_648, 5_000_000_000_000, 999_999_999_999_999, 1_000_000_000_000_000];
+
+  it("round-trips through the database and JSON responses without losing a digit", async () => {
+    for (const [i, price] of prices.entries()) {
+      const created = await api({ method: "POST", path: "/api/v1/products", body: draft({ name: `گران قیمت ${i}`, slug: `big-${i}`, priceToman: price }) });
+      expect(created.status).toBe(201);
+      expect(created.body.product.priceToman).toBe(price);
+      const raw = await app.handle(new Request(`https://admin.example.test/api/v1/products/${created.body.product.id}`, { headers: { cookie: owner.cookie } }));
+      expect(await raw.text()).toContain(`"priceToman":${price}`); // literally the exact digits on the wire
+    }
+  });
+
+  it("sorts and filters by large prices exactly", async () => {
+    for (const [i, price] of prices.entries()) await api({ method: "POST", path: "/api/v1/products", body: draft({ name: `گران قیمت ${i}`, slug: `big-${i}`, priceToman: price }) });
+    const asc = await api({ path: "/api/v1/products?sort=price_asc" });
+    expect(asc.body.items.map((i: { priceToman: number }) => i.priceToman)).toEqual(prices);
+    const range = await api({ path: "/api/v1/products?minPrice=999999999999999&maxPrice=999999999999999" });
+    expect(range.body.items.map((i: { priceToman: number }) => i.priceToman)).toEqual([999_999_999_999_999]);
+    const above = await api({ path: "/api/v1/products?minPrice=2147483649" });
+    expect(above.body.total).toBe(3);
+  });
+
+  it("never lets a bigint reach a response", async () => {
+    await api({ method: "POST", path: "/api/v1/products", body: draft({ priceToman: 5_000_000_000_000 }) });
+    const list = await app.handle(new Request("https://admin.example.test/api/v1/products", { headers: { cookie: owner.cookie } }));
+    expect(list.status).toBe(200);
+    expect(await list.text()).toContain("5000000000000");
+  });
+
+  it("publishes large prices exactly in the public snapshot", async () => {
+    const created = await api({ method: "POST", path: "/api/v1/products", body: publishable({ slug: "pricey", priceToman: 999_999_999_999_999, fulfillment: "stocked", inventory: 2,
+      variants: undefined }) });
+    await api({ method: "POST", path: `/api/v1/products/${created.body.product.id}/status`, body: { status: "published", expectedVersion: 1 } });
+    await app.settle();
+    expect(app.storage.text("catalog/products/pricey.json")).toContain('"priceToman":999999999999999');
+    expect(app.storage.text("catalog/categories/wall-hangings.json")).toContain('"priceToman":999999999999999');
   });
 });
 
