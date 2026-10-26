@@ -4,10 +4,15 @@ import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { MobileCtaBar } from "@/components/layout/MobileCtaBar";
 import { site } from "@/lib/site";
+import { seoSettings } from "@/seo/config";
 import "./globals.css";
 
+const { origin, indexing } = seoSettings();
+
 export const metadata: Metadata = {
-  metadataBase: new URL(site.url),
+  metadataBase: new URL(origin ?? site.url),
+  // Closed until the owner launches the site (SEO_ALLOW_INDEXING=true); sample pages override this per page.
+  robots: indexing ? { index: true, follow: true } : { index: false, follow: false },
   title: { default: `${site.name} | ${site.slogan}`, template: `%s | ${site.name}` },
   description: site.description,
   openGraph: { title: site.name, description: site.slogan, locale: "fa_IR", type: "website" },

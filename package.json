@@ -27,7 +27,9 @@
     "admin": "tsx server/cli/admin.ts",
     "admin:prod": "node dist/server/cli/admin.mjs",
     "ops": "tsx server/cli/ops.ts",
-    "ops:prod": "node dist/server/cli/ops.mjs"
+    "ops:prod": "node dist/server/cli/ops.mjs",
+    "seo:fixture": "tsx scripts/seo/generate-fixture.ts .data/seo-snapshot",
+    "seo:verify": "node scripts/seo/run-verify.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1157.0",

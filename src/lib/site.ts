@@ -20,9 +20,9 @@ export const site = {
 } as const;
 
 export const navLinks = [
-  { href: "#collections", label: "مجموعه‌ها" },
-  { href: "#featured", label: "آثار منتخب" },
-  { href: "#story", label: "داستان ما" },
-  { href: "#trust", label: "اطمینان" },
-  { href: "#contact", label: "تماس" },
+  { href: "/#collections", label: "مجموعه‌ها" },
+  { href: "/#featured", label: "آثار منتخب" },
+  { href: "/#story", label: "داستان ما" },
+  { href: "/#trust", label: "اطمینان" },
+  { href: "/#contact", label: "تماس" },
 ] as const;

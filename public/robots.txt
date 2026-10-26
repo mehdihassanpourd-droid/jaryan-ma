@@ -1,3 +1,0 @@
-# Demo deployment: keep out of search results until real content ships.
-User-agent: *
-Disallow: /

@@ -22,7 +22,8 @@ Read `PRD.md` and `ARCHITECTURE.md` first.
 9. **Customer authentication is real or absent.** Customers sign in only with an SMS one-time code through the `SmsProvider` port. No paid SMS service is activated by default; `console` SMS is development-only and refused in production; never add test codes, bypass flags or fake sessions to production paths. Customer sign-in stays off in production (`CUSTOMER_ACCOUNTS_ENABLED`) until a gateway is configured.
 10. **Backups are "operational" only after a successful restore test.** Never write code, docs or PR text that calls backups working because a job ran; the state comes from `assessBackups` (`src/domain/maintenance/backup.ts`).
 11. **Personal data is minimal and deletable.** New personal fields must be covered by data export (`gatherExport`) and by `anonymize`; never log phone numbers, codes, tokens, message text or request bodies; internal staff notes live in `SupportNote` and are never selected by customer-facing queries.
-12. Work on feature branches; open PRs; never push to the default branch directly.
+12. **SEO is derived from verified data only.** Titles, descriptions, alt text and JSON-LD come from the published catalogue snapshot (`src/seo/`), never from invented text: no ratings, reviews, brand, dates or prices that are not in the data. Sample (`isDemo`) content is never indexable or described as real. Raw HTML injection is allowed only in `src/seo/JsonLd.tsx`. Keep `npm run seo:verify` passing when touching pages, metadata or the snapshot format.
+13. Work on feature branches; open PRs; never push to the default branch directly.
 
 ## Code conventions
 - TypeScript strict; no `any`; prefer Server Components, add `"use client"` only for interactivity.
