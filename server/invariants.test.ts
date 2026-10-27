@@ -106,7 +106,7 @@ describe("the admin PWA stays private, portable and safe", () => {
 });
 
 describe("the Codespaces test environment stays private and uses real authentication", () => {
-  const scripts = ["lib", "setup", "create-admin", "start", "up", "down"].map((n) => `scripts/codespace/${n}.sh`);
+  const scripts = ["lib", "setup", "create-admin", "start", "up", "down", "update", "watch"].map((n) => `scripts/codespace/${n}.sh`);
   const everything = [...scripts, ".devcontainer/devcontainer.json", "scripts/codespace/smoke.ts"].map(read).join("\n");
 
   it("defines Node 22 + the forwarded admin port only, as pure JSON", () => {

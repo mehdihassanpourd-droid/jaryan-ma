@@ -197,6 +197,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     setup,
     originHostSuffixes: config.adminOriginHostSuffixes,
     originDebug: !config.production,
+    ...(config.appCommit ? { build: config.appCommit } : {}),
     adminRoutes: platform.adminRoutes,
     catalog: new CatalogService(repo),
     storage,

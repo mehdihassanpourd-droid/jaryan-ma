@@ -43,6 +43,8 @@ const schema = z.object({
   DEV_ADMIN_PASSWORD: z.string().optional(),
   /** Development only: create the FIRST administrator (password + mandatory TOTP) from the browser. Refused in production. */
   FIRST_RUN_SETUP: bool(false),
+  /** Short git commit the server runs (set by the Codespaces scripts); shown on the sign-in page in development only. */
+  APP_COMMIT: z.string().regex(/^[0-9a-f]{7,40}$/).optional(),
   // ---- customers, SMS, support, maintenance
   CUSTOMER_ACCOUNTS_ENABLED: bool(),
   /** Storefront origin(s) allowed to call the customer API with credentials. */
@@ -103,6 +105,8 @@ export interface Config {
   devAdmin: { email: string; password: string } | null;
   /** Browser-based creation of the first administrator; never true in production. */
   firstRunSetup: boolean;
+  /** Commit shown in development (never exposed in production). */
+  appCommit: string | null;
   customerAccountsEnabled: boolean;
   customerOrigins: string;
   sms: SmsConfig;
@@ -226,6 +230,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     schedulerEnabled: e.SCHEDULER_ENABLED ?? true,
     adminUiDir: (e.ADMIN_UI_ENABLED ?? true) ? e.ADMIN_UI_DIR : null,
     firstRunSetup: !production && e.FIRST_RUN_SETUP === true,
+    appCommit: e.APP_COMMIT ?? null,
     devAdmin: !production && e.DEV_ADMIN_EMAIL && e.DEV_ADMIN_PASSWORD ? { email: e.DEV_ADMIN_EMAIL, password: e.DEV_ADMIN_PASSWORD } : null,
   };
 }

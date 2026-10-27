@@ -58,7 +58,7 @@ export interface TestApp {
 }
 
 /** Builds the whole server (without HTTP sockets) on a test database. */
-export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string; customerAccountsEnabled?: boolean; firstRunSetup?: boolean; originHostSuffixes?: string[]; originDebug?: boolean } = {}): Promise<TestApp> {
+export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string; customerAccountsEnabled?: boolean; firstRunSetup?: boolean; originHostSuffixes?: string[]; originDebug?: boolean; build?: string } = {}): Promise<TestApp> {
   await testDb.reset();
   const vendorId = await ensureDefaultVendor(testDb.db);
   let clock = new Date("2026-03-01T10:00:00.000Z");
@@ -96,6 +96,7 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
   deps.adminRoutes = platform.adminRoutes;
   if (overrides.originHostSuffixes) deps.originHostSuffixes = overrides.originHostSuffixes;
   if (overrides.originDebug) deps.originDebug = true;
+  if (overrides.build) deps.build = overrides.build;
   if (overrides.firstRunSetup) deps.setup = new FirstRunSetup(true, auth, adminStore, new RateLimiter(() => clock.getTime()), () => clock);
   const customerApi = createCustomerApi({
     enabled: overrides.customerAccountsEnabled ?? true, customers: platform.customerStore, auth: platform.customerAuth, authenticator: platform.customerAuthenticator,

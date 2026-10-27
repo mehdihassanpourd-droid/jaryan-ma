@@ -37,7 +37,7 @@ function setupMessage(error: unknown): string {
  * administrator. It creates the same account as the command-line tool: strong password and a mandatory authenticator
  * (TOTP) that must be proven with a current code before anything is saved. It never appears once an account exists.
  */
-export function SetupPage({ onDone }: { onDone: () => void }) {
+export function SetupPage({ onDone, build = null }: { onDone: () => void; build?: string | null }) {
   const toast = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -127,6 +127,7 @@ export function SetupPage({ onDone }: { onDone: () => void }) {
             </Button>
           </form>
         )}
+        {build ? <p className="hint">نسخهٔ سرور آزمایشی: <bdi dir="ltr">{build}</bdi></p> : null}
       </main>
     </div>
   );
