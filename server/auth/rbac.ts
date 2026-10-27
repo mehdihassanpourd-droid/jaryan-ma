@@ -20,6 +20,9 @@ export const ACTIONS = [
   // orders (personal data: names, phones, addresses)
   "order:read",
   "order:manage",
+  // shipping rates and methods (prices the customer pays: owner only)
+  "shipping:read",
+  "shipping:manage",
   // operations
   "customer:manage",
   "maintenance:read",

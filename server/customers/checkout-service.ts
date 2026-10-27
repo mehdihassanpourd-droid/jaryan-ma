@@ -1,4 +1,6 @@
 import { MAX_OPEN_ORDERS, type CheckoutRequest, type LineProblem } from "../../src/domain/customer/checkout";
+import type { Destination, MethodQuote } from "../../src/domain/shipping/pricing";
+import type { ShippingService } from "../shipping/service";
 import { newOrderSchema } from "../../src/domain/customer/schema";
 import { lineTotal, MoneyRangeError, sumToman } from "../../src/domain/money";
 import type { CatalogRepository } from "../../src/domain/product/ports";
@@ -9,17 +11,33 @@ import type { AccountStore, OrderView } from "./account-ports";
 import type { CustomerStore } from "./ports";
 import { StockConflictError } from "../orders/stock";
 
-export type CheckoutErrorCode = "items_unavailable" | "too_many_open_orders" | "order_total_out_of_range" | "account_not_active";
+export type CheckoutErrorCode =
+  | "items_unavailable"
+  | "too_many_open_orders"
+  | "order_total_out_of_range"
+  | "account_not_active"
+  /** The chosen delivery method cannot deliver this cart to this place (disabled, not served, too heavy for any rate). */
+  | "delivery_unavailable"
+  /** The server's fee is not the one the customer was shown: nothing was ordered; `quotes` holds the current prices. */
+  | "delivery_fee_changed";
 
 export class CheckoutError extends Error {
   constructor(
     public code: CheckoutErrorCode,
     /** Per-line reasons for `items_unavailable`. */
     public problems: LineProblem[] = [],
+    /** For the two delivery errors: the server's current price for every method. */
+    public quotes: MethodQuote[] = [],
   ) {
     super(code);
     this.name = "CheckoutError";
   }
+}
+
+export interface CartQuote {
+  subtotalToman: number;
+  weightGrams: number;
+  quotes: MethodQuote[];
 }
 
 export interface PlacedOrder {
@@ -40,6 +58,8 @@ export class CheckoutService {
     private readonly catalog: Pick<CatalogRepository, "getPublishedBySlugs">,
     private readonly accounts: AccountStore,
     private readonly customers: CustomerStore,
+    /** Prices the delivery (the owner's rate table today; other providers later). The browser's idea of the fee is never used. */
+    private readonly shipping: ShippingService,
     /** The vendor that sells the catalogue this service reads (every order line carries a vendor: multi-vendor readiness). */
     private readonly vendorId: string,
     private readonly clock: () => Date = () => new Date(),
@@ -57,16 +77,64 @@ export class CheckoutService {
 
     if ((await this.accounts.countOpenOrders(customerId)) >= MAX_OPEN_ORDERS) throw new CheckoutError("too_many_open_orders");
 
-    const products = new Map((await this.catalog.getPublishedBySlugs([...new Set(request.items.map((l) => l.slug))])).map((p) => [p.slug, p]));
+    const priced = await this.priceItems(request.items);
+    const { products, items } = priced;
+    const total = priced.subtotalToman;
+
+    const address = request.deliveryMethod === "pickup" ? null : request.shipping;
+    const method = request.deliveryMethod;
+    const { weightGrams, quotes } = await this.shipping.quote({
+      destination: method !== "pickup" && address ? { province: address.province, city: address.city } : null,
+      lines: priced.weights,
+      subtotalToman: total,
+    });
+    const chosen = quotes.find((q) => q.method === method);
+    if (!chosen || !chosen.available) throw new CheckoutError("delivery_unavailable", [], quotes);
+    if (chosen.feeToman !== request.expectedFeeToman) throw new CheckoutError("delivery_fee_changed", [], quotes);
+    let grand: number;
+    try {
+      grand = sumToman([BigInt(total), BigInt(chosen.feeToman)]);
+    } catch (error) {
+      if (error instanceof MoneyRangeError) throw new CheckoutError("order_total_out_of_range");
+      throw error;
+    }
+    // Pickup keeps only who collects it.
+    const shippingSnapshot = !address
+      ? { recipientName: request.shipping.recipientName, recipientPhone: request.shipping.recipientPhone, province: "", city: "", street: null, plaque: null, unit: null, postalCode: null }
+      : address;
+    const delivery = {
+      method,
+      feeToman: chosen.feeToman,
+      details: { rateId: chosen.rateId, weightGrams, free: chosen.free, etaMinDays: chosen.etaMinDays, etaMaxDays: chosen.etaMaxDays, note: chosen.note },
+    };
+
+    const input = newOrderSchema.parse({ customerId, items, shipping: shippingSnapshot, delivery, customerNote: request.customerNote, requestId: request.requestId, totalToman: grand });
+    try {
+      const placed = await this.accounts.placeOrderOnce({ ...input, requestId: request.requestId }, this.clock());
+      if (placed.created) this.onStockChanged([...new Set(input.items.filter((i) => i.reserveStock).map((i) => i.productId))]);
+      return placed;
+    } catch (error) {
+      // Someone else took the stock between our check and the reservation (the reservation is the authority): say which lines.
+      if (error instanceof StockConflictError) throw new CheckoutError("items_unavailable", await this.problemsAfterConflict(request, error, products));
+      throw error;
+    }
+  }
+
+
+  /** Prices the cart's lines from the database. Throws `items_unavailable` with per-line reasons when any line cannot be ordered. */
+  private async priceItems(lines: CheckoutRequest["items"]) {
+    const products = new Map((await this.catalog.getPublishedBySlugs([...new Set(lines.map((l) => l.slug))])).map((p) => [p.slug, p]));
     const problems: LineProblem[] = [];
     const items = [];
-    for (const line of request.items) {
+    const weights: Array<{ quantity: number; weightGrams: number | null }> = [];
+    for (const line of lines) {
       const product = products.get(line.slug);
       const found: ReturnType<CheckoutService["priceLine"]> = product ? this.priceLine(product, line.sku, line.quantity) : { problem: "not_found" };
       if ("problem" in found) {
         problems.push({ slug: line.slug, sku: line.sku, reason: found.problem, ...(found.available !== undefined ? { available: found.available } : {}) });
         continue;
       }
+      weights.push({ quantity: line.quantity, weightGrams: found.product.weightGrams });
       items.push({
         productId: found.product.id,
         vendorId: this.vendorId,
@@ -80,25 +148,21 @@ export class CheckoutService {
       });
     }
     if (problems.length > 0) throw new CheckoutError("items_unavailable", problems);
-
-    let total: number;
+    let subtotalToman: number;
     try {
-      total = sumToman(items.map((i) => lineTotal(i.unitPriceToman, i.quantity)));
+      subtotalToman = sumToman(items.map((i) => lineTotal(i.unitPriceToman, i.quantity)));
     } catch (error) {
       if (error instanceof MoneyRangeError) throw new CheckoutError("order_total_out_of_range");
       throw error;
     }
+    return { products, items, weights, subtotalToman };
+  }
 
-    const input = newOrderSchema.parse({ customerId, items, shipping: request.shipping, customerNote: request.customerNote, requestId: request.requestId, totalToman: total });
-    try {
-      const placed = await this.accounts.placeOrderOnce({ ...input, requestId: request.requestId }, this.clock());
-      if (placed.created) this.onStockChanged([...new Set(input.items.filter((i) => i.reserveStock).map((i) => i.productId))]);
-      return placed;
-    } catch (error) {
-      // Someone else took the stock between our check and the reservation (the reservation is the authority): say which lines.
-      if (error instanceof StockConflictError) throw new CheckoutError("items_unavailable", await this.problemsAfterConflict(request, error, products));
-      throw error;
-    }
+  /** What delivery would cost for this cart (shown before the customer orders). Nothing is stored or reserved. */
+  async quote(request: { items: CheckoutRequest["items"]; destination: Destination | null }): Promise<CartQuote> {
+    const priced = await this.priceItems(request.items);
+    const { weightGrams, quotes } = await this.shipping.quote({ destination: request.destination, lines: priced.weights, subtotalToman: priced.subtotalToman });
+    return { subtotalToman: priced.subtotalToman, weightGrams, quotes };
   }
 
   /** Re-reads the catalogue to explain which lines lost the race and how many units are left (never reports a line as fine). */

@@ -4,6 +4,8 @@ import type { AdminOrderJson } from "../../src/domain/customer/order-admin";
 import { ORDER_STATUSES } from "../../src/domain/customer/order-status";
 import type { ShippingSnapshot } from "../../src/domain/customer/schema";
 import type { Prisma } from "../../src/generated/prisma/client";
+import type { CarrierKey } from "../../src/domain/shipping/methods";
+import { deliveryOf } from "../customers/prisma-account-store";
 import type { Db } from "../db/client";
 
 export const adminOrderListQuery = z.object({
@@ -13,7 +15,7 @@ export const adminOrderListQuery = z.object({
 });
 export type AdminOrderListQuery = z.output<typeof adminOrderListQuery>;
 
-const INCLUDE = { items: { orderBy: [{ titleSnapshot: "asc" }, { skuSnapshot: "asc" }] }, statusHistory: { orderBy: { seq: "asc" } }, customer: { select: { phone: true, firstName: true, lastName: true, status: true } } } satisfies Prisma.OrderInclude;
+const INCLUDE = { items: { orderBy: [{ titleSnapshot: "asc" }, { skuSnapshot: "asc" }] }, statusHistory: { orderBy: { seq: "asc" } }, shipment: true, customer: { select: { phone: true, firstName: true, lastName: true, status: true } } } satisfies Prisma.OrderInclude;
 type Row = Prisma.OrderGetPayload<{ include: typeof INCLUDE }>;
 
 /** The order as it goes over JSON (a Date serialises to the same ISO string). */
@@ -24,6 +26,12 @@ function toView(o: Row): AdminOrderJson {
     number: o.number,
     status: o.status,
     totalToman: tomanFromDb(o.totalToman),
+    subtotalToman: tomanFromDb(o.subtotalToman),
+    shippingFeeToman: tomanFromDb(o.shippingFeeToman),
+    delivery: { ...deliveryOf(o), weightGrams: ((o.deliveryDetails ?? {}) as { weightGrams?: number }).weightGrams ?? null },
+    shipment: o.shipment
+      ? { carrier: o.shipment.carrier as CarrierKey, carrierName: o.shipment.carrierName, trackingCode: o.shipment.trackingCode, updatedBy: o.shipment.updatedBy, updatedAt: o.shipment.updatedAt.toISOString() }
+      : null,
     placedAt: o.placedAt.toISOString(),
     customerNote: o.customerNote,
     shipping: o.shipping as unknown as ShippingSnapshot,

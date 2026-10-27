@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { canTransition, ORDER_REASON_MAX, ORDER_STATUSES, releasesStock, type OrderActorType, type OrderStatusValue } from "../../src/domain/customer/order-status";
+import { CARRIERS, CARRIER_NAME_MAX, TRACKING_CODE_MAX } from "../../src/domain/shipping/methods";
+import { toLatinDigits, fixPersianLetters } from "../../src/domain/persian";
 import { Prisma } from "../../src/generated/prisma/client";
 import type { Db } from "../db/client";
 import { releaseStock, type StockLine } from "./stock";
 
-export type OrderLifecycleErrorCode = "not_found" | "invalid_transition" | "order_changed";
+export type OrderLifecycleErrorCode = "not_found" | "invalid_transition" | "order_changed" | "shipment_not_allowed";
 
 export class OrderLifecycleError extends Error {
   constructor(
@@ -16,6 +18,34 @@ export class OrderLifecycleError extends Error {
     this.name = "OrderLifecycleError";
   }
 }
+
+/** Carrier and tracking entered by staff. A tracking code is short and plain (letters, digits, - _ . / and spaces). */
+export const shipmentInputSchema = z
+  .object({
+    carrier: z.enum(CARRIERS),
+    carrierName: z
+      .string()
+      .trim()
+      .max(CARRIER_NAME_MAX)
+      .transform(fixPersianLetters)
+      .transform((v) => (v === "" ? null : v))
+      .nullish()
+      .transform((v) => v ?? null),
+    trackingCode: z
+      .string()
+      .trim()
+      .max(TRACKING_CODE_MAX)
+      .transform((v) => toLatinDigits(v))
+      .refine((v) => v === "" || /^[\p{L}\p{N}\-_./ ]+$/u.test(v), "invalid_tracking_code")
+      .transform((v) => (v === "" ? null : v))
+      .nullish()
+      .transform((v) => v ?? null),
+  })
+  .strict()
+  .superRefine((s, ctx) => {
+    if (s.carrier === "other" && !s.carrierName) ctx.addIssue({ code: "custom", message: "carrier_name_required", path: ["carrierName"] });
+  });
+export type ShipmentInput = z.output<typeof shipmentInputSchema>;
 
 /** The body staff send to move an order. `expectedStatus` is what their screen showed: if someone else moved it first, nothing happens. */
 export const staffTransitionSchema = z
@@ -29,8 +59,11 @@ export const staffTransitionSchema = z
       .transform((v) => (v === "" ? null : v))
       .nullish()
       .transform((v) => v ?? null),
+    /** Only with `to: "shipped"`: the carrier and tracking code, saved in the same step. */
+    shipment: shipmentInputSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine((t) => t.shipment === undefined || t.to === "shipped", { message: "shipment_only_when_shipping", path: ["shipment"] });
 export type StaffTransition = z.output<typeof staffTransitionSchema>;
 
 export const customerCancelSchema = z
@@ -55,6 +88,8 @@ export interface TransitionRequest {
   /** The staff member's e-mail for audit and history (staff only). */
   actorLabel?: string | null;
   reason?: string | null;
+  /** Carrier and tracking to save with a move to "shipped". */
+  shipment?: ShipmentInput;
 }
 
 export interface TransitionResult {
@@ -127,6 +162,8 @@ export class OrderLifecycleService {
         await releaseStock(tx, give, now);
       }
 
+      if (request.shipment) await this.writeShipment(tx, order.id, order.number, request.shipment, request.actorLabel ?? null, now);
+
       await tx.orderStatusEvent.create({
         data: { orderId: order.id, fromStatus: from, toStatus: request.to, actorType: request.by, actorLabel: request.by === "staff" ? (request.actorLabel ?? null) : null, reason: request.reason ?? null, createdAt: now },
       });
@@ -142,6 +179,34 @@ export class OrderLifecycleService {
         },
       });
       return { number: order.number, from, to: request.to, productIds: [...new Set(give.map((l) => l.productId))] };
+    }, TX);
+  }
+
+  /** Creates or corrects the carrier/tracking of an order, inside the caller's transaction. */
+  private async writeShipment(tx: Prisma.TransactionClient, orderId: string, number: number, input: ShipmentInput, actor: string | null, now: Date): Promise<void> {
+    const data = { carrier: input.carrier, carrierName: input.carrier === "other" ? input.carrierName : null, trackingCode: input.trackingCode, updatedBy: actor, updatedAt: now };
+    await tx.orderShipment.upsert({ where: { orderId }, create: { orderId, createdAt: now, ...data }, update: data });
+    await tx.auditLog.create({
+      data: {
+        actorEmail: actor ?? "staff",
+        action: "order.shipment",
+        entity: "order",
+        entityId: orderId,
+        // The tracking code itself is not written to the log, only that there is one.
+        detail: { number, carrier: input.carrier, hasTracking: input.trackingCode !== null },
+        at: now,
+      },
+    });
+  }
+
+  /** Staff enter or correct the carrier and tracking code of an order that has been confirmed (also after it shipped). */
+  async setShipment(number: number, input: ShipmentInput, actorLabel: string | null): Promise<void> {
+    const now = this.clock();
+    await this.db.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { number }, select: { id: true, status: true } });
+      if (!order) throw new OrderLifecycleError("not_found");
+      if (!["confirmed", "preparing", "shipped", "delivered"].includes(order.status)) throw new OrderLifecycleError("shipment_not_allowed", order.status);
+      await this.writeShipment(tx, order.id, number, input, actorLabel, now);
     }, TX);
   }
 

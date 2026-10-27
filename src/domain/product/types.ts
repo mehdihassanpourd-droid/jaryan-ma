@@ -42,6 +42,8 @@ export interface StoredProduct {
   priceToman: number | null;
   inventory: number | null;
   leadTimeDays: number | null;
+  /** Packed weight of one unit in grams (shipping rates); null = the shop's default item weight applies. */
+  weightGrams: number | null;
   images: StoredImage[];
   variants: StoredVariant[];
   /** Optimistic-concurrency counter, incremented on every update. */

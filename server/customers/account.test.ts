@@ -31,6 +31,7 @@ async function order(customerId: string, priceToman: number, status: "pending" |
     customerId,
     items: [{ productId: p.id, vendorId, titleSnapshot: "سبد", unitPriceToman: priceToman, quantity }],
     shipping: { recipientName: "علی رضایی", recipientPhone: "09121234567", province: "تهران", city: "تهران", street: "خیابان ولیعصر ۱۲", postalCode: "1459813176" },
+    delivery: { method: "post", feeToman: 0, details: { rateId: null, weightGrams: 500, free: false, etaMinDays: null, etaMaxDays: null, note: null } },
     customerNote: "زنگ نزنید",
     totalToman: priceToman * quantity,
   });
@@ -143,7 +144,7 @@ describe("orders", () => {
 
   it("rejects a tampered total and totals above the supported maximum", async () => {
     const p = await product("x");
-    const base = { customerId: alice, shipping: { recipientName: "علی", recipientPhone: "09121234567", province: "تهران", city: "تهران", street: "خیابان ولیعصر", postalCode: "1459813176" } };
+    const base = { customerId: alice, delivery: { method: "post", feeToman: 0, details: { rateId: null, weightGrams: 500, free: false, etaMinDays: null, etaMaxDays: null, note: null } }, shipping: { recipientName: "علی", recipientPhone: "09121234567", province: "تهران", city: "تهران", street: "خیابان ولیعصر", postalCode: "1459813176" } };
     const line = (unit: number, quantity = 1) => ({ productId: p.id, vendorId, titleSnapshot: "x", unitPriceToman: unit, quantity });
     expect(newOrderSchema.safeParse({ ...base, items: [line(1000, 2)], totalToman: 1000 }).success).toBe(false);
     expect(newOrderSchema.safeParse({ ...base, items: [line(MAX_TOMAN, 2)], totalToman: MAX_TOMAN }).success).toBe(false);

@@ -201,6 +201,8 @@ model Product {
   /// unique: 0 or 1. stocked: stock (null when variants carry it). made_to_order: always null.
   inventory    Int?
   leadTimeDays Int?
+  /// Packed weight of one unit in grams, for shipping rates. Null = the shop-wide default item weight applies.
+  weightGrams  Int?
   /// Normalised name + description + SKUs for search (see normalizeForSearch).
   searchText   String        @default("")
   /// Optimistic concurrency: updates must present the version they read.
@@ -447,7 +449,16 @@ model Order {
   customerId   String
   status       OrderStatus @default(pending)
   /// Sum of the lines, whole Toman (BIGINT).
+  /// What the customer pays: subtotal + shippingFeeToman (whole Toman, BIGINT). Orders made before shipping existed have fee 0.
   totalToman   BigInt
+  /// Sum of the lines.
+  subtotalToman    BigInt   @default(0)
+  /// Delivery fee as quoted by the server at order time (0 = free, pickup, or an order from before shipping existed).
+  shippingFeeToman BigInt   @default(0)
+  /// How the order is delivered; null only for orders made before shipping existed.
+  deliveryMethod   ShippingMethod?
+  /// Quote details frozen with the order: { rateId, weightGrams, free, etaMinDays, etaMaxDays, note }.
+  deliveryDetails  Json?
   /// Delivery address and contact as they were at order time. Personal fields are scrubbed on anonymisation.
   shipping     Json
   customerNote String?
@@ -460,6 +471,7 @@ model Order {
   items         OrderItem[]
   tickets       SupportTicket[]
   statusHistory OrderStatusEvent[]
+  shipment      OrderShipment?
 
   @@unique([customerId, requestId])
   @@index([customerId, placedAt(sort: Desc)])
@@ -489,6 +501,78 @@ model OrderItem {
   @@index([orderId])
   @@index([vendorId])
   @@map("order_items")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Shipping: admin-configured rates (no external carrier API), the fee frozen with each order, and the carrier/tracking
+// that staff enter when it ships. See docs/shipping/SHIPPING.md.
+// ---------------------------------------------------------------------------------------------
+
+enum ShippingMethod {
+  post
+  tipax
+  local_courier
+  pickup
+}
+
+/// One row (id = 1): weight assumptions used when a product has no weight of its own.
+model ShippingSettings {
+  id                     Int      @id @default(1)
+  defaultItemWeightGrams Int      @default(500)
+  packagingWeightGrams   Int      @default(0)
+  /// Optimistic concurrency for the admin screen: a save presents the version it read.
+  version                Int      @default(1)
+  updatedAt              DateTime @default(now())
+
+  @@map("shipping_settings")
+}
+
+/// One row per delivery method. A method is offered to customers only when `enabled` (and, except pickup, a rate matches).
+model ShippingMethodConfig {
+  method             ShippingMethod @id
+  enabled            Boolean        @default(false)
+  /// Items subtotal at or above which this method is free. Null = no free shipping.
+  freeThresholdToman BigInt?
+  etaMinDays         Int?
+  etaMaxDays         Int?
+  /// Shown to the customer next to the method (pickup place and hours, courier area...). Written by the owner.
+  note               String?
+  rates              ShippingRate[]
+
+  @@map("shipping_method_configs")
+}
+
+/// Price for a destination + weight band. Empty `provinces` = anywhere; empty `cities` = every city of those provinces.
+model ShippingRate {
+  id             String               @id @default(uuid())
+  method         ShippingMethod
+  position       Int
+  provinces      String[]
+  cities         String[]
+  /// Band is minWeightGrams <= weight <= maxWeightGrams (null = no upper limit).
+  minWeightGrams Int                  @default(0)
+  maxWeightGrams Int?
+  priceToman     BigInt
+  config         ShippingMethodConfig @relation(fields: [method], references: [method], onDelete: Cascade)
+
+  @@index([method, position])
+  @@map("shipping_rates")
+}
+
+/// Carrier and tracking entered by staff for one order.
+model OrderShipment {
+  orderId      String   @id
+  /// post | tipax | local_courier | pickup | other
+  carrier      String
+  /// Free text; used when carrier is "other".
+  carrierName  String?
+  trackingCode String?
+  updatedBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_shipments")
 }
 
 /// Every status an order has been in, who changed it and why. Written in the same transaction as the change.

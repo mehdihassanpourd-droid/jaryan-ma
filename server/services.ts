@@ -1,3 +1,7 @@
+import { createShippingAdminRoutes } from "./routes/admin-shipping";
+import { PrismaShippingConfigStore } from "./shipping/config-store";
+import { ManualRatesProvider } from "./shipping/manual-provider";
+import { ShippingService } from "./shipping/service";
 import { hkdfSync } from "node:crypto";
 import type { SecurityFacts } from "../src/domain/maintenance/security-checks";
 import { DEFAULT_OTP_POLICY, type OtpPolicy } from "../src/domain/customer/otp-policy";
@@ -64,7 +68,9 @@ export function createPlatformServices(o: PlatformOptions) {
   const support = new SupportService(supportStore, o.limiter, (entry) => adminAudit(o.db, entry), undefined, clock);
   const accounts = new AccountService(accountStore, customerStore, DEFAULT_ACCOUNT_SETTINGS, clock, (customerId) => support.exportForCustomer(customerId));
   const onStockChanged = o.onStockChanged ?? (() => undefined);
-  const checkout = new CheckoutService(o.catalog, accountStore, customerStore, o.vendorId, clock, onStockChanged);
+  const shippingConfig = new PrismaShippingConfigStore(o.db);
+  const shipping = new ShippingService([new ManualRatesProvider(shippingConfig)], shippingConfig, o.log);
+  const checkout = new CheckoutService(o.catalog, accountStore, customerStore, shipping, o.vendorId, clock, onStockChanged);
   const orderLifecycle = new OrderLifecycleService(o.db, onStockChanged, clock);
   const orderAdmin = new OrderAdminService(o.db);
   const maintenance = new MaintenanceService(
@@ -74,8 +80,8 @@ export function createPlatformServices(o: PlatformOptions) {
     clock,
   );
 
-  const adminRoutes: AdminRouter[] = [createSupportAdminRoutes(support), createMaintenanceAdminRoutes(maintenance), createOrderAdminRoutes(orderAdmin, orderLifecycle)];
-  return { customerStore, accountStore, supportStore, maintenanceStore, customerAuth, customerAuthenticator, support, accounts, checkout, orderLifecycle, orderAdmin, maintenance, adminRoutes };
+  const adminRoutes: AdminRouter[] = [createSupportAdminRoutes(support), createMaintenanceAdminRoutes(maintenance), createOrderAdminRoutes(orderAdmin, orderLifecycle), createShippingAdminRoutes(shippingConfig, clock)];
+  return { shippingConfig, shipping, customerStore, accountStore, supportStore, maintenanceStore, customerAuth, customerAuthenticator, support, accounts, checkout, orderLifecycle, orderAdmin, maintenance, adminRoutes };
 }
 
 export type PlatformServices = ReturnType<typeof createPlatformServices>;

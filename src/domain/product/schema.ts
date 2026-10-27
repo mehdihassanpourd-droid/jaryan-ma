@@ -93,6 +93,8 @@ const baseProductSchema = z.object({
   priceToman: toman.nullable().default(null),
   inventory: stock.nullable().default(null),
   leadTimeDays: z.number().int().min(1).max(365).nullable().default(null),
+  // undefined = the caller did not mention it (older client, CSV without the column): keep what is stored.
+  weightGrams: z.number().int().min(1).max(100_000).nullable().optional(),
   images: z.array(imageInputSchema).max(MAX_IMAGES_PER_PRODUCT).default([]),
   variants: z.array(variantInputSchema).max(MAX_VARIANTS_PER_PRODUCT).default([]),
 });

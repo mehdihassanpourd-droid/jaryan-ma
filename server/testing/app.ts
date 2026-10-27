@@ -1,3 +1,4 @@
+import type { ShippingConfigInput } from "../../src/domain/shipping/config";
 import { randomBytes } from "node:crypto";
 import { createApi, CLIENT_IP_HEADER, CSRF_HEADER, type ApiDeps } from "../api";
 import { FirstRunSetup } from "../auth/first-run-setup";
@@ -57,8 +58,19 @@ export interface TestApp {
   logs: Array<{ event: string; detail?: Record<string, unknown> }>;
 }
 
+/** Post (anywhere, free) and pickup, enabled: what `buildTestApp` seeds unless a test configures shipping itself. */
+export const FREE_SHIPPING: ShippingConfigInput = {
+  expectedVersion: 1,
+  defaultItemWeightGrams: 500,
+  packagingWeightGrams: 0,
+  methods: [
+    { method: "post", enabled: true, freeThresholdToman: null, etaMinDays: null, etaMaxDays: null, note: null, rates: [{ provinces: [], cities: [], minWeightGrams: 0, maxWeightGrams: null, priceToman: 0 }] },
+    { method: "pickup", enabled: true, freeThresholdToman: null, etaMinDays: null, etaMaxDays: null, note: null, rates: [] },
+  ],
+};
+
 /** Builds the whole server (without HTTP sockets) on a test database. */
-export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string; customerAccountsEnabled?: boolean; firstRunSetup?: boolean; originHostSuffixes?: string[]; originDebug?: boolean; build?: string; rewrittenOriginPort?: number } = {}): Promise<TestApp> {
+export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string; customerAccountsEnabled?: boolean; firstRunSetup?: boolean; originHostSuffixes?: string[]; originDebug?: boolean; build?: string; rewrittenOriginPort?: number; shipping?: "free" | "none" } = {}): Promise<TestApp> {
   await testDb.reset();
   const vendorId = await ensureDefaultVendor(testDb.db);
   let clock = new Date("2026-03-01T10:00:00.000Z");
@@ -93,6 +105,8 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
       security: () => SECURITY_FACTS,
     },
   });
+  // Most tests are about something else and just need a delivery to exist: post and pickup, both free. "none" = the fresh, unconfigured state.
+  if ((overrides.shipping ?? "free") === "free") await platform.shippingConfig.save(FREE_SHIPPING, "seed@example.test", clock);
   deps.adminRoutes = platform.adminRoutes;
   if (overrides.originHostSuffixes) deps.originHostSuffixes = overrides.originHostSuffixes;
   if (overrides.originDebug) deps.originDebug = true;
@@ -101,7 +115,7 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
   if (overrides.firstRunSetup) deps.setup = new FirstRunSetup(true, auth, adminStore, new RateLimiter(() => clock.getTime()), () => clock);
   const customerApi = createCustomerApi({
     enabled: overrides.customerAccountsEnabled ?? true, customers: platform.customerStore, auth: platform.customerAuth, authenticator: platform.customerAuthenticator,
-    accounts: platform.accounts, checkout: platform.checkout, orderLifecycle: platform.orderLifecycle, support: platform.support, maintenance: platform.maintenance, cookie: { name: CUSTOMER_COOKIE, secure: true },
+    accounts: platform.accounts, checkout: platform.checkout, shipping: platform.shipping, orderLifecycle: platform.orderLifecycle, support: platform.support, maintenance: platform.maintenance, cookie: { name: CUSTOMER_COOKIE, secure: true },
     sessionMaxAgeSeconds: 30 * 24 * 3600, customerOrigins: STORE_ORIGIN, environment: "test", limiter, clock: () => clock, healthCacheMs: 0,
     log: (event, detail) => void logs.push({ event, detail }),
   });

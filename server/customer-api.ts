@@ -11,11 +11,12 @@ import type { AccountService } from "./customers/account-service";
 import type { CheckoutService } from "./customers/checkout-service";
 import { OrderLifecycleError, customerCancelSchema, type OrderLifecycleService } from "./orders/order-lifecycle";
 import { CheckoutError } from "./customers/checkout-service";
-import { checkoutRequestSchema } from "../src/domain/customer/checkout";
+import { checkoutRequestSchema, quoteRequestSchema } from "../src/domain/customer/checkout";
 import type { CustomerAuthService, CustomerSessionAuthenticator } from "./customers/customer-auth";
 import type { CustomerRecord, CustomerPrincipal, CustomerStore } from "./customers/ports";
 import type { MaintenanceService } from "./maintenance/service";
 import { domainErrorResponse, parseBody, parseQuery } from "./routes/common";
+import type { ShippingService } from "./shipping/service";
 import type { SupportService } from "./support/service";
 
 export interface CustomerApiDeps {
@@ -26,6 +27,8 @@ export interface CustomerApiDeps {
   authenticator: CustomerSessionAuthenticator;
   accounts: AccountService;
   checkout: CheckoutService;
+  /** Prices delivery (read-only) and turns carrier codes into tracking links when a provider knows them. */
+  shipping: ShippingService;
   /** Lets a customer cancel their own PENDING order (stock goes back). */
   orderLifecycle: OrderLifecycleService;
   support: SupportService;
@@ -43,6 +46,10 @@ export interface CustomerApiDeps {
 }
 
 const PREFIX = "/api/v1/";
+
+/** The order as the customer gets it: carrier codes become tracking links where a provider knows one (none do today). */
+const presenter = (shipping: ShippingService) => <T extends { shipment: { carrier: Parameters<ShippingService["trackingUrl"]>[0]; trackingCode: string | null } | null } | null>(order: T): T =>
+  order?.shipment ? { ...order, shipment: { ...order.shipment, trackingUrl: order.shipment.trackingCode ? shipping.trackingUrl(order.shipment.carrier, order.shipment.trackingCode) : null } } : order;
 const pageSchema = z.object({ page: z.coerce.number().int().min(1).max(10_000).default(1), pageSize: z.coerce.number().int().min(1).max(50).default(20) });
 
 function profileView(c: CustomerRecord) {
@@ -68,6 +75,7 @@ export const isCustomerApiPath = (pathname: string) => pathname === "/health" ||
  */
 export function createCustomerApi(deps: CustomerApiDeps) {
   const log = deps.log ?? (() => undefined);
+  const present = presenter(deps.shipping);
   const clock = deps.clock ?? (() => new Date());
   const allowedOrigins = deps.customerOrigins.split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean);
   let healthCache: { at: number; report: HealthReport } | null = null;
@@ -206,6 +214,18 @@ export function createCustomerApi(deps: CustomerApiDeps) {
       }
     }
 
+    // ---- delivery prices for a cart (the checkout shows them before the customer orders)
+    if (path === "/shipping/quote" && method === "POST") {
+      const body = await parseBody(request, quoteRequestSchema);
+      if (!body.ok) return body.response;
+      try {
+        return json(await deps.checkout.quote({ items: body.data.items, destination: body.data.destination }));
+      } catch (error) {
+        if (error instanceof CheckoutError) return errorResponse(error.code, error.code === "order_total_out_of_range" ? 422 : 409, error.problems.length > 0 ? { items: error.problems } : undefined);
+        throw error;
+      }
+    }
+
     // ---- orders: place (pending, no payment) and read
     if (path === "/orders" && method === "POST") {
       const body = await parseBody(request, checkoutRequestSchema);
@@ -213,11 +233,11 @@ export function createCustomerApi(deps: CustomerApiDeps) {
       try {
         const placed = await deps.checkout.placeOrder(id, body.data);
         log("order_placed", { number: placed.order.number, created: placed.created, lines: placed.order.items.length });
-        return json({ order: placed.order, created: placed.created }, placed.created ? 201 : 200);
+        return json({ order: present(placed.order), created: placed.created }, placed.created ? 201 : 200);
       } catch (error) {
         if (error instanceof CheckoutError) {
           const status = error.code === "account_not_active" ? 403 : error.code === "order_total_out_of_range" ? 422 : 409;
-          return errorResponse(error.code, status, error.problems.length > 0 ? { items: error.problems } : undefined);
+          return errorResponse(error.code, status, { ...(error.problems.length > 0 ? { items: error.problems } : {}), ...(error.quotes.length > 0 ? { quotes: error.quotes } : {}) });
         }
         throw error;
       }
@@ -234,15 +254,18 @@ export function createCustomerApi(deps: CustomerApiDeps) {
         throw error;
       }
       log("order_cancelled_by_customer", { number });
-      return json({ order: await deps.accounts.getOrder(id, number) });
+      return json({ order: present(await deps.accounts.getOrder(id, number)) });
     }
     if (path === "/orders" && method === "GET") {
       const q = parseQuery(url.searchParams, pageSchema);
       if (!q.ok) return q.response;
-      return json(await deps.accounts.listOrders(id, q.data.page, q.data.pageSize));
+      {
+        const page = await deps.accounts.listOrders(id, q.data.page, q.data.pageSize);
+        return json({ ...page, items: page.items.map((o) => present(o)) });
+      }
     }
     const order = /^\/orders\/(\d{1,10})$/.exec(path);
-    if (order && method === "GET") return json({ order: await deps.accounts.getOrder(id, Number(order[1])) });
+    if (order && method === "GET") return json({ order: present(await deps.accounts.getOrder(id, Number(order[1]))) });
 
     // ---- support
     if (path === "/support/tickets" && method === "GET") {

@@ -3,6 +3,7 @@ import { MAX_TOMAN, lineTotal, sumToman } from "../money";
 import { fixPersianLetters, toLatinDigits } from "../persian";
 import { E164_IRAN_MOBILE, normalizeIranMobile } from "../phone";
 import { IRAN_PROVINCES, isIranProvince, normalizePostalCode } from "./geo";
+import { SHIPPING_METHODS } from "../shipping/methods";
 
 export const MAX_ADDRESSES_PER_CUSTOMER = 10;
 export const MAX_FAVORITES_PER_CUSTOMER = 500;
@@ -93,6 +94,10 @@ export type AddressInput = z.output<typeof addressInputSchema>;
 export const shippingInputSchema = z.object(deliveryFields).strict();
 export type ShippingInput = z.output<typeof shippingInputSchema>;
 
+/** Collecting an order in person needs only a name and a phone number to hand it to. */
+export const pickupContactSchema = z.object({ recipientName: deliveryFields.recipientName, recipientPhone: deliveryFields.recipientPhone }).strict();
+export type PickupContact = z.output<typeof pickupContactSchema>;
+
 /** Delivery details frozen into an order. */
 export interface ShippingSnapshot {
   recipientName: string | null;
@@ -128,6 +133,26 @@ export const orderItemInputSchema = z.object({
   reserveStock: z.boolean().default(false),
 });
 
+/** The delivery the server priced for an order (all of it decided on the server, see `ShippingService`). */
+export const orderDeliverySchema = z
+  .object({
+    method: z.enum(SHIPPING_METHODS),
+    feeToman: z.number().int().min(0).max(MAX_TOMAN),
+    /** Frozen quote: which rate row applied, the weight it was priced at, whether the free threshold applied, the promised days. */
+    details: z
+      .object({
+        rateId: z.string().max(64).nullable(),
+        weightGrams: z.number().int().min(0),
+        free: z.boolean(),
+        etaMinDays: z.number().int().nullable(),
+        etaMaxDays: z.number().int().nullable(),
+        note: z.string().max(300).nullable(),
+      })
+      .strict(),
+  })
+  .strict();
+export type OrderDelivery = z.output<typeof orderDeliverySchema>;
+
 export const newOrderSchema = z
   .object({
     customerId: z.string().min(1).max(64),
@@ -135,23 +160,28 @@ export const newOrderSchema = z
     shipping: z.object({
       recipientName: text(2, 80),
       recipientPhone: phoneSchema,
-      province: z.enum(IRAN_PROVINCES),
-      city: text(2, 60),
-      street: text(5, 200),
+      // Pickup orders carry no address: province/city are empty and the rest null.
+      province: z.enum(IRAN_PROVINCES).or(z.literal("")),
+      city: z.union([text(2, 60), z.literal("")]),
+      street: text(5, 200).nullable().default(null),
       plaque: z.string().max(10).nullable().default(null),
       unit: z.string().max(10).nullable().default(null),
-      postalCode: postalCodeSchema,
+      postalCode: postalCodeSchema.nullable().default(null),
     }),
+    delivery: orderDeliverySchema,
     customerNote: optionalText(300),
     /** Idempotency key of the checkout attempt (see `Order.requestId`). */
     requestId: z.string().uuid().nullable().default(null),
-    /** What the caller believes the total is; must equal the exact sum of the lines. */
+    /** What the caller believes the total is; must equal the exact sum of the lines plus the delivery fee. */
     totalToman: z.number().int().min(0).max(MAX_TOMAN),
   })
   .strict()
   .superRefine((order, ctx) => {
+    const address = order.delivery.method !== "pickup";
+    if (address && (!order.shipping.province || !order.shipping.city || !order.shipping.street || !order.shipping.postalCode)) ctx.addIssue({ code: "custom", message: "address_required", path: ["shipping"] });
+    if (!address && order.delivery.feeToman !== 0) ctx.addIssue({ code: "custom", message: "pickup_is_free", path: ["delivery", "feeToman"] });
     try {
-      const sum = sumToman(order.items.map((i) => lineTotal(i.unitPriceToman, i.quantity)));
+      const sum = sumToman([...order.items.map((i) => lineTotal(i.unitPriceToman, i.quantity)), BigInt(order.delivery.feeToman)]);
       if (sum !== order.totalToman) ctx.addIssue({ code: "custom", message: "order_total_mismatch", path: ["totalToman"] });
     } catch {
       ctx.addIssue({ code: "custom", message: "order_total_out_of_range", path: ["totalToman"] });

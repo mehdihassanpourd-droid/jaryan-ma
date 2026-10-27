@@ -238,6 +238,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     accounts: platform.accounts,
     checkout: platform.checkout,
     orderLifecycle: platform.orderLifecycle,
+    shipping: platform.shipping,
     support: platform.support,
     maintenance: platform.maintenance,
     cookie: customerCookie,

@@ -4,12 +4,13 @@ import { tomanFromDb, tomanToDb } from "../../src/domain/money";
 import { Prisma } from "../../src/generated/prisma/client";
 import type { Db } from "../db/client";
 import { LIST_SELECT, toListRow } from "../catalog/prisma-repository";
-import type { AccountStore, AddressRecord, CustomerExportCore, DataRequestType, OrderView } from "./account-ports";
+import type { AccountStore, AddressRecord, CustomerExportCore, DataRequestType, OrderDeliveryView, OrderView, ShipmentView } from "./account-ports";
 
 // Lines have no position column: a stable, readable order (title, then SKU) instead of random uuid order.
 const ORDER_INCLUDE = {
   items: { orderBy: [{ titleSnapshot: "asc" }, { skuSnapshot: "asc" }] },
   statusHistory: { orderBy: { seq: "asc" } },
+  shipment: true,
 } satisfies Prisma.OrderInclude;
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof ORDER_INCLUDE }>;
 
@@ -18,11 +19,24 @@ const toAddress = (a: Prisma.AddressGetPayload<object>): AddressRecord => ({
   street: a.street, plaque: a.plaque, unit: a.unit, postalCode: a.postalCode, notes: a.notes, isDefault: a.isDefault, createdAt: a.createdAt, updatedAt: a.updatedAt,
 });
 
+export function deliveryOf(o: Pick<Prisma.OrderGetPayload<object>, "deliveryMethod" | "deliveryDetails">): OrderDeliveryView {
+  const d = (o.deliveryDetails ?? {}) as Partial<{ free: boolean; etaMinDays: number | null; etaMaxDays: number | null; note: string | null }>;
+  return { method: o.deliveryMethod, free: d.free ?? false, etaMinDays: d.etaMinDays ?? null, etaMaxDays: d.etaMaxDays ?? null, note: d.note ?? null };
+}
+
+export function shipmentOf(s: Prisma.OrderShipmentGetPayload<object>): ShipmentView {
+  return { carrier: s.carrier as ShipmentView["carrier"], carrierName: s.carrierName, trackingCode: s.trackingCode, updatedAt: s.updatedAt };
+}
+
 function toOrder(o: OrderRow): OrderView {
   return {
     number: o.number,
     status: o.status,
     totalToman: tomanFromDb(o.totalToman),
+    subtotalToman: tomanFromDb(o.subtotalToman),
+    shippingFeeToman: tomanFromDb(o.shippingFeeToman),
+    delivery: deliveryOf(o),
+    shipment: o.shipment ? shipmentOf(o.shipment) : null,
     placedAt: o.placedAt,
     shipping: o.shipping as unknown as ShippingSnapshot,
     customerNote: o.customerNote,
@@ -155,6 +169,10 @@ export class PrismaAccountStore implements AccountStore {
         data: {
           customerId: input.customerId,
           totalToman: tomanToDb(input.totalToman),
+          subtotalToman: tomanToDb(input.totalToman - input.delivery.feeToman),
+          shippingFeeToman: tomanToDb(input.delivery.feeToman),
+          deliveryMethod: input.delivery.method,
+          deliveryDetails: input.delivery.details as unknown as Prisma.InputJsonValue,
           shipping: input.shipping as unknown as Prisma.InputJsonValue,
           customerNote: input.customerNote,
           requestId: input.requestId,

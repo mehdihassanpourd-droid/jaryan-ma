@@ -64,7 +64,7 @@ export function shop(app: () => TestApp, testDb: () => TestDatabase, categoryId:
   }
 
   const place = (as: Customer | null, items: unknown[], extra: Record<string, unknown> = {}, o: Parameters<typeof call>[1] = {}) =>
-    call("/api/v1/customer/orders", { method: "POST", as, body: { items, shipping: SHIPPING, requestId: requestId(), ...extra }, ...o });
+    call("/api/v1/customer/orders", { method: "POST", as, body: { items, shipping: SHIPPING, deliveryMethod: "post", expectedFeeToman: 0, requestId: requestId(), ...extra }, ...o });
 
   return { product, call, signIn, place, ACTOR };
 }

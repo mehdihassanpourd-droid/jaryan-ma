@@ -15,6 +15,7 @@ export function storedProduct(overrides: Partial<StoredProduct> = {}): StoredPro
     priceToman: 1000,
     inventory: 1,
     leadTimeDays: null,
+    weightGrams: null,
     images: [{ id: "i1", key: "images/p1/aaa.webp", alt: "تصویر نمونه", position: 0 }],
     variants: [],
     version: 1,

@@ -57,6 +57,7 @@ export class CatalogService {
       priceToman: current.priceToman,
       inventory: current.inventory,
       leadTimeDays: current.leadTimeDays,
+      weightGrams: current.weightGrams,
       images: current.images.map((i) => ({ key: i.key, alt: i.alt })),
       variants: current.variants.map((v) => ({ sku: v.sku, options: v.options, priceToman: v.priceToman, inventory: v.inventory })),
     });
