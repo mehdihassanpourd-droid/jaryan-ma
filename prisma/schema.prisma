@@ -73,6 +73,14 @@ enum OrderStatus {
   shipped
   delivered
   cancelled
+  /// Refused by staff before confirmation (reserved stock is released).
+  rejected
+}
+
+enum OrderActor {
+  customer
+  staff
+  system
 }
 
 enum DataRequestType {
@@ -448,12 +456,14 @@ model Order {
   placedAt     DateTime    @default(now())
   updatedAt    DateTime    @default(now())
 
-  customer Customer        @relation(fields: [customerId], references: [id])
-  items    OrderItem[]
-  tickets  SupportTicket[]
+  customer      Customer           @relation(fields: [customerId], references: [id])
+  items         OrderItem[]
+  tickets       SupportTicket[]
+  statusHistory OrderStatusEvent[]
 
   @@unique([customerId, requestId])
   @@index([customerId, placedAt(sort: Desc)])
+  @@index([status, placedAt(sort: Desc)])
   @@map("orders")
 }
 
@@ -468,6 +478,9 @@ model OrderItem {
   imageKeySnapshot String?
   unitPriceToman   BigInt
   quantity         Int     @default(1)
+  /// Units currently held out of the product's/variant's `inventory` for this line (0 = none: made-to-order lines, orders made
+  /// before reservations existed, or already released). Released exactly once when the order is rejected or cancelled.
+  reservedQuantity Int     @default(0)
 
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
@@ -476,6 +489,27 @@ model OrderItem {
   @@index([orderId])
   @@index([vendorId])
   @@map("order_items")
+}
+
+/// Every status an order has been in, who changed it and why. Written in the same transaction as the change.
+model OrderStatusEvent {
+  id         String       @id @default(uuid())
+  /// Strictly increasing: the order of events is exact even when two share a timestamp.
+  seq        Int          @default(autoincrement())
+  orderId    String
+  /// null for the first event (the order being placed).
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  actorType  OrderActor
+  /// The staff member's e-mail for staff actions; never a customer's phone number.
+  actorLabel String?
+  /// Written by staff when rejecting/cancelling and shown to the customer; scrubbed when the customer is anonymised.
+  reason     String?
+  createdAt  DateTime     @default(now())
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("order_status_events")
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -845,3 +845,57 @@ th {
   text-align: center;
   font-size: 1.3rem;
 }
+
+/* ---- orders: attention to what waits for a decision ---- */
+.nav a {
+  position: relative;
+}
+.nav-badge {
+  position: absolute;
+  inset-block-start: 0.35rem;
+  inset-inline-end: calc(50% - 1.6rem);
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding-inline: 0.3rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.35rem;
+  text-align: center;
+}
+@media (min-width: 900px) {
+  .nav-badge {
+    inset-block-start: 50%;
+    inset-inline-end: 0.9rem;
+    transform: translateY(-50%);
+  }
+}
+.attention-banner {
+  display: block;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-weight: 700;
+  text-decoration: none;
+  margin-block-end: 1rem;
+}
+a.attention-banner:hover {
+  text-decoration: underline;
+}
+.row-attention {
+  border-inline-start: 5px solid var(--warn);
+  background: var(--warn-bg);
+}
+.timeline {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: 0.6rem;
+}
+.timeline p {
+  margin: 0.15rem 0 0;
+}

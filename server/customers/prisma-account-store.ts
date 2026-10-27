@@ -1,4 +1,5 @@
 import { REDACTED, scrubShipping, type AddressInput, type NewOrderInput, type ShippingSnapshot } from "../../src/domain/customer/schema";
+import { reserveStock, type StockLine } from "../orders/stock";
 import { tomanFromDb, tomanToDb } from "../../src/domain/money";
 import { Prisma } from "../../src/generated/prisma/client";
 import type { Db } from "../db/client";
@@ -6,7 +7,10 @@ import { LIST_SELECT, toListRow } from "../catalog/prisma-repository";
 import type { AccountStore, AddressRecord, CustomerExportCore, DataRequestType, OrderView } from "./account-ports";
 
 // Lines have no position column: a stable, readable order (title, then SKU) instead of random uuid order.
-const ORDER_INCLUDE = { items: { orderBy: [{ titleSnapshot: "asc" }, { skuSnapshot: "asc" }] } } satisfies Prisma.OrderInclude;
+const ORDER_INCLUDE = {
+  items: { orderBy: [{ titleSnapshot: "asc" }, { skuSnapshot: "asc" }] },
+  statusHistory: { orderBy: { seq: "asc" } },
+} satisfies Prisma.OrderInclude;
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof ORDER_INCLUDE }>;
 
 const toAddress = (a: Prisma.AddressGetPayload<object>): AddressRecord => ({
@@ -31,6 +35,8 @@ function toOrder(o: OrderRow): OrderView {
       unitPriceToman: tomanFromDb(i.unitPriceToman),
       quantity: i.quantity,
     })),
+    // What the customer may know: the status, when, by whom (customer / staff / system) and the reason staff wrote. Never who.
+    history: o.statusHistory.map((e) => ({ status: e.toStatus, at: e.createdAt, reason: e.reason, by: e.actorType })),
   };
 }
 
@@ -141,25 +147,33 @@ export class PrismaAccountStore implements AccountStore {
   }
 
   async createOrder(input: NewOrderInput, now: Date) {
-    const row = await this.db.order.create({
-      data: {
-        customerId: input.customerId,
-        totalToman: tomanToDb(input.totalToman),
-        shipping: input.shipping as unknown as Prisma.InputJsonValue,
-        customerNote: input.customerNote,
-        requestId: input.requestId,
-        placedAt: now,
-        updatedAt: now,
-        items: {
-          create: input.items.map((i) => ({
-            productId: i.productId, vendorId: i.vendorId, titleSnapshot: i.titleSnapshot, skuSnapshot: i.skuSnapshot,
-            variantSnapshot: i.variantSnapshot === null ? Prisma.JsonNull : (i.variantSnapshot as Prisma.InputJsonValue),
-            imageKeySnapshot: i.imageKeySnapshot, unitPriceToman: tomanToDb(i.unitPriceToman), quantity: i.quantity,
-          })),
+    const stock: StockLine[] = input.items.filter((i) => i.reserveStock).map((i) => ({ productId: i.productId, sku: i.skuSnapshot, quantity: i.quantity }));
+    const row = await this.db.$transaction(async (tx) => {
+      // Stock first, in the same transaction as the order: either the order exists AND holds its stock, or neither happened.
+      await reserveStock(tx, stock, now);
+      const created = await tx.order.create({
+        data: {
+          customerId: input.customerId,
+          totalToman: tomanToDb(input.totalToman),
+          shipping: input.shipping as unknown as Prisma.InputJsonValue,
+          customerNote: input.customerNote,
+          requestId: input.requestId,
+          placedAt: now,
+          updatedAt: now,
+          items: {
+            create: input.items.map((i) => ({
+              productId: i.productId, vendorId: i.vendorId, titleSnapshot: i.titleSnapshot, skuSnapshot: i.skuSnapshot,
+              variantSnapshot: i.variantSnapshot === null ? Prisma.JsonNull : (i.variantSnapshot as Prisma.InputJsonValue),
+              imageKeySnapshot: i.imageKeySnapshot, unitPriceToman: tomanToDb(i.unitPriceToman), quantity: i.quantity,
+              reservedQuantity: i.reserveStock ? i.quantity : 0,
+            })),
+          },
+          statusHistory: { create: { fromStatus: null, toStatus: "pending", actorType: "customer", createdAt: now } },
         },
-      },
-      include: ORDER_INCLUDE,
-    });
+        include: ORDER_INCLUDE,
+      });
+      return created;
+    }, TX);
     return toOrder(row);
   }
 
@@ -259,6 +273,8 @@ export class PrismaAccountStore implements AccountStore {
       const orders = await tx.order.findMany({ where: { customerId }, select: { id: true, shipping: true } });
       for (const order of orders) {
         await tx.order.update({ where: { id: order.id }, data: { shipping: scrubShipping(order.shipping) as unknown as Prisma.InputJsonValue, customerNote: null } });
+        // a reason written by staff may mention the customer: keep that the order was refused/cancelled, not why
+        await tx.orderStatusEvent.updateMany({ where: { orderId: order.id, reason: { not: null } }, data: { reason: null } });
       }
 
       // Support conversations: keep the fact that a ticket existed (category, status, dates), drop what was said.

@@ -168,6 +168,13 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
   }
 
   const limiter = new RateLimiter();
+  // Work that may finish after the response (refreshing public snapshots); `stop()` waits for it.
+  const pending = new Set<Promise<unknown>>();
+  const background = (task: Promise<unknown>) => {
+    pending.add(task);
+    void task.finally(() => pending.delete(task));
+  };
+  const publisher = new SnapshotPublisher(repo, storage, config.publicMediaUrl ?? "");
   const customerCookie = { name: config.cookieSecure ? "__Host-jm_c" : "jm_c", secure: config.cookieSecure };
   const platform = createPlatformServices({
     db,
@@ -177,6 +184,8 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     customerCookie,
     catalog: repo,
     vendorId,
+    // An order that takes (or gives back) stock can sell a piece out (or bring it back): refresh what the storefront sees.
+    onStockChanged: (ids) => background(publisher.sync(ids.map((id) => ({ id }))).catch((error) => log("warn", "snapshot_sync_failed", { error: String(error) }))),
     log: (event, detail) => log("warn", event, detail),
     otpPolicy: { ...DEFAULT_OTP_POLICY, dailyBudget: config.sms.dailyLimit },
     probes: {
@@ -194,7 +203,6 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
   const setup = config.firstRunSetup ? new FirstRunSetup(true, auth.service, auth.store, new RateLimiter()) : undefined;
   if (setup) log("warn", "first_run_setup_enabled", { note: "development only: the first administrator can be created from the browser until one exists" });
 
-  const pending = new Set<Promise<unknown>>();
   const adminApi = createApi({
     setup,
     originHostSuffixes: config.adminOriginHostSuffixes,
@@ -204,7 +212,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     adminRoutes: platform.adminRoutes,
     catalog: new CatalogService(repo),
     storage,
-    publisher: new SnapshotPublisher(repo, storage, config.publicMediaUrl ?? ""),
+    publisher,
     auth: auth.service,
     authenticator: auth.authenticator,
     cookie: auth.cookie,
@@ -212,10 +220,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     adminOrigins: config.adminOrigins,
     mediaBaseUrl: config.publicMediaUrl ?? "",
     importChunkMax: config.importChunkMax,
-    background: (task) => {
-      pending.add(task);
-      void task.finally(() => pending.delete(task));
-    },
+    background,
     log: (event, detail) => {
       log("error", event, detail);
       // Unhandled server errors become de-duplicated, sanitised error reports (no request data is attached).
@@ -232,6 +237,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     authenticator: platform.customerAuthenticator,
     accounts: platform.accounts,
     checkout: platform.checkout,
+    orderLifecycle: platform.orderLifecycle,
     support: platform.support,
     maintenance: platform.maintenance,
     cookie: customerCookie,

@@ -91,3 +91,13 @@ jobs:
           npx vitest run --config vitest.e2e.config.mts admin/e2e/shopping.e2e.ts
         env:
           E2E_DATABASE_URL: postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci_shopping
+
+      # Order management and inventory safety: two real browsers race for one unique piece, owner confirms/cancels/rejects, stock
+      # comes back once, the "new orders" indicator, and a check that no page ever contacts a foreign host.
+      - name: Order management on real PostgreSQL 16 (reservations, races, confirm/reject/cancel; 412px phone)
+        run: |
+          PGPASSWORD=ci-only-throwaway psql -h 127.0.0.1 -U ci -d ci -c "create database ci_orders"
+          DATABASE_URL=postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci_orders npx prisma migrate deploy
+          npx vitest run --config vitest.e2e.config.mts admin/e2e/order-management.e2e.ts
+        env:
+          E2E_DATABASE_URL: postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci_orders

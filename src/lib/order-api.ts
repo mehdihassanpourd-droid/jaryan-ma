@@ -1,4 +1,5 @@
 import type { CheckoutRequest, LineProblem } from "@/domain/customer/checkout";
+import { ORDER_STATUS_LABEL as STATUS_LABEL, type OrderActorType, type OrderStatusValue } from "@/domain/customer/order-status";
 
 /**
  * Browser client of the customer API (sign-in with a one-time code, addresses, orders). The API lives on the shop's own
@@ -40,14 +41,24 @@ export interface CustomerProfile {
   status: string;
 }
 
+export interface ApiOrderEvent {
+  status: OrderStatusValue;
+  at: string;
+  /** The reason staff gave when rejecting or cancelling. */
+  reason: string | null;
+  by: OrderActorType;
+}
+
 export interface ApiOrder {
   number: number;
-  status: "pending" | "confirmed" | "preparing" | "shipped" | "delivered" | "cancelled";
+  status: OrderStatusValue;
   totalToman: number;
   placedAt: string;
   customerNote: string | null;
   shipping: { recipientName: string | null; recipientPhone: string | null; province: string; city: string; street: string | null; plaque: string | null; unit: string | null; postalCode: string | null };
   items: Array<{ title: string; sku: string | null; variant: Record<string, string> | null; imageKey: string | null; unitPriceToman: number; quantity: number }>;
+  /** Oldest first. */
+  history: ApiOrderEvent[];
 }
 
 export interface ApiAddress {
@@ -63,14 +74,7 @@ export interface ApiAddress {
   isDefault: boolean;
 }
 
-export const ORDER_STATUS_LABEL: Record<ApiOrder["status"], string> = {
-  pending: "در انتظار تأیید",
-  confirmed: "تأیید شده",
-  preparing: "در حال آماده‌سازی",
-  shipped: "ارسال شده",
-  delivered: "تحویل داده شده",
-  cancelled: "لغو شده",
-};
+export const ORDER_STATUS_LABEL = STATUS_LABEL;
 
 export function createOrderApi(baseUrl: string, fetchImpl: typeof fetch = fetch) {
   const base = baseUrl.replace(/\/+$/, "");
@@ -133,6 +137,8 @@ export function createOrderApi(baseUrl: string, fetchImpl: typeof fetch = fetch)
     placeOrder: (order: CheckoutRequest) => request<{ order: ApiOrder; created: boolean }>("POST", "/orders", order),
     listOrders: (page = 1) => request<{ items: ApiOrder[]; total: number }>("GET", `/orders?page=${page}&pageSize=20`),
     getOrder: async (number: number) => (await request<{ order: ApiOrder }>("GET", `/orders/${number}`)).order,
+    /** The customer cancels their own PENDING order (its reserved stock goes back). */
+    cancelOrder: async (number: number) => (await request<{ order: ApiOrder }>("POST", `/orders/${number}/cancel`, {})).order,
   };
 }
 export type OrderApi = ReturnType<typeof createOrderApi>;

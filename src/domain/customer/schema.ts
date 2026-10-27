@@ -124,6 +124,8 @@ export const orderItemInputSchema = z.object({
   imageKeySnapshot: z.string().max(200).nullable().default(null),
   unitPriceToman: z.number().int().min(0).max(MAX_TOMAN),
   quantity: z.number().int().min(1).max(1000),
+  /** True: this line's quantity is taken out of the product's/variant's inventory with the order (and given back if it ends rejected or cancelled). */
+  reserveStock: z.boolean().default(false),
 });
 
 export const newOrderSchema = z

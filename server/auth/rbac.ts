@@ -19,6 +19,7 @@ export const ACTIONS = [
   "customer:read",
   // orders (personal data: names, phones, addresses)
   "order:read",
+  "order:manage",
   // operations
   "customer:manage",
   "maintenance:read",
@@ -32,13 +33,13 @@ export type Action = (typeof ACTIONS)[number];
  * - viewer: read the catalogue.
  * - editor: manages the catalogue and the FAQ; no access to customers' conversations.
  * - support: works tickets (reply, internal notes, status/priority/assignment), edits the FAQ and sees the
- *   customer details a ticket needs, and reads orders (to answer questions about them); cannot change the catalogue.
+ *   customer details a ticket needs, and reads AND manages orders (confirm, reject, cancel, prepare, ship, deliver); cannot change the catalogue.
  * - owner: everything, including operations (incidents, backups, customer data requests, admin management).
  */
 const GRANTS: Record<Role, readonly Action[]> = {
   viewer: ["product:read"],
   editor: ["product:read", "product:write", "product:publish", "product:import", "image:upload", "category:write", "catalog:sync", "faq:write"],
-  support: ["product:read", "support:read", "support:reply", "support:note", "support:manage", "faq:write", "customer:read", "order:read"],
+  support: ["product:read", "support:read", "support:reply", "support:note", "support:manage", "faq:write", "customer:read", "order:read", "order:manage"],
   owner: ACTIONS,
 };
 

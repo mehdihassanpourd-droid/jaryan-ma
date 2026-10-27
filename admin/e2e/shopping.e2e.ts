@@ -326,11 +326,11 @@ describe("customer shopping journey, start to finish, on a phone", () => {
     await ctx.close();
   });
 
-  it("the owner sees the real orders in the admin (read-only), with who ordered what and where it goes", async () => {
+  it("the owner sees the real orders in the admin, pending on top, with who ordered what and where it goes", async () => {
     const admin = adminPage;
     await admin.goto(`${h.baseUrl}/admin/#/orders`);
     await pw(admin.getByRole("heading", { name: "سفارش‌ها", level: 1 })).toBeVisible();
-    await pw(admin.getByText("فقط نمایشی است")).toBeVisible();
+    await pw(admin.getByTestId("pending-heading")).toContainText("۲ سفارش در انتظار تصمیم شماست");
     const list = admin.getByRole("list", { name: "فهرست سفارش‌ها" });
     await pw(list.getByRole("listitem")).toHaveCount(2);
     await pw(list.getByRole("listitem").first()).toContainText("JM-100002"); // newest first

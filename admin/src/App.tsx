@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { hrefFor, isProductId, useRoute } from "./router";
+import { useOrderSummary } from "./lib/useOrderSummary";
 import { useSession, useUser } from "./session";
 import { Button } from "./ui/controls";
-import { Alert, Loading } from "./ui/feedback";
+import { Alert, Loading, useToast } from "./ui/feedback";
 import { Icon } from "./ui/Icon";
 import { AccountPage } from "./pages/AccountPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
@@ -30,14 +31,24 @@ function Shell() {
   const route = useRoute();
   const user = useUser();
   const { can } = useSession();
+  const toast = useToast();
   const mainRef = useRef<HTMLElement>(null);
   const title = titleFor(route.path);
 
+  // "New orders" indicator: how many orders wait for a decision (polled from this same server; see useOrderSummary).
+  const orders = useOrderSummary(can("order:read"));
+  const seen = useRef<number | null>(null);
   useEffect(() => {
-    document.title = `${title} | مدیریت جریان ما`;
+    if (!orders.known) return;
+    if (seen.current !== null && orders.pending > seen.current) toast.success("سفارش جدیدی ثبت شد و منتظر تأیید است.");
+    seen.current = orders.pending;
+  }, [orders.pending, orders.known, toast]);
+
+  useEffect(() => {
+    document.title = `${orders.pending > 0 ? `(${orders.pending.toLocaleString("fa-IR")}) ` : ""}${title} | مدیریت جریان ما`;
     mainRef.current?.focus();
     window.scrollTo(0, 0);
-  }, [title, route.path]);
+  }, [title, route.path, orders.pending]);
 
   let page = <ProductsPage />;
   const segments = route.path.split("/").filter(Boolean);
@@ -55,9 +66,9 @@ function Shell() {
     page = !can("order:read") ? (
       <Alert tone="error">این بخش برای نقش شما فعال نیست.</Alert>
     ) : raw === undefined ? (
-      <OrdersPage number={null} />
+      <OrdersPage number={null} onChanged={orders.refresh} />
     ) : /^\d{1,10}$/.test(raw) ? (
-      <OrdersPage number={Number(raw)} />
+      <OrdersPage number={Number(raw)} onChanged={orders.refresh} />
     ) : (
       <Alert tone="error">شمارهٔ سفارش معتبر نیست. <a href={hrefFor("/orders")}>بازگشت به فهرست</a></Alert>
     );
@@ -79,10 +90,16 @@ function Shell() {
           <a key={item.path} href={hrefFor(item.path)} aria-current={route.path.startsWith(item.path) ? "page" : undefined}>
             <Icon name={item.icon} />
             {item.label}
+            {item.path === "/orders" && orders.pending > 0 && <span className="nav-badge" data-testid="orders-badge" aria-label={`${orders.pending.toLocaleString("fa-IR")} سفارش در انتظار تأیید`}>{orders.pending.toLocaleString("fa-IR")}</span>}
           </a>
         ))}
       </nav>
       <main id="main" className="main" tabIndex={-1} ref={mainRef}>
+        {orders.pending > 0 && segments[0] !== "orders" && (
+          <a className="attention-banner" href={hrefFor("/orders", { status: "pending" })} role="status" data-testid="pending-banner">
+            {orders.pending.toLocaleString("fa-IR")} سفارش در انتظار تأیید دارید. برای بررسی بزنید.
+          </a>
+        )}
         {page}
       </main>
     </div>

@@ -112,6 +112,19 @@ export function CheckoutView() {
   if (orderable.length === 0) {
     return shell(
       <div className="rounded-2xl border border-sand-300 bg-ivory-50 p-6">
+        {/* If this page just tried to place an order that the server refused, say why: otherwise the explanation would vanish with the form. */}
+        {failure && (
+          <div role="alert" data-testid="checkout-failure" className="mb-4 rounded-xl bg-red-50 p-4 text-sm leading-7 text-red-900">
+            <p>{failure}</p>
+            {lineProblems.length > 0 && (
+              <ul className="mt-2 list-disc ps-5">
+                {lineProblems.map((p) => (
+                  <li key={`${p.slug}|${p.sku ?? ""}`}>{products.value.get(p.slug)?.name ?? p.slug}: {LINE_REASON_TEXT[p.reason]}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         <p role="status" className="text-bark-700">کالای قابل سفارشی در سبد شما نیست.</p>
         <p className="mt-4"><Link href="/cart" className="text-olive-700 underline">بازگشت به سبد خرید</Link></p>
       </div>,

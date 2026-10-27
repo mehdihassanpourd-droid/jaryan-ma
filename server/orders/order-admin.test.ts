@@ -85,9 +85,10 @@ describe("admin orders (read-only, personal data)", () => {
     const page1 = await call(app, { path: "/api/v1/orders?pageSize=2", ...(await as("owner")) });
     expect(page1.body.total).toBe(5);
     expect(page1.body.items.map((x: any) => x.number)).toEqual([numbers[4], numbers[3]]);
-    expect((await call(app, { path: "/api/v1/orders?pageSize=2&page=3", ...(await as("owner")) })).body.items.map((x: any) => x.number)).toEqual([numbers[0]]);
+    expect((await call(app, { path: "/api/v1/orders?pageSize=2&page=3", ...(await as("owner")) })).body.items.map((x: any) => x.number)).toEqual([numbers[1]]);
     const all = (await call(app, { path: "/api/v1/orders?pageSize=50", ...(await as("owner")) })).body.items.map((x: any) => x.number);
-    expect(all).toEqual([...numbers].reverse()); // newest first
+    // open orders first (pending on top), then finished ones; newest first within a status
+    expect(all).toEqual([numbers[4], numbers[3], numbers[2], numbers[0], numbers[1]]);
     const delivered = await call(app, { path: "/api/v1/orders?status=delivered", ...(await as("owner")) });
     expect(delivered.body.items.map((x: any) => x.number)).toEqual([numbers[1]]);
     expect((await call(app, { path: "/api/v1/orders?status=bogus", ...(await as("owner")) })).status).toBe(400);

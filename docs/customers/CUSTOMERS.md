@@ -12,7 +12,8 @@ Status: **foundation, order placement (no payment) and the storefront cart/check
 | Several shipping addresses (max 10, exactly one default) | yes | `Address`, `PrismaAccountStore` |
 | Favourites (published products only, max 500) | yes | `Favorite` |
 | Order history | yes (model + API + storefront page `/orders`) | `Order`, `OrderItem` |
-| **Order placement** (`POST /orders`): a pending order built from the cart, priced and checked by the server, idempotent | yes; **no payment, no stock change, no notification** (see §8) | `CheckoutService` |
+| **Order placement** (`POST /orders`): a pending order built from the cart, priced and checked by the server, idempotent, with its stock reserved | yes; **no payment, no notification** (see §8, §9) | `CheckoutService` |
+| Order management: confirm / reject / cancel / prepare / ship / deliver, history, audit | yes (staff in the admin app; the customer may cancel a PENDING order) | `OrderLifecycleService` (§9) |
 | Data export (JSON) | yes | `AccountService.exportData` |
 | Account deletion (14-day grace period, then anonymisation) | yes | `AccountService`, `PrismaAccountStore.anonymize` |
 | Pluggable SMS provider | yes: interface + `disabled` (default), `console` (dev only), `memory` (tests), generic `http` | `server/sms/provider.ts` |
@@ -82,6 +83,7 @@ Enabling customers in production (`CUSTOMER_ACCOUNTS_ENABLED=true`) additionally
 | `GET/POST /addresses`, `PUT/DELETE /addresses/:id`, `POST /addresses/:id/default` | addresses |
 | `GET /favorites`, `PUT/DELETE /favorites/:slug` | favourites |
 | `POST /orders` | place a pending order (§8) |
+| `POST /orders/:number/cancel` | cancel your own PENDING order (stock goes back) |
 | `GET /orders`, `GET /orders/:number` | order history |
 | `GET/POST /support/tickets`, `GET /support/tickets/:number`, `POST …/reply` | support (see [SUPPORT.md](../support/SUPPORT.md)) |
 | `POST /account/export` | JSON download of the customer's data (once per hour) |
@@ -113,7 +115,7 @@ Every route checks ownership by `customerId` taken from the session, never from 
 
 * In-memory burst limiter (per process) on top of the durable database limits; a multi-instance deployment needs a shared limiter (documented trade-off).
 * No phone-number change flow, no e-mail verification, no staff action to suspend/restore a customer through the API yet (status exists in the model; `suspended` customers cannot sign in).
-* Orders are only ever created (pending) and read: confirming, cancelling and changing status are not implemented (§8).
+* Customers can only place orders and cancel their own PENDING ones; every other change is staff-only (§9). Returns and refunds after shipping are not modelled.
 * Consent text (terms/privacy policy) is only a version string; the documents themselves are the owner's.
 
 ## 8. Shopping: cart, checkout, orders (no payment)
@@ -124,8 +126,36 @@ Every route checks ownership by `customerId` taken from the session, never from 
 * **Checkout** (`/checkout`) collects the recipient, mobile number, province (31 listed), city, address, plaque, unit, postal code and an optional note, validated with the SAME schema as the server (`shippingInputSchema`). A signed-in customer's default saved address pre-fills the form; "save this address" stores it in the address book.
 * **`POST /api/v1/customer/orders`** (`CheckoutService`) needs a customer session, the CSRF token and an allowed origin. The request names products, variants and quantities: **never prices, titles, totals or customer ids** (unknown keys are rejected). The server reads published products from the database, checks each line (`not_found`, `variant_required`, `variant_not_found`, `sold_out`, `insufficient_stock` with how many are left, `quantity_not_allowed`, `no_price`; all lines reported at once as `409 items_unavailable`), computes the exact total, snapshots title/SKU/variant/image/unit price/vendor into the order and stores a **pending** order. `order_total_out_of_range` (422) refuses a total beyond the exact range. At most 10 open orders per customer; accounts being deleted cannot order.
 * **Idempotency:** the browser sends a `requestId` per checkout attempt (unique per customer in the database). A retry, even a concurrent one, returns the first order (`created: false`) instead of a second one.
-* **No payment, no stock change, no notification.** A pending order is a *request*: nothing is charged, stock is neither reserved nor reduced (there is no staff action yet to release it if an order is never confirmed), and nobody is notified. Staff can see orders in the admin app (`order:read`: owner and support; read-only) but cannot yet confirm, cancel or change them. Two customers can therefore order the same unique piece; the owner decides when confirming.
+* **No payment, no notification, but stock IS reserved.** Placing an order takes its quantity out of the product's (or the chosen variant's) `inventory` in the same transaction (§9); nothing is charged and nobody is notified (staff see the "new orders" indicator in the admin app while it is open).
 * **Demo checkout:** a build WITHOUT `NEXT_PUBLIC_ORDER_API_URL` has no order system. Its checkout page says so in a dashed banner, creates nothing, shows no order number, keeps the cart and only builds a text the shopper can copy and send to the gallery on Instagram ("پیش‌نمایش سفارش (ثبت نشده)"). The same fallback is offered when the SMS service is unavailable or the API is unreachable. This is also the only way to order in production until SMS and the API are deployed.
 * **Order pages:** `/order?number=N` (confirmation and detail) and `/orders` (history) read the signed-in customer's own orders; another customer's number is "not found".
 
 **Not available until production infrastructure exists:** the customer API itself (needs the backend deployed on a domain that shares a registrable domain with the storefront, `CUSTOMER_ORIGINS`, `CUSTOMER_ACCOUNTS_ENABLED=true`), an SMS gateway (`SMS_PROVIDER=http`; without it nobody can sign in), the owner's terms and privacy texts (the sign-up checkbox refers to them, but no such pages exist yet), the shipping-cost and delivery rules (the total says shipping is not included), and a way to notify the owner of a new order.
+
+## 9. Order management and inventory safety
+
+**Meaning of `inventory`:** the number of units still available to order. An order takes its units out of it when it is placed (a reservation) and gives them back only if it ends rejected or cancelled; a shipped or delivered order keeps them taken. Made-to-order lines have no stock and reserve nothing.
+
+**Reservation** (`server/orders/stock.ts`, inside the order's own transaction): the product rows are locked in id order and their `version` is bumped (so an admin editing a stale copy of the product gets a version conflict instead of overwriting the stock an order just reserved), then each line runs `UPDATE … SET inventory = inventory - q WHERE inventory >= q AND status = 'published'` and counts the affected rows. PostgreSQL serialises updates of the same row, so concurrent orders can never both get the last unit; if any line fails the whole transaction rolls back (no partial holds) and the shopper gets `409 items_unavailable` naming the lines, with how many are left. The database's own `CHECK`s (stock ≥ 0, unique pieces 0/1, `reservedQuantity` between 0 and the ordered quantity) are the last safety net. `OrderItem.reservedQuantity` records what an order currently holds.
+
+**Release:** ending an order as `rejected` or `cancelled` flips the status with `UPDATE … WHERE status = <what we read>`, claims each line's hold by zeroing `reservedQuantity` (only the transaction that zeroes it returns the units), and gives the units back to the same variant/product; a unique piece never goes above 1 even if staff re-stocked it by hand. Two simultaneous cancels, or a confirm racing a cancel, therefore have exactly one winner and the stock is returned once. Deadlocks between concurrent transactions are rolled back by PostgreSQL and retried (up to 3 times). After any stock movement the product's public snapshot is refreshed (a sold unique piece reads "sold out" on the storefront within the cache time; it comes back on cancel).
+
+**Statuses** (`src/domain/customer/order-status.ts`, enforced by the server, also used by the apps to choose buttons):
+
+| From | Staff may move to | Customer may |
+|---|---|---|
+| pending | confirmed, rejected (reason), cancelled (reason) | cancel (own order only) |
+| confirmed | preparing, cancelled (reason) | — |
+| preparing | shipped, cancelled (reason) | — |
+| shipped | delivered | — |
+| delivered / cancelled / rejected | final | — |
+
+Staff actions need `order:manage` (owner and support) and carry the status the screen showed (`expectedStatus`): if someone else changed the order first, nothing happens and the screen reloads the real state (`409 order_changed`). The optional reason (≤ 200 characters) is **shown to the customer**; it is scrubbed when the customer is anonymised.
+
+**History and audit:** every change writes an `OrderStatusEvent` (from, to, who: customer / staff e-mail / system, reason, time, strictly ordered by `seq`) and an `AuditLog` row (`order.<status>`, order number, from, to, units released; never a phone number) in the same transaction as the change. Orders that existed before this feature got one "migrated" history entry and hold no stock (cancelling them gives nothing back). The customer sees their own history (status, time, who in general terms, reason) on `/order?number=N` and in the order list, re-read when they return to the tab and every minute; staff see the full history with identities.
+
+**Admin app:** the orders list shows open orders first (pending on top, highlighted); a banner on every screen, a badge on the "سفارش‌ها" tab, the page title and a toast announce orders waiting for a decision. The count comes from `GET /api/v1/orders/summary`, polled from the admin's own server every 30 s while the page is visible (no push service, no foreign dependency).
+
+**Known limits / decisions for the owner:** unconfirmed pending orders hold stock until someone acts (there is no automatic expiry; the per-customer cap is 10 open orders); `inventory` edited by hand or overwritten by a CSV import means "available now" (an import can therefore re-open stock that open orders hold: review open orders before importing); no refunds, returns or partial cancellation; no notification outside the app (SMS is off by design).
+
+**Resilience requirement:** the store must keep working inside Iran during international internet shutdowns, so nothing here (or anywhere) may depend at run time on a foreign service. `server/invariants.test.ts` fails if storefront or admin source references a foreign absolute URL, and `admin/e2e/order-management.e2e.ts` fails if any page requests a non-local host.

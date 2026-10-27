@@ -276,3 +276,27 @@ describe("GitHub workflows", () => {
     expect(relative(ROOT, join(ROOT, dir))).toBe(dir);
   });
 });
+
+describe("no mandatory foreign runtime dependency", () => {
+  // The production store must keep working inside Iran when the international internet is cut: nothing the storefront or the admin
+  // loads or calls at run time may live on a foreign host (fonts, CDNs, analytics, scripts, APIs are bundled or self-hosted). The only
+  // foreign addresses in the source are links the shopper may click, identifiers that are never fetched, and placeholders.
+  const ALLOWED = [/^http:\/\/localhost/, /^http:\/\/127\.0\.0\.1/, /^https:\/\/(www\.)?instagram\.com\//, /^https:\/\/schema\.org(\/|$)/, /^https?:\/\/([a-z0-9-]+\.)*example\.(ir|com|test)/];
+  const sources = [...walk("src", (f) => /\.(ts|tsx|css|html)$/.test(f) && !/\.test\./.test(f)), ...walk("admin/src", (f) => /\.(ts|tsx|css|html)$/.test(f) && !/\.test\./.test(f)), "admin/index.html", ...walk("public", () => true)];
+
+  it("every absolute URL in the storefront and admin source is a link, an identifier or a placeholder (see the allow-list)", () => {
+    const offenders: string[] = [];
+    for (const file of sources) {
+      for (const match of read(file).matchAll(/https?:\/\/[^\s"'`)<>\\]+/g)) {
+        if (!ALLOWED.some((ok) => ok.test(match[0]))) offenders.push(`${file}: ${match[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("the admin page loads no external script, stylesheet or font", () => {
+    const html = read("admin/index.html");
+    expect(html).not.toMatch(/<(script|link)\b[^>]*(src|href)=["']https?:/i);
+    expect(read("admin/src/styles/admin.css")).not.toMatch(/@import\s+url\(["']?https?:/);
+  });
+});

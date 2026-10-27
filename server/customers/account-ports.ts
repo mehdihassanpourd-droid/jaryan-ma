@@ -1,4 +1,5 @@
 import type { ProductListRow } from "../../src/domain/product/types";
+import type { OrderActorType, OrderStatusValue } from "../../src/domain/customer/order-status";
 import type { AddressInput, NewOrderInput, ShippingSnapshot } from "../../src/domain/customer/schema";
 
 /** Customer-facing data other than sign-in: addresses, favourites, orders, data requests. */
@@ -30,14 +31,25 @@ export interface OrderItemView {
   quantity: number;
 }
 
+/** One step in an order's life as the CUSTOMER sees it: no staff identity, only what they should know. */
+export interface OrderHistoryEntry {
+  status: OrderStatusValue;
+  at: Date;
+  /** The reason staff gave when rejecting or cancelling (null otherwise). */
+  reason: string | null;
+  by: OrderActorType;
+}
+
 export interface OrderView {
   number: number;
-  status: "pending" | "confirmed" | "preparing" | "shipped" | "delivered" | "cancelled";
+  status: OrderStatusValue;
   totalToman: number;
   placedAt: Date;
   shipping: ShippingSnapshot;
   customerNote: string | null;
   items: OrderItemView[];
+  /** Oldest first. */
+  history: OrderHistoryEntry[];
 }
 
 export type DataRequestType = "export" | "deletion";
@@ -85,7 +97,7 @@ export interface AccountStore {
   /** The order a checkout attempt already created, if any. */
   findOrderByRequestId(customerId: string, requestId: string): Promise<OrderView | null>;
   /**
-   * Checkout: creates the order unless this customer already placed one with the same `requestId`, in which case that
+   * Checkout: creates the order (and reserves its stock in the SAME transaction, see `NewOrderInput` items' `reserveStock`) unless this customer already placed one with the same `requestId`, in which case that
    * order is returned (`created: false`). Safe against a retry racing the original request.
    */
   placeOrderOnce(input: NewOrderInput & { requestId: string }, now: Date): Promise<{ order: OrderView; created: boolean }>;
