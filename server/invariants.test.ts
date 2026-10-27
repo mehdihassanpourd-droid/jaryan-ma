@@ -301,6 +301,17 @@ describe("no mandatory foreign runtime dependency", () => {
   });
 });
 
+describe("SEO modules shared with the admin app stay browser-safe", () => {
+  // admin/src/lib/seo-suggest.ts bundles src/seo/catalog-seo.ts; anything it reaches must not need Node.
+  const nodeOnly = new Set(["src/seo/index.ts", "src/seo/overrides-file.ts", "src/seo/catalog-source.ts"]);
+  it("keeps node: imports (direct or via overrides-file/catalog-source/index) out of the shared SEO modules", () => {
+    const offenders = walk("src/seo", (f) => /\.ts$/.test(f) && !/\.test\.ts$/.test(f))
+      .filter((f) => !nodeOnly.has(f.replaceAll("\\", "/")))
+      .filter((f) => /from\s+["']node:/.test(read(f)) || /from\s+["']\.\/(index|overrides-file|catalog-source)["']/.test(read(f)));
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe("SEO automation (tools/seo-growth and its workflow)", () => {
   const tools = walk("tools/seo-growth", (f) => /\.ts$/.test(f) && !/\.test\./.test(f));
   const monitor = read(".github/workflows/seo-monitor.yml");

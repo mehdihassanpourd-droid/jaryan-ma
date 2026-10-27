@@ -1,6 +1,6 @@
 import { formatNumber, formatToman } from "@/lib/format";
 import { effectiveSettings, type SeoSettings } from "./config";
-import { NO_OVERRIDES, type SeoOverrides } from "./overrides-file";
+import { NO_OVERRIDES, type SeoOverrides } from "./overrides";
 import { cleanText, truncate } from "./text";
 import type { SeoCatalog, SeoImage, SeoProduct } from "./types";
 import { absoluteImageUrl, absoluteUrl, categoryPath, productPath } from "./urls";
