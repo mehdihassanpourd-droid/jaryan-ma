@@ -1,0 +1,59 @@
+# TEMPORARY, read-only: fetches the live design-preview pages of PR #22 from a GitHub runner and prints what they answer.
+# No secrets, no third-party actions. Delete this branch after reading the log.
+name: Verify design preview (temporary)
+
+on:
+  push:
+    branches: [claude/verify-design-preview]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Fetch live preview pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch
+        run: |
+          base="https://pr-22.jaryan-ma.pages.dev"
+          prod="https://jaryan-ma.pages.dev"
+          fail=0
+          # check <url> <expected-status> <expected-text-or-empty>
+          check() {
+            local url="$1" want="$2" text="$3" tries=0 code="" hdr=""
+            while [ $tries -lt 6 ]; do
+              code=$(curl -sS -L --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' "$url" 2>/dev/null || echo 000)
+              [ "$code" = "$want" ] && break
+              tries=$((tries+1)); sleep 5
+            done
+            robots=$(grep -i '^x-robots-tag' /tmp/h | tail -n1 | tr -d '\r' | sed 's/^[^:]*: *//')
+            size=$(wc -c < /tmp/b | tr -d ' ')
+            if [ "$code" != "$want" ]; then echo "FAIL  HTTP $code (wanted $want)  $url"; fail=1; return; fi
+            if [ -n "$text" ] && ! grep -q -- "$text" /tmp/b; then echo "FAIL  HTTP $code but text '$text' missing  $url"; fail=1; return; fi
+            echo "OK    HTTP $code  ${size}B  x-robots-tag='${robots}'  $url"
+          }
+          echo "== Pages of the PR #22 preview ($base)"
+          check "$base/design-preview/"                                   200 "دو مفهوم طراحی برای بررسی"
+          check "$base/design-preview/concept-a/"                         200 "اینجا هنر"
+          check "$base/design-preview/concept-a/product?c=mandala&n=1"    200 "جریان ما"
+          check "$base/design-preview/concept-a/product?c=tote&n=2"       200 "جریان ما"
+          check "$base/design-preview/concept-a/product?c=pottery&n=1"    200 "جریان ما"
+          check "$base/design-preview/concept-b/"                         200 "اینجا هنر"
+          check "$base/design-preview/concept-b/product?c=mandala&n=1"    200 "جریان ما"
+          check "$base/design-preview/concept-b/product?c=tote&n=2"       200 "جریان ما"
+          check "$base/design-preview/concept-b/product?c=pottery&n=1"    200 "جریان ما"
+          echo "== Assets the pages need"
+          for f in concept-a/a.css concept-b/b.css assets/proto-ui.js assets/proto-data.js assets/icons.svg \
+                   assets/fonts/markazi-text-arabic-700-normal.woff2 assets/fonts/baloo-bhaijaan-2-arabic-800-normal.woff2 assets/fonts/vazirmatn-arabic-wght-normal.woff2 \
+                   assets/img/a-mandala-1.svg assets/img/b-pottery-1.svg assets/img/b-tote-2.svg assets/img/mark-a.svg; do
+            check "$base/design-preview/$f" 200 ""
+          done
+          echo "== The real storefront is unchanged and does not link to the previews"
+          check "$base/" 200 "اینجا هنر در جریان است"
+          if curl -sS -L --max-time 30 "$base/" | grep -q "design-preview"; then echo "FAIL  the storefront home links to design-preview"; fail=1; else echo "OK    the storefront home does not link to design-preview"; fi
+          echo "== Production address must NOT have the previews"
+          code=$(curl -sS -L --max-time 30 -o /dev/null -w '%{http_code}' "$prod/design-preview/concept-a/" || echo 000)
+          if [ "$code" = "404" ]; then echo "OK    production $prod/design-preview/concept-a/ -> HTTP 404 (not published there)"; else echo "FAIL  production answers HTTP $code for /design-preview/concept-a/"; fail=1; fi
+          exit $fail
