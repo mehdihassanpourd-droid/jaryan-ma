@@ -7,7 +7,7 @@ Read `PRD.md` and `ARCHITECTURE.md` first.
 - `npm run check` — lint + typecheck + tests + `prisma validate` (run before every commit)
 - `npm run db:generate` — regenerate Prisma client after schema edits (runs automatically before test/typecheck/build)
 - `npm run admin:build` — build the admin PWA (`admin/` → `dist/admin`, served at `/admin/` by the API server) · `npm run admin:e2e` — Playwright browser tests against the real server (not part of `check`; CI job "Admin PWA")
-- `npm run codespace:setup|admin|start` — free Android-phone test environment in GitHub Codespaces (`.devcontainer`, `scripts/codespace/`, guide `docs/admin/CODESPACES-FA.md`): private port only, real password + TOTP, throw-away data
+- `npm run codespace:setup|up|down|admin|start|logs` — free Android-phone test environment in GitHub Codespaces (`.devcontainer`, `scripts/codespace/`, guide `docs/admin/CODESPACES-FA.md`): the app starts by itself on a private port; first administrator is created in the browser (`FIRST_RUN_SETUP`, dev-only, refused in production); real password + TOTP, throw-away data · `npm run api:dev` builds the admin app once if `dist/admin` is missing
 - `npm run ops -- health|security-check|backup|restore-test|backup-status` — operations CLI (see docs/maintenance/MAINTENANCE.md)
 - `npm run api:dev` — admin API with embedded PostgreSQL · `TEST_DATABASE_URL=postgresql://… npm test` — run tests on a real PostgreSQL
 

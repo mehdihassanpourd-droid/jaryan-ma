@@ -36,6 +36,9 @@ start_db() {
 # default admin (DEV_ADMIN_* is explicitly unset), customer accounts and SMS stay off.
 export_server_env() {
   unset DEV_ADMIN_EMAIL DEV_ADMIN_PASSWORD
+  # Lets you create the FIRST administrator in the browser (password + mandatory TOTP). The server closes it for good once
+  # an account exists and refuses this flag in production.
+  export FIRST_RUN_SETUP=true
   export NODE_ENV=development
   export HOST=127.0.0.1 PORT="$APP_PORT"
   export DATABASE_URL; DATABASE_URL="$(database_url)"
@@ -56,3 +59,5 @@ public_origin() {
     die "این دستور فقط داخل GitHub Codespaces اجرا می‌شود (نشانی خصوصی پیدا نشد)."
   fi
 }
+
+app_up() { curl -fsS -m 3 "http://127.0.0.1:${APP_PORT}/healthz" >/dev/null 2>&1; }

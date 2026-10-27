@@ -106,7 +106,7 @@ describe("the admin PWA stays private, portable and safe", () => {
 });
 
 describe("the Codespaces test environment stays private and uses real authentication", () => {
-  const scripts = ["lib", "setup", "create-admin", "start"].map((n) => `scripts/codespace/${n}.sh`);
+  const scripts = ["lib", "setup", "create-admin", "start", "up", "down"].map((n) => `scripts/codespace/${n}.sh`);
   const everything = [...scripts, ".devcontainer/devcontainer.json", "scripts/codespace/smoke.ts"].map(read).join("\n");
 
   it("defines Node 22 + the forwarded admin port only, as pure JSON", () => {
@@ -129,6 +129,15 @@ describe("the Codespaces test environment stays private and uses real authentica
     expect(lib).toContain("unset DEV_ADMIN_EMAIL DEV_ADMIN_PASSWORD");
     expect(lib).toContain("CUSTOMER_ACCOUNTS_ENABLED=false");
     expect(everything).not.toMatch(/REQUIRE_TOTP=false|COOKIE_SECURE=false|DEV_ADMIN_(EMAIL|PASSWORD)=|NODE_ENV=production/);
+  });
+
+  it("browser first-run setup is development-only: refused in production, never enabled by deploy docs or workflows", () => {
+    expect(read("server/config.ts")).toContain("FIRST_RUN_SETUP is development-only and not allowed in production");
+    expect(read("server/config.ts")).toMatch(/firstRunSetup: !production &&/);
+    expect(read("scripts/codespace/lib.sh")).toContain("FIRST_RUN_SETUP=true");
+    for (const file of [".github/workflows/cloudflare-pages.yml", ".github/workflows/admin.yml", "docs/admin/SELF-HOSTING.md"]) {
+      expect(read(file), file).not.toMatch(/FIRST_RUN_SETUP\s*[=:]\s*["']?true/);
+    }
   });
 
   it("keeps the database password out of the repository (random, in the git-ignored state dir)", () => {

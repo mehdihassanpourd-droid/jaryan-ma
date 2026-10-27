@@ -39,6 +39,8 @@ const schema = z.object({
   DEV_DATA_DIR: z.string().default(".data"),
   DEV_ADMIN_EMAIL: z.string().optional(),
   DEV_ADMIN_PASSWORD: z.string().optional(),
+  /** Development only: create the FIRST administrator (password + mandatory TOTP) from the browser. Refused in production. */
+  FIRST_RUN_SETUP: bool(false),
   // ---- customers, SMS, support, maintenance
   CUSTOMER_ACCOUNTS_ENABLED: bool(),
   /** Storefront origin(s) allowed to call the customer API with credentials. */
@@ -95,6 +97,8 @@ export interface Config {
   scryptLogN: number;
   devDataDir: string;
   devAdmin: { email: string; password: string } | null;
+  /** Browser-based creation of the first administrator; never true in production. */
+  firstRunSetup: boolean;
   customerAccountsEnabled: boolean;
   customerOrigins: string;
   sms: SmsConfig;
@@ -130,6 +134,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     if (e.REQUIRE_TOTP === false) problems.push("REQUIRE_TOTP=false is not allowed in production");
     if (e.COOKIE_SECURE === false) problems.push("COOKIE_SECURE=false is not allowed in production");
     if (e.DEV_ADMIN_EMAIL || e.DEV_ADMIN_PASSWORD) problems.push("DEV_ADMIN_* must not be set in production (create administrators with the admin CLI)");
+    if (e.FIRST_RUN_SETUP) problems.push("FIRST_RUN_SETUP is development-only and not allowed in production (create administrators with the admin CLI)");
     if (e.DATABASE_URL?.startsWith("pglite")) problems.push("DATABASE_URL must point to a PostgreSQL server in production");
   }
   const accounts = e.CUSTOMER_ACCOUNTS_ENABLED ?? !production;
@@ -209,6 +214,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     release: e.RELEASE ?? null,
     schedulerEnabled: e.SCHEDULER_ENABLED ?? true,
     adminUiDir: (e.ADMIN_UI_ENABLED ?? true) ? e.ADMIN_UI_DIR : null,
+    firstRunSetup: !production && e.FIRST_RUN_SETUP === true,
     devAdmin: !production && e.DEV_ADMIN_EMAIL && e.DEV_ADMIN_PASSWORD ? { email: e.DEV_ADMIN_EMAIL, password: e.DEV_ADMIN_PASSWORD } : null,
   };
 }

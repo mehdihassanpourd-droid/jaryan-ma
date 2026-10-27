@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { expect as pw } from "playwright/test";
 import type { BrowserContext, Page } from "playwright";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { startHarness, type Harness } from "./harness";
 
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
@@ -21,6 +21,10 @@ beforeAll(async () => {
     page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
   });
   owner = await h.login(ownerCtx, h.accounts.owner);
+});
+// A failed test prints what the server was doing: intermittent stalls are otherwise undiagnosable.
+afterEach((context) => {
+  if (context.task.result?.state === "fail") console.error(`--- server log (tail) after "${context.task.name}":\n${h?.serverLog(60)}`);
 });
 afterAll(async () => {
   await h?.stop();
@@ -145,7 +149,7 @@ describe("mobile layout and accessibility", () => {
     await owner.getByLabel(/^نام محصول/).fill("آزمون دسترس‌پذیری");
     await owner.getByLabel("نوع تحویل").selectOption("stocked");
     await owner.getByRole("button", { name: "ذخیره پیش‌نویس" }).click();
-    await owner.getByRole("tab", { name: "تصاویر" }).waitFor();
+    await owner.locator(".toast", { hasText: "محصول ذخیره شد" }).first().waitFor(); // saved: nothing is in flight any more
     for (const tab of ["گونه‌ها", "تصاویر", "سئو", "پیش‌نمایش", "اطلاعات"]) {
       await owner.getByRole("tab", { name: tab }).click();
       if (tab === "گونه‌ها") {

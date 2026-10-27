@@ -90,8 +90,12 @@ export function ProductEditorPage({ id }: { id: string | null }) {
         const r = await api<{ product: StoredProduct }>("POST", "/products", { body: checked.body });
         toast.success("محصول ذخیره شد. حالا می‌توانید تصویر اضافه کنید.");
         adopt(r.product);
-        navigate(`/products/${r.product.id}`, undefined, { replace: true });
-        setTab(status === "draft" ? "images" : "basics");
+        // Show the product's own address WITHOUT re-rendering the route: `navigate` would remount this editor (its key is the
+        // route id), resetting the tab and dropping whatever the person did right after saving. Saving continues to use
+        // `product.id` from state, and a reload of this address loads the product normally.
+        window.history.replaceState(null, "", hrefFor(`/products/${r.product.id}`));
+        // Guide a new draft towards adding photos, but never override a tab the person has already moved to while saving.
+        setTab((current) => (current === "basics" && status === "draft" ? "images" : current));
       } else {
         const r = await api<{ product: StoredProduct }>("PUT", `/products/${product.id}`, { body: { expectedVersion: product.version, product: checked.body } });
         adopt(r.product);

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { adminContentSecurityPolicy, createAdminUiHandler } from "./admin-ui";
+import { adminContentSecurityPolicy, createAdminUiHandler, createUnbuiltAdminUiHandler } from "./admin-ui";
 
 let dir: string;
 let outside: string;
@@ -34,6 +34,12 @@ describe("serving the admin app", () => {
     expect(await handle("GET", "/api/v1/products")).toBeNull();
     expect(await handle("GET", "/administrator")).toBeNull();
     expect(await get("/admin")).toMatchObject({ status: 308, headers: { location: "/admin/" } });
+  });
+
+  it("sends the bare server address to the admin app instead of a 404 (what a forwarded port opens)", async () => {
+    expect(await get("/")).toMatchObject({ status: 302, headers: { location: "/admin/", "cache-control": "no-store" } });
+    expect(await get("/", "HEAD")).toMatchObject({ status: 302 });
+    expect(await handle("POST", "/")).toBeNull(); // only GET/HEAD are redirected; other methods fall through to the API
   });
 
   it("serves index.html at /admin/ and revalidates it, so new releases reach installed apps", async () => {
@@ -106,5 +112,25 @@ describe("response headers", () => {
     expect(h["referrer-policy"]).toBe("no-referrer");
     expect(h["permissions-policy"]).toContain("camera=()");
     expect(h["cross-origin-resource-policy"]).toBe("same-origin");
+  });
+});
+
+describe("when the admin app has not been built", () => {
+  const unbuilt = createUnbuiltAdminUiHandler();
+
+  it("explains what is missing (503) instead of an unexplained 404, for /, /admin and /admin/*", async () => {
+    for (const path of ["/", "/admin", "/admin/", "/admin/assets/app.js"]) {
+      const r = (await unbuilt("GET", path))!;
+      expect(r.status, path).toBe(503);
+      expect(r.body?.toString()).toContain("npm run admin:build");
+      expect(r.headers["cache-control"]).toBe("no-store");
+      expect(r.headers["x-content-type-options"]).toBe("nosniff");
+    }
+  });
+
+  it("leaves API and media paths alone and serves no files", async () => {
+    expect(await unbuilt("GET", "/api/v1/products")).toBeNull();
+    expect(await unbuilt("GET", "/media/images/a/b.png")).toBeNull();
+    expect((await unbuilt("HEAD", "/admin/"))!.body).toBeNull();
   });
 });
