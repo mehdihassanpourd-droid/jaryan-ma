@@ -74,6 +74,7 @@ describe("customer tickets", () => {
         items: [{ productId: p.id, vendorId, titleSnapshot: "p", skuSnapshot: null, variantSnapshot: null, imageKeySnapshot: null, unitPriceToman: 1000, quantity: 1 }],
         shipping: { recipientName: "علی", recipientPhone: "+989121234567", province: "تهران", city: "تهران", street: "خیابان ولیعصر", plaque: null, unit: null, postalCode: "1459813176" },
         customerNote: null,
+        requestId: null,
         totalToman: 1000,
       },
       now,

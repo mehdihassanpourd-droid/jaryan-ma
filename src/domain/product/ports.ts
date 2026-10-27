@@ -43,6 +43,8 @@ export interface CatalogRepository {
   getProduct(id: string): Promise<StoredProduct | null>;
   /** At most 100 ids per call. */
   getProducts(ids: string[]): Promise<StoredProduct[]>;
+  /** PUBLISHED products only, by slug (checkout reads prices and stock here). At most 100 slugs per call. */
+  getPublishedBySlugs(slugs: string[]): Promise<StoredProduct[]>;
   getSummary(id: string): Promise<ProductSummary | null>;
 
   /** `input.slug` must already be resolved and unique-checked by the caller; the store still enforces it. */

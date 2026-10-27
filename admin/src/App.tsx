@@ -8,11 +8,13 @@ import { AccountPage } from "./pages/AccountPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
 import { DataPage } from "./pages/DataPage";
 import { LoginPage } from "./pages/LoginPage";
+import { OrdersPage } from "./pages/OrdersPage";
 import { ProductEditorPage } from "./pages/ProductEditorPage";
 import { ProductsPage } from "./pages/ProductsPage";
 
 const NAV = [
   { path: "/products", label: "محصولات", icon: "products" },
+  { path: "/orders", label: "سفارش‌ها", icon: "orders", permission: "order:read" },
   { path: "/data", label: "ورود و خروج", icon: "data" },
   { path: "/categories", label: "دسته‌ها", icon: "categories" },
   { path: "/account", label: "حساب", icon: "account" },
@@ -27,6 +29,7 @@ function titleFor(path: string): string {
 function Shell() {
   const route = useRoute();
   const user = useUser();
+  const { can } = useSession();
   const mainRef = useRef<HTMLElement>(null);
   const title = titleFor(route.path);
 
@@ -47,7 +50,18 @@ function Shell() {
         <Alert tone="error">نشانی محصول معتبر نیست. <a href={hrefFor("/products")}>بازگشت به فهرست</a></Alert>
       );
   }
-  else if (segments[0] === "data") page = <DataPage />;
+  else if (segments[0] === "orders") {
+    const raw = segments[1];
+    page = !can("order:read") ? (
+      <Alert tone="error">این بخش برای نقش شما فعال نیست.</Alert>
+    ) : raw === undefined ? (
+      <OrdersPage number={null} />
+    ) : /^\d{1,10}$/.test(raw) ? (
+      <OrdersPage number={Number(raw)} />
+    ) : (
+      <Alert tone="error">شمارهٔ سفارش معتبر نیست. <a href={hrefFor("/orders")}>بازگشت به فهرست</a></Alert>
+    );
+  } else if (segments[0] === "data") page = <DataPage />;
   else if (segments[0] === "categories") page = <CategoriesPage />;
   else if (segments[0] === "account") page = <AccountPage />;
 
@@ -61,7 +75,7 @@ function Shell() {
         <span className="who" dir="ltr">{user.email}</span>
       </header>
       <nav className="nav" aria-label="بخش‌های مدیریت">
-        {NAV.map((item) => (
+        {NAV.filter((item) => !("permission" in item) || can(item.permission)).map((item) => (
           <a key={item.path} href={hrefFor(item.path)} aria-current={route.path.startsWith(item.path) ? "page" : undefined}>
             <Icon name={item.icon} />
             {item.label}

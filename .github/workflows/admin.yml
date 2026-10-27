@@ -22,7 +22,7 @@ jobs:
   build-and-test:
     name: Build, unit tests, browser tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     # A throw-away PostgreSQL 16 for the product-workflow browser test (CI-only credentials, nothing persists).
     services:
       postgres:
@@ -81,3 +81,13 @@ jobs:
           npx vitest run --config vitest.e2e.config.mts admin/e2e/storefront-publish.e2e.ts
         env:
           E2E_DATABASE_URL: postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci_storefront
+
+      # The shopper's journey: cart, checkout with an SMS code (development console provider), a real pending order on PostgreSQL,
+      # confirmation, history, the owner's read-only orders page, and a build without an order system (demo checkout).
+      - name: Shopping journey on real PostgreSQL 16 (cart, checkout, orders; 412px phone)
+        run: |
+          PGPASSWORD=ci-only-throwaway psql -h 127.0.0.1 -U ci -d ci -c "create database ci_shopping"
+          DATABASE_URL=postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci_shopping npx prisma migrate deploy
+          npx vitest run --config vitest.e2e.config.mts admin/e2e/shopping.e2e.ts
+        env:
+          E2E_DATABASE_URL: postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci_shopping

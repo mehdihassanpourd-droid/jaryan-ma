@@ -83,7 +83,7 @@ The demo is a fully static export (`output: "export"` in `next.config.ts`). It h
    | Build output directory | `out` |
    | Root directory | _(leave empty)_ |
 
-3. Environment variables (optional): `NEXT_PUBLIC_CATALOG_URL` = the public https base URL of the published-catalogue snapshots (set as a repository **variable**; with it the storefront shows real published products live, with no redeploy per publish; see docs/admin/ARCHITECTURE.md §7), `NEXT_PUBLIC_SITE_URL` = your final public URL, e.g. `https://jaryan-ma.pages.dev` (used for metadata only). It is **public** and inlined into the build, so never put secrets in `NEXT_PUBLIC_*` variables. Do not set `DATABASE_URL`; the demo does not use a database.
+3. Environment variables (optional): `NEXT_PUBLIC_ORDER_API_URL` = the public https base URL of the customer API (optional; without it the checkout is a labelled demo that places no order), `NEXT_PUBLIC_CATALOG_URL` = the public https base URL of the published-catalogue snapshots (set as a repository **variable**; with it the storefront shows real published products live, with no redeploy per publish; see docs/admin/ARCHITECTURE.md §7), `NEXT_PUBLIC_SITE_URL` = your final public URL, e.g. `https://jaryan-ma.pages.dev` (used for metadata only). It is **public** and inlined into the build, so never put secrets in `NEXT_PUBLIC_*` variables. Do not set `DATABASE_URL`; the demo does not use a database.
 4. Node version is pinned by `.node-version` (22). Save and deploy.
 
 **Manual deploy** (no Git integration): `npm run build`, then `npx wrangler pages deploy out --project-name jaryan-ma`.

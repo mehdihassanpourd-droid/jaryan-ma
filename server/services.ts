@@ -3,7 +3,9 @@ import type { SecurityFacts } from "../src/domain/maintenance/security-checks";
 import { DEFAULT_OTP_POLICY, type OtpPolicy } from "../src/domain/customer/otp-policy";
 import type { RateLimiter } from "./auth/rate-limit";
 import type { CookieSettings } from "./auth/session";
+import type { CatalogRepository } from "../src/domain/product/ports";
 import { AccountService, DEFAULT_ACCOUNT_SETTINGS } from "./customers/account-service";
+import { CheckoutService } from "./customers/checkout-service";
 import { CustomerAuthService, CustomerSessionAuthenticator, DEFAULT_CUSTOMER_AUTH, type CustomerAuthSettings } from "./customers/customer-auth";
 import { OtpService } from "./customers/otp-service";
 import { PrismaAccountStore } from "./customers/prisma-account-store";
@@ -12,6 +14,8 @@ import type { Db } from "./db/client";
 import { PrismaMaintenanceStore } from "./maintenance/prisma-store";
 import { MaintenanceService, type HealthProbes, type MaintenanceSettings, DEFAULT_MAINTENANCE_SETTINGS } from "./maintenance/service";
 import { createMaintenanceAdminRoutes } from "./routes/admin-maintenance";
+import { createOrderAdminRoutes } from "./routes/admin-orders";
+import { OrderAdminService } from "./orders/order-admin";
 import { createSupportAdminRoutes } from "./routes/admin-support";
 import type { SmsProvider } from "./sms/provider";
 import { PrismaSupportStore } from "./support/prisma-store";
@@ -30,6 +34,9 @@ export interface PlatformOptions {
   sms: SmsProvider;
   limiter: RateLimiter;
   customerCookie: CookieSettings;
+  /** Checkout reads published products (prices, stock) from here, never from the browser. */
+  catalog: Pick<CatalogRepository, "getPublishedBySlugs">;
+  vendorId: string;
   clock?: () => Date;
   log?: (event: string, detail?: Record<string, unknown>) => void;
   otpPolicy?: OtpPolicy;
@@ -53,6 +60,7 @@ export function createPlatformServices(o: PlatformOptions) {
 
   const support = new SupportService(supportStore, o.limiter, (entry) => adminAudit(o.db, entry), undefined, clock);
   const accounts = new AccountService(accountStore, customerStore, DEFAULT_ACCOUNT_SETTINGS, clock, (customerId) => support.exportForCustomer(customerId));
+  const checkout = new CheckoutService(o.catalog, accountStore, customerStore, o.vendorId, clock);
   const maintenance = new MaintenanceService(
     maintenanceStore,
     { ...o.probes, overdueDeletions: async () => (await accountStore.listDueDeletions(new Date(clock().getTime() - 24 * 3600_000), 1000)).length },
@@ -60,8 +68,8 @@ export function createPlatformServices(o: PlatformOptions) {
     clock,
   );
 
-  const adminRoutes: AdminRouter[] = [createSupportAdminRoutes(support), createMaintenanceAdminRoutes(maintenance)];
-  return { customerStore, accountStore, supportStore, maintenanceStore, customerAuth, customerAuthenticator, support, accounts, maintenance, adminRoutes };
+  const adminRoutes: AdminRouter[] = [createSupportAdminRoutes(support), createMaintenanceAdminRoutes(maintenance), createOrderAdminRoutes(new OrderAdminService(o.db))];
+  return { customerStore, accountStore, supportStore, maintenanceStore, customerAuth, customerAuthenticator, support, accounts, checkout, maintenance, adminRoutes };
 }
 
 export type PlatformServices = ReturnType<typeof createPlatformServices>;

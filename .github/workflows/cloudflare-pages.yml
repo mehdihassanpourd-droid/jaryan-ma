@@ -67,6 +67,16 @@ jobs:
             echo "NEXT_PUBLIC_CATALOG_URL=$CATALOG_URL" >> "$GITHUB_ENV"
           fi
 
+      # Optional, public value: the base URL of the customer API. With it checkout places real PENDING orders (after an SMS-code
+      # sign-in); without it the checkout is a labelled demo that creates nothing. Never a secret: set it as a repository *variable*.
+      - name: Configure order system URL
+        env:
+          ORDER_API_URL: ${{ vars.NEXT_PUBLIC_ORDER_API_URL }}
+        run: |
+          if [ -n "$ORDER_API_URL" ]; then
+            echo "NEXT_PUBLIC_ORDER_API_URL=$ORDER_API_URL" >> "$GITHUB_ENV"
+          fi
+
       - name: Build static export
         run: npm run build
 
