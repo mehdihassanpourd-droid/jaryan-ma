@@ -116,3 +116,8 @@ jobs:
       # structured data, sold-out handling, robots.txt, sitemap.xml, crawlability from the home page, image hints, layout stability) and a closed build.
       - name: SEO output in a real browser (launched and closed builds; 412px phone)
         run: npx vitest run --config vitest.e2e.config.mts admin/e2e/seo.e2e.ts
+
+      # The public preview exactly as the deploy workflow builds it (no optional variables): every page on an Android phone, the tap journey,
+      # honest demo-only checkout, nothing private or foreign in the published files.
+      - name: Public preview build on an Android phone (412px)
+        run: npx vitest run --config vitest.e2e.config.mts admin/e2e/preview.e2e.ts

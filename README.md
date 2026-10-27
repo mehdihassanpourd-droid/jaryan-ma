@@ -51,8 +51,10 @@ npm run db:studio
 | Event | What runs |
 |---|---|
 | Pull request to `main` | `npm run check`, `npm run build`, then a **preview** deployment at `https://pr-<number>.jaryan-ma.pages.dev` (the exact URL is in the run's summary) |
-| Push / merge to `main` | `npm run check`, `npm run build`, then a **production** deployment |
+| Push / merge to `main` | `npm run check`, `npm run build`, then — once **every other check on the commit** (browser tests, PostgreSQL 16 tests, SEO output) is green — a **production** deployment at the permanent address `https://jaryan-ma.pages.dev` |
 | PR from a fork | checks and build only (forks cannot read secrets) |
+
+After every deployment the workflow **fetches the live site** and fails unless `/build-info.json` names the deployed commit and the home, cart, checkout and orders pages answer (`scripts/deploy/verify-live.sh`; production at the permanent address, a preview at its own address and PR alias). A failed check holds production back (`scripts/deploy/wait-for-checks.sh`): fix it and re-run the deploy job. A failed run opens a `deployment-failure` issue ("Deployment watch"). What the public preview contains, what is demo-only and what is unavailable is in `docs/deploy/PREVIEW-FA.md`; `npm run admin:e2e` includes `admin/e2e/preview.e2e.ts`, which drives the exact deployed build on an Android-sized phone.
 
 Deployment is skipped (with a notice, not a failure) until both repository secrets exist. Nothing is deployed from an unconfigured repo.
 
