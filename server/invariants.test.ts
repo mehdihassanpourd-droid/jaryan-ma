@@ -301,6 +301,23 @@ describe("no mandatory foreign runtime dependency", () => {
   });
 });
 
+describe("the public preview deployment proves its result", () => {
+  const workflow = () => read(".github/workflows/cloudflare-pages.yml");
+  it("records the commit in the build and fetches it back from the live site after deploying", () => {
+    expect(workflow()).toContain("out/build-info.json");
+    expect(workflow()).toContain("scripts/deploy/verify-live.sh");
+    expect(workflow().indexOf("Verify the live site serves this commit")).toBeGreaterThan(workflow().indexOf("- name: Deploy\n"));
+  });
+  it("holds production back until every other check on the commit is green", () => {
+    expect(workflow()).toContain("scripts/deploy/wait-for-checks.sh");
+    expect(workflow().indexOf("Wait for the other checks")).toBeLessThan(workflow().indexOf("- name: Deploy\n"));
+  });
+  it("deploys only what the build job produced, with read-only repository access", () => {
+    expect(workflow()).toMatch(/needs: build/);
+    expect(workflow()).not.toMatch(/contents:\s*write/);
+  });
+});
+
 describe("SEO modules shared with the admin app stay browser-safe", () => {
   // admin/src/lib/seo-suggest.ts bundles src/seo/catalog-seo.ts; anything it reaches must not need Node.
   const nodeOnly = new Set(["src/seo/index.ts", "src/seo/overrides-file.ts", "src/seo/catalog-source.ts"]);

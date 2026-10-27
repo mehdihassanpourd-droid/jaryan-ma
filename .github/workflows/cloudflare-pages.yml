@@ -3,6 +3,9 @@
 #   - push to main        -> production deployment
 #   - pull request        -> preview deployment (alias: pr-<number>.jaryan-ma.pages.dev)
 #
+# A deployment is only reported as successful after the LIVE site is fetched and found to serve this exact commit
+# (scripts/deploy/verify-live.sh); a production deployment also waits for every other check on the commit (scripts/deploy/wait-for-checks.sh).
+#
 # Deployment needs two repository secrets: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
 # Until both exist the deploy job skips itself; checks and build still run.
 # See README.md "Automated deployment (GitHub Actions)".
@@ -105,6 +108,12 @@ jobs:
           test -f out/404.html
           test -f out/_headers
 
+      # Public, harmless: which commit this build is. The deploy job fetches it back from the live URL to prove the deployment is really served.
+      - name: Record build info
+        env:
+          COMMIT: ${{ github.sha }}
+        run: printf '{"commit":"%s"}\n' "$COMMIT" > out/build-info.json
+
       - name: Upload static site
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -117,10 +126,21 @@ jobs:
     name: Deploy to Cloudflare Pages
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
+    # `checks: read` lets the production gate see the other checks of the commit; nothing here can write to the repository.
+    permissions:
+      contents: read
+      checks: read
     # Forked PRs cannot read secrets (and must not be deployed from this workflow).
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
+      # Only the two small deployment scripts are needed here (the site itself comes from the build artifact).
+      - name: Checkout deployment scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/deploy
+          persist-credentials: false
+
       # Secrets are only inspected for presence; their values are never printed.
       - name: Check Cloudflare credentials
         id: creds
@@ -142,6 +162,16 @@ jobs:
           name: pages-out
           path: out
 
+      # Production only goes live after EVERY other check on this commit (browser tests, PostgreSQL 16 tests, SEO output, ...) is green. A failed
+      # check holds it back and the "Deployment watch" workflow opens an issue; fix it, then re-run this job. Previews are gated by `build` above.
+      - name: Wait for the other checks on this commit
+        if: steps.creds.outputs.enabled == 'true' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+        run: bash scripts/deploy/wait-for-checks.sh "$REPO" "$COMMIT" 2400 'Check and build|Deploy to Cloudflare Pages|Report deployment result'
+
       # Branch is a fixed value or the PR number, never user-controlled text.
       # "main" is the project's production branch, so it becomes the production deployment.
       - name: Deploy
@@ -153,9 +183,30 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy out --project-name=jaryan-ma --branch=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main' }} --commit-hash=${{ github.sha }}
 
+      # Trust the result, not the configuration: fetch the live site and require it to serve THIS commit (and its pages to answer).
+      # Production is checked at the permanent address; a preview at its own deployment address (and its PR alias).
+      - name: Verify the live site serves this commit
+        id: verify
+        if: steps.creds.outputs.enabled == 'true'
+        env:
+          COMMIT: ${{ github.sha }}
+          IS_PREVIEW: ${{ github.event_name == 'pull_request' }}
+          PERMANENT_URL: ${{ vars.PREVIEW_URL || 'https://jaryan-ma.pages.dev' }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.deployment-url }}
+          ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+        run: |
+          if [ "$IS_PREVIEW" = "true" ]; then
+            bash scripts/deploy/verify-live.sh "$DEPLOY_URL" "$COMMIT" 300
+            if [ -n "$ALIAS_URL" ]; then bash scripts/deploy/verify-live.sh "$ALIAS_URL" "$COMMIT" 300; fi
+          else
+            bash scripts/deploy/verify-live.sh "$PERMANENT_URL" "$COMMIT" 300
+          fi
+
       - name: Summary
         if: steps.creds.outputs.enabled == 'true'
         env:
+          PERMANENT_URL: ${{ vars.PREVIEW_URL || 'https://jaryan-ma.pages.dev' }}
+          COMMIT: ${{ github.sha }}
           KIND: ${{ github.event_name == 'pull_request' && 'Preview' || 'Production' }}
           DEPLOY_URL: ${{ steps.deploy.outputs.deployment-url }}
           ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
@@ -164,4 +215,5 @@ jobs:
             echo "### $KIND deployment"
             echo "- Deployment: $DEPLOY_URL"
             if [ -n "$ALIAS_URL" ]; then echo "- Alias: $ALIAS_URL"; fi
+            if [ "$KIND" = "Production" ]; then echo "- Permanent address: $PERMANENT_URL (verified: serves commit ${COMMIT:0:12})"; fi
           } >> "$GITHUB_STEP_SUMMARY"

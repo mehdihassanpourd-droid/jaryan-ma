@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArtPlaceholder } from "@/components/product/ArtPlaceholder";
 import { Container } from "@/components/ui/Container";
 import { PlaceholderTag } from "@/components/ui/PlaceholderTag";
@@ -5,6 +6,7 @@ import { SectionHeading } from "@/components/ui/SectionHeading";
 import { demoCategories, demoProducts } from "@/data/demo-catalog";
 import { countByCategory } from "@/lib/catalog";
 import { formatNumber } from "@/lib/format";
+import { categoryPath } from "@/seo/urls";
 
 export function CategoryGrid() {
   return (
@@ -20,7 +22,7 @@ export function CategoryGrid() {
         <ul className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
           {demoCategories.map((c) => (
             <li key={c.slug}>
-              <a href="#featured" className="group block rounded-2xl">
+              <Link href={categoryPath(c.slug)} className="group block rounded-2xl">
                 <div className="aspect-[4/5] overflow-hidden rounded-2xl shadow-soft ring-1 ring-sand-200">
                   <div className="h-full w-full transition-transform duration-500 group-hover:scale-105">
                     <ArtPlaceholder tone={c.tone} motif={c.motif} alt={`تصویر نمونه دسته ${c.name}`} />
@@ -29,7 +31,7 @@ export function CategoryGrid() {
                 <h3 className="mt-4 text-lg font-bold text-bark-900">{c.name}</h3>
                 <p className="text-sm text-bark-600">{c.blurb}</p>
                 <p className="mt-1 text-xs text-olive-700">{formatNumber(countByCategory(demoProducts, c.slug))} اثر نمونه</p>
-              </a>
+              </Link>
             </li>
           ))}
         </ul>
