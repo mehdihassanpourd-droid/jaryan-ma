@@ -12,6 +12,8 @@ import { isIranProvince } from "@/domain/customer/geo";
 import type { ShippingMethodKey } from "@/domain/shipping/methods";
 import { feeText } from "@/lib/delivery-text";
 import { DeliveryOptions } from "./DeliveryOptions";
+import { FreeShippingNote } from "./FreeShippingNote";
+import { useFreeShippingPolicy } from "./useFreeShipping";
 import { useShippingQuote } from "./useShippingQuote";
 import { formatNumber, formatToman } from "@/lib/format";
 import { LIVE_CATALOG_BASE } from "@/lib/live-config";
@@ -61,6 +63,7 @@ export function CheckoutView() {
   const cart = useCart();
   const { products, retry: refreshProducts } = useCartProducts(cart.lines.map((l) => l.slug));
   const customer = useCustomer();
+  const freeShippingPolicy = useFreeShippingPolicy();
   const [form, setForm] = useState<ShippingForm>(emptyShippingForm);
   const [errors, setErrors] = useState<ShippingErrors>({});
   const [busy, setBusy] = useState(false);
@@ -298,6 +301,7 @@ export function CheckoutView() {
               <span className="font-medium text-bark-900">جمع کل سفارش</span>
               <strong className="text-xl text-bark-900" data-testid="checkout-grand-total">{chosenFee === null ? "—" : formatToman(total + BigInt(chosenFee))}</strong>
             </p>
+            <FreeShippingNote policy={freeShippingPolicy} subtotalToman={total} />
             <p className="mt-2 text-xs text-bark-600">هزینهٔ ارسال را سرور محاسبه می‌کند و پیش از ثبت اینجا می‌بینید. پرداخت آنلاین هنوز فعال نیست.</p>
           </>
         ) : (

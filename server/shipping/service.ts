@@ -1,5 +1,5 @@
 import { SHIPPING_METHODS, type CarrierKey, type ShippingMethodKey } from "../../src/domain/shipping/methods";
-import { cartWeightGrams, type Destination, type MethodQuote } from "../../src/domain/shipping/pricing";
+import { applyFreeShipping, cartWeightGrams, freeShippingProgress, type Destination, type FreeShippingProgress, type MethodQuote } from "../../src/domain/shipping/pricing";
 import { toRules, type ShippingConfigStore } from "./config-store";
 import type { ShippingProvider } from "./provider";
 
@@ -7,6 +7,8 @@ export interface ShippingQuote {
   weightGrams: number;
   /** One entry per method, in the fixed display order. */
   quotes: MethodQuote[];
+  /** The free shipping policy as it applies to this cart (how much more to buy, or that it qualifies). */
+  freeShipping: FreeShippingProgress;
 }
 
 /**
@@ -21,7 +23,7 @@ export class ShippingService {
   ) {}
 
   async quote(input: { destination: Destination | null; lines: Array<{ quantity: number; weightGrams: number | null }>; subtotalToman: number }): Promise<ShippingQuote> {
-    const { weight } = toRules(await this.config.load());
+    const { weight, free } = toRules(await this.config.load());
     const weightGrams = cartWeightGrams(input.lines, weight);
     const context = { destination: input.destination, weightGrams, subtotalToman: input.subtotalToman };
     const answers = new Map<ShippingMethodKey, MethodQuote>();
@@ -34,7 +36,15 @@ export class ShippingService {
         this.log("shipping.provider_failed", { provider: provider.id });
       }
     }
-    return { weightGrams, quotes: SHIPPING_METHODS.map((m) => answers.get(m) ?? { method: m, available: false as const, reason: "disabled" as const }) };
+    // The policy is the shop's, not a provider's: it waives the fee of any qualifying method, whoever priced it.
+    const quotes = SHIPPING_METHODS.map((m) => applyFreeShipping(answers.get(m) ?? { method: m, available: false as const, reason: "disabled" as const }, free, input.subtotalToman));
+    return { weightGrams, quotes, freeShipping: freeShippingProgress(free, input.subtotalToman) };
+  }
+
+  /** The policy alone (for the cart page, before any address or checkout): public information the shopper is promised. */
+  async freeShippingPolicy(): Promise<FreeShippingProgress> {
+    const { free } = toRules(await this.config.load());
+    return freeShippingProgress(free, 0);
   }
 
   trackingUrl(carrier: CarrierKey, code: string): string | null {

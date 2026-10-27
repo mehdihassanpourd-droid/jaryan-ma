@@ -22,8 +22,10 @@ beforeEach(async () => {
   S = shop(() => app, () => testDb, () => categoryId);
 });
 
+const FREE_OFF = { enabled: false, thresholdToman: null, methods: [] };
+const FREE_3M = { enabled: true, thresholdToman: 3_000_000, methods: ["post"] };
 const rate = (over: Record<string, unknown> = {}) => ({ provinces: [], cities: [], minWeightGrams: 0, maxWeightGrams: null, priceToman: 100_000, ...over });
-const method = (m: string, over: Record<string, unknown> = {}) => ({ method: m, enabled: true, freeThresholdToman: null, etaMinDays: null, etaMaxDays: null, note: null, rates: m === "pickup" ? [] : [rate()], ...over });
+const method = (m: string, over: Record<string, unknown> = {}) => ({ method: m, enabled: true, etaMinDays: null, etaMaxDays: null, note: null, rates: m === "pickup" ? [] : [rate()], ...over });
 const getConfig = async () => (await adminCall(app, { path: "/api/v1/shipping/config", as: owner })).body.config;
 async function putConfig(methods: unknown[], over: Record<string, unknown> = {}, as: Session | null = owner) {
   const current = as ? await getConfig().catch(() => null) : null;
@@ -31,7 +33,7 @@ async function putConfig(methods: unknown[], over: Record<string, unknown> = {},
     method: "PUT",
     path: "/api/v1/shipping/config",
     as,
-    body: { expectedVersion: current?.version ?? 1, defaultItemWeightGrams: 500, packagingWeightGrams: 0, methods, ...over },
+    body: { expectedVersion: current?.version ?? 1, defaultItemWeightGrams: 500, packagingWeightGrams: 0, freeShipping: FREE_OFF, methods, ...over },
   });
 }
 const quote = (as: Customer | null, items: unknown[], destination: unknown = null) =>
@@ -60,13 +62,14 @@ describe("the owner's shipping table", () => {
 
   it("saves and returns prices exactly, keeps rate order, and records an audit entry without prices or personal data", async () => {
     const saved = await putConfig(
-      [method("post", { freeThresholdToman: 5_000_000, etaMinDays: 3, etaMaxDays: 7, rates: [rate({ provinces: ["تهران"], priceToman: 85_000 }), rate({ priceToman: 140_000, minWeightGrams: 0, maxWeightGrams: 2000 })] }), method("pickup", { note: "گالری، ساعت ۱۰ تا ۱۸" })],
-      { defaultItemWeightGrams: 650, packagingWeightGrams: 200 },
+      [method("post", { etaMinDays: 3, etaMaxDays: 7, rates: [rate({ provinces: ["تهران"], priceToman: 85_000 }), rate({ priceToman: 140_000, minWeightGrams: 0, maxWeightGrams: 2000 })] }), method("pickup", { note: "گالری، ساعت ۱۰ تا ۱۸" })],
+      { defaultItemWeightGrams: 650, packagingWeightGrams: 200, freeShipping: { enabled: true, thresholdToman: 5_000_000, methods: ["post"] } },
     );
     expect(saved.status).toBe(200);
     expect(saved.body.config).toMatchObject({ version: 2, defaultItemWeightGrams: 650, packagingWeightGrams: 200 });
     const post = saved.body.config.methods.find((m: any) => m.method === "post");
-    expect(post).toMatchObject({ enabled: true, freeThresholdToman: 5_000_000, etaMinDays: 3, etaMaxDays: 7 });
+    expect(post).toMatchObject({ enabled: true, etaMinDays: 3, etaMaxDays: 7 });
+    expect(saved.body.config.freeShipping).toEqual({ enabled: true, thresholdToman: 5_000_000, methods: ["post"] });
     expect(post.rates.map((r: any) => r.priceToman)).toEqual([85_000, 140_000]);
     expect(saved.body.config.methods.find((m: any) => m.method === "pickup").note).toBe("گالری، ساعت ۱۰ تا ۱۸");
     const log = await testDb.db.auditLog.findFirstOrThrow({ where: { action: "shipping.config" } });
@@ -96,7 +99,7 @@ describe("the owner's shipping table", () => {
   it("refuses a save made from an out-of-date screen and hands back the current table", async () => {
     const first = await getConfig();
     expect((await putConfig([method("pickup")], { expectedVersion: first.version })).status).toBe(200);
-    const stale = await adminCall(app, { method: "PUT", path: "/api/v1/shipping/config", as: owner, body: { expectedVersion: first.version, defaultItemWeightGrams: 500, packagingWeightGrams: 0, methods: [method("tipax")] } });
+    const stale = await adminCall(app, { method: "PUT", path: "/api/v1/shipping/config", as: owner, body: { expectedVersion: first.version, defaultItemWeightGrams: 500, packagingWeightGrams: 0, freeShipping: FREE_OFF, methods: [method("tipax")] } });
     expect(stale.status).toBe(409);
     expect(stale.body.error).toBe("shipping_config_changed");
     expect(stale.body.detail.config.version).toBe(first.version + 1);
@@ -111,7 +114,6 @@ describe("quotes by destination, weight and method", () => {
         await putConfig(
           [
             method("post", {
-              freeThresholdToman: 3_000_000,
               etaMinDays: 3,
               etaMaxDays: 7,
               rates: [
@@ -125,7 +127,7 @@ describe("quotes by destination, weight and method", () => {
             method("local_courier", { rates: [rate({ provinces: ["تهران"], cities: ["تهران"], priceToman: 60_000 })], etaMinDays: 1, etaMaxDays: 1 }),
             method("pickup", { note: "تحویل در گالری" }),
           ],
-          { defaultItemWeightGrams: 500, packagingWeightGrams: 100 },
+          { defaultItemWeightGrams: 500, packagingWeightGrams: 100, freeShipping: FREE_3M },
         )
       ).status,
     ).toBe(200);
@@ -200,10 +202,13 @@ describe("quotes by destination, weight and method", () => {
 
 describe("ordering with delivery", () => {
   beforeEach(async () => {
-    await putConfig([
-      method("post", { freeThresholdToman: 3_000_000, etaMinDays: 3, etaMaxDays: 7, rates: [rate({ provinces: ["تهران"], priceToman: 90_000 })] }),
-      method("pickup", { note: "تحویل در گالری" }),
-    ]);
+    await putConfig(
+      [
+        method("post", { etaMinDays: 3, etaMaxDays: 7, rates: [rate({ provinces: ["تهران"], priceToman: 90_000 })] }),
+        method("pickup", { note: "تحویل در گالری" }),
+      ],
+      { freeShipping: FREE_3M },
+    );
   });
 
   it("stores the method, the server's fee, the frozen quote, and a total of goods + delivery", async () => {

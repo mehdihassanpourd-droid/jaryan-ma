@@ -21,7 +21,6 @@ interface RateDraft {
 interface MethodDraft {
   method: ShippingMethodKey;
   enabled: boolean;
-  freeThreshold: string;
   etaMin: string;
   etaMax: string;
   note: string;
@@ -31,6 +30,9 @@ interface Draft {
   version: number;
   defaultItemWeight: string;
   packagingWeight: string;
+  freeEnabled: boolean;
+  freeThreshold: string;
+  freeMethods: ShippingMethodKey[];
   methods: MethodDraft[];
 }
 
@@ -43,10 +45,12 @@ function toDraft(config: ShippingConfigJson): Draft {
     version: config.version,
     defaultItemWeight: String(config.defaultItemWeightGrams),
     packagingWeight: String(config.packagingWeightGrams),
+    freeEnabled: config.freeShipping.enabled,
+    freeThreshold: priceToInput(config.freeShipping.thresholdToman),
+    freeMethods: config.freeShipping.methods,
     methods: config.methods.map((m) => ({
       method: m.method,
       enabled: m.enabled,
-      freeThreshold: priceToInput(m.freeThresholdToman),
       etaMin: text(m.etaMinDays),
       etaMax: text(m.etaMaxDays),
       note: m.note ?? "",
@@ -98,7 +102,6 @@ function toBody(draft: Draft): { ok: true; body: Record<string, unknown> } | { o
     return {
       method: m.method,
       enabled: m.enabled,
-      freeThresholdToman: carried ? price(at("freeThreshold"), m.freeThreshold, false) : null,
       etaMinDays,
       etaMaxDays,
       note: m.note,
@@ -113,8 +116,11 @@ function toBody(draft: Draft): { ok: true; body: Record<string, unknown> } | { o
         : [],
     };
   });
+  const thresholdToman = price("freeThreshold", draft.freeThreshold, draft.freeEnabled);
+  if (draft.freeEnabled && thresholdToman !== null && thresholdToman < 1) errors.freeThreshold = "حداقل مبلغ باید دست‌کم ۱ تومان باشد.";
+  if (draft.freeEnabled && draft.freeMethods.length === 0) errors.freeMethods = "دست‌کم یک روش ارسال را انتخاب کنید.";
   if (Object.keys(errors).length > 0) return { ok: false, errors };
-  return { ok: true, body: { expectedVersion: draft.version, defaultItemWeightGrams, packagingWeightGrams, methods } };
+  return { ok: true, body: { expectedVersion: draft.version, defaultItemWeightGrams, packagingWeightGrams, freeShipping: { enabled: draft.freeEnabled, thresholdToman, methods: draft.freeMethods }, methods } };
 }
 
 /** The server's rule codes, in words an owner understands. Keyed by the issue message. */
@@ -126,6 +132,9 @@ const RULE_TEXT: Record<string, string> = {
   eta_range: "حداکثر روز نباید از حداقل روز کمتر باشد.",
   duplicate_province: "یک استان دوبار انتخاب شده است.",
   invalid_province: "نام استان معتبر نیست.",
+  free_threshold_required: "برای فعال بودن ارسال رایگان، حداقل مبلغ سفارش را (دست‌کم ۱ تومان) بنویسید.",
+  free_methods_required: "برای فعال بودن ارسال رایگان، دست‌کم یک روش ارسال را انتخاب کنید.",
+  pickup_is_always_free: "تحویل حضوری همیشه رایگان است و نیازی به انتخاب ندارد.",
 };
 
 function serverErrors(error: ApiError): string[] {
@@ -231,6 +240,35 @@ export function ShippingPage() {
         </div>
       </section>
 
+      <section className="card stack" aria-labelledby="s-free" data-testid="free-shipping">
+        <div className="row between">
+          <h2 id="s-free">ارسال رایگان</h2>
+          <label className="check">
+            <input type="checkbox" checked={draft.freeEnabled} disabled={!writable} onChange={(e) => { update({ ...draft, freeEnabled: e.target.checked }); clearError("freeThreshold"); clearError("freeMethods"); }} data-testid="enable-free" />
+            <span>فعال</span>
+          </label>
+        </div>
+        <p className="hint">وقتی جمع قیمت کالاهای سفارش (بدون هزینهٔ ارسال) به این مبلغ برسد، هزینهٔ ارسال روش‌های انتخاب‌شده صفر می‌شود. به مشتری هم نشان داده می‌شود چقدر دیگر خرید کند. مبلغ را هر وقت خواستید عوض کنید؛ سفارش‌های قبلی تغییر نمی‌کنند. فقط به مقصدهایی که برایشان نرخ نوشته‌اید ارسال رایگان می‌شود.</p>
+        <NumberField label="حداقل جمع کالاها برای ارسال رایگان (تومان)" required={draft.freeEnabled} value={draft.freeThreshold} readOnly={!writable} error={errors.freeThreshold} onChange={(e) => { update({ ...draft, freeThreshold: e.target.value }); clearError("freeThreshold"); }} />
+        <fieldset className="stack">
+          <legend className="label-like">روش‌هایی که رایگان می‌شوند</legend>
+          {draft.methods.filter((m) => methodNeedsAddress(m.method)).map((m) => (
+            <label key={m.method} className="check">
+              <input
+                type="checkbox"
+                checked={draft.freeMethods.includes(m.method)}
+                disabled={!writable}
+                onChange={(e) => { update({ ...draft, freeMethods: e.target.checked ? [...draft.freeMethods, m.method] : draft.freeMethods.filter((x) => x !== m.method) }); clearError("freeMethods"); }}
+                data-testid={`free-method-${m.method}`}
+              />
+              <span>{SHIPPING_METHOD_LABEL[m.method]}</span>
+            </label>
+          ))}
+          <p className="hint">تحویل حضوری همیشه بدون هزینه است.</p>
+          {errors.freeMethods && <p className="error" role="alert">{errors.freeMethods}</p>}
+        </fieldset>
+      </section>
+
       {draft.methods.map((m) => {
         const carried = methodNeedsAddress(m.method);
         const at = (field: string) => `m.${m.method}.${field}`;
@@ -252,7 +290,6 @@ export function ShippingPage() {
             <TextAreaField label="توضیحات برای مشتری (اختیاری)" rows={2} value={m.note} readOnly={!writable} counter={{ value: m.note.length, max: 300 }} onChange={(e) => patchMethod(m.method, { note: e.target.value })} />
             {carried && (
               <>
-                <NumberField label="ارسال رایگان از جمع کالاهای (تومان)" hint="خالی = ارسال رایگان نداریم. از این مبلغ به بالا هزینهٔ ارسال صفر می‌شود، به شرط اینکه به آن مقصد ارسال کنید." value={m.freeThreshold} readOnly={!writable} error={errors[at("freeThreshold")]} onChange={(e) => { patchMethod(m.method, { freeThreshold: e.target.value }); clearError(at("freeThreshold")); }} />
                 <h3>نرخ‌ها بر اساس مقصد و وزن</h3>
                 {m.rates.length === 0 && <p className="hint">هنوز نرخی ننوشته‌اید.</p>}
                 {m.rates.map((r, index) => (

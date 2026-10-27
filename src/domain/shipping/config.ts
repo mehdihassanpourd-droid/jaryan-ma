@@ -29,7 +29,6 @@ export const methodInputSchema = z
   .object({
     method: z.enum(SHIPPING_METHODS),
     enabled: z.boolean(),
-    freeThresholdToman: toman.nullable().default(null),
     etaMinDays: z.number().int().min(1).max(MAX_ETA_DAYS).nullable().default(null),
     etaMaxDays: z.number().int().min(1).max(MAX_ETA_DAYS).nullable().default(null),
     note: z
@@ -45,16 +44,34 @@ export const methodInputSchema = z
   .strict();
 export type MethodInput = z.output<typeof methodInputSchema>;
 
+/** Free shipping policy: the owner switches it on, sets the minimum items subtotal in whole Toman and picks the qualifying methods. */
+export const freeShippingInputSchema = z
+  .object({
+    enabled: z.boolean(),
+    thresholdToman: toman.nullable().default(null),
+    methods: z.array(z.enum(SHIPPING_METHODS)).max(SHIPPING_METHODS.length).default([]),
+  })
+  .strict();
+export type FreeShippingInput = z.output<typeof freeShippingInputSchema>;
+
 export const shippingConfigSchema = z
   .object({
     /** The version the screen was loaded with: a save made from an older screen is refused instead of overwriting newer changes. */
     expectedVersion: z.number().int().min(1),
     defaultItemWeightGrams: grams(1, 100_000),
     packagingWeightGrams: grams(0, 100_000),
+    freeShipping: freeShippingInputSchema,
     methods: z.array(methodInputSchema).min(1).max(SHIPPING_METHODS.length),
   })
   .strict()
   .superRefine((config, ctx) => {
+    const free = config.freeShipping;
+    if (free.methods.includes("pickup")) ctx.addIssue({ code: "custom", message: "pickup_is_always_free", path: ["freeShipping", "methods"] });
+    if (new Set(free.methods).size !== free.methods.length) ctx.addIssue({ code: "custom", message: "duplicate_method", path: ["freeShipping", "methods"] });
+    if (free.enabled) {
+      if (free.thresholdToman === null || free.thresholdToman < 1) ctx.addIssue({ code: "custom", message: "free_threshold_required", path: ["freeShipping", "thresholdToman"] });
+      if (free.methods.filter((m) => m !== "pickup").length === 0) ctx.addIssue({ code: "custom", message: "free_methods_required", path: ["freeShipping", "methods"] });
+    }
     const seen = new Set<string>();
     config.methods.forEach((m, mi) => {
       const at = (...path: Array<string | number>) => ["methods", mi, ...path];
@@ -63,7 +80,6 @@ export const shippingConfigSchema = z
       if (m.etaMinDays !== null && m.etaMaxDays !== null && m.etaMaxDays < m.etaMinDays) ctx.addIssue({ code: "custom", message: "eta_range", path: at("etaMaxDays") });
       if (!methodNeedsAddress(m.method)) {
         if (m.rates.length > 0) ctx.addIssue({ code: "custom", message: "pickup_has_no_rates", path: at("rates") });
-        if (m.freeThresholdToman !== null) ctx.addIssue({ code: "custom", message: "pickup_has_no_threshold", path: at("freeThresholdToman") });
         return;
       }
       if (m.enabled && m.rates.length === 0) ctx.addIssue({ code: "custom", message: "enabled_needs_rate", path: at("rates") });
@@ -90,5 +106,6 @@ export interface ShippingConfigJson {
   version: number;
   defaultItemWeightGrams: number;
   packagingWeightGrams: number;
+  freeShipping: FreeShippingInput;
   methods: Array<MethodInput & { rates: Array<RateInput & { id: string }> }>;
 }

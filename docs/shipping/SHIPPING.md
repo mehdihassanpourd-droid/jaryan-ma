@@ -6,19 +6,20 @@ Status: **implemented and tested with admin-configured rates only.** No carrier 
 
 | | |
 |---|---|
-| Methods | `post` (پست), `tipax` (تیپاکس), `local_courier` (پیک محلی), `pickup` (تحویل حضوری). All four start **disabled**; the owner switches on what the gallery really offers. |
+| Methods | `post` (پست ایران), `tipax` (تیپاکس), `local_courier` (پیک محلی), `pickup` (تحویل حضوری). All four start **disabled**; the owner switches on what the gallery really offers. |
 | Prices | The owner writes **rate rows** per method: provinces (empty = everywhere), optional cities, a weight band in grams (`min`–`max`, no maximum allowed) and a price in whole Toman. Screen: admin → «ارسال» (`/api/v1/shipping/config`, owner only). |
-| Free shipping | Per method: from an items subtotal of N Toman the fee is 0 — but only to destinations the owner priced (free shipping never invents coverage). Pickup is always free. |
+| Free shipping | One **shop-wide policy** set in the admin screen «ارسال رایگان» without any code change: on/off, the minimum **items subtotal in whole Toman**, and which carried methods qualify (pickup is always free). From the threshold (exactly, to the Toman) the fee of the chosen methods is 0 — only to destinations the owner priced (it never invents coverage). Applied by `ShippingService` to the quote of *any* provider. The cart and the checkout tell the shopper «با ۴۵۰٬۰۰۰ تومان خرید بیشتر، ارسال … رایگان می‌شود» (progress bar, `aria` values) from the public `GET /api/v1/public/shipping/free-shipping` (policy only, no rates, no cookie, always revalidated); the order's fee is still decided by the server. Orders already placed never change when the policy changes. |
 | Weight | `Product.weightGrams` (editor field «وزن یک عدد»); a product without weight uses the shop default (500 g, editable) per unit; a packaging weight is added once per order. |
 | Delivery time | Optional min/max days per method, shown as «حدود ۳ تا ۷ روز». Left empty = no promise is shown. |
 | Pickup | No address is asked for or stored (only name and phone). The owner's note (place, hours) is shown to the customer. |
 | Order record | `Order.subtotalToman`, `shippingFeeToman`, `totalToman` (= subtotal + fee), `deliveryMethod`, `deliveryDetails` (rate row, weight, free?, days, note — frozen). Later price changes never touch an existing order. Orders made before this feature keep `deliveryMethod = null`, fee 0, `subtotal = total`. |
-| Carrier + tracking | Staff enter a carrier (`post`/`tipax`/`local_courier`/`pickup`/`other` + name) and an optional tracking code, together with «ثبت ارسال» or later (also corrections, up to and after delivery) via `PUT /api/v1/orders/:n/shipment`. Customers see the carrier and code on their order page together with a plain-language delivery status. Tracking codes are plain text (letters, digits, `- _ . /`, ≤ 64) and are not written to the audit log. |
+| Shipment status + delivery confirmation | Admin order screen shows «وضعیت ارسال» (در انتظار ارسال / ارسال‌شده / تحویل‌شده) with the time it shipped and the time delivery was confirmed and **who** confirmed it (from the status history); customers see the same dates on their order. «ثبت تحویل» is the delivery confirmation. |
+| Carrier + tracking | Staff enter a carrier (`post`/`tipax`/`local_courier`/`pickup`/`other` + name) and an optional tracking code, together with «ثبت ارسال» or later (also corrections, up to and after delivery) via `PUT /api/v1/orders/:n/shipment`. Customers see the carrier and code on their order page (and in the order list) together with a plain-language delivery status. Tracking codes are plain text (letters, digits, `- _ . /`, ≤ 64) and are not written to the audit log. |
 
 ## 2. Rules the server enforces
 
 1. **The browser never sends or decides a fee.** Checkout sends only the method and the fee it *showed* (`expectedFeeToman`). The server recomputes the fee from the database (lines, product weights, rates); a different fee → `409 delivery_fee_changed` with the current prices, nothing is ordered and no stock is reserved. A method that is off or does not serve the address → `409 delivery_unavailable`.
-2. **Quote endpoint** `POST /api/v1/customer/shipping/quote` (signed-in customers): same engine, read-only. Without an address only pickup can be priced.
+2. **Quote endpoint** `POST /api/v1/customer/shipping/quote` (signed-in customers): same engine, read-only; also returns `freeShipping` (qualified / `remainingToman`). Without an address only pickup can be priced.
 3. **Rate matching** (`src/domain/shipping/pricing.ts`, pure): city row beats province row beats «anywhere» row; then the narrower weight band; then the first row. Cities are compared after letter/digit normalisation (كرج = کرج). The owner's save refuses overlapping bands for the same place, enabled methods without any rate, pickup rates/thresholds, cities without a province.
 4. **Saving the table** is optimistic (`expectedVersion`): a save from an outdated screen is refused (409) and the current table is returned, so nothing is silently overwritten. It is audited (`shipping.config`: switches and counts only).
 5. **Address**: carried deliveries need the full validated address (same schema as the address book); pickup accepts only name + phone (an address sent with pickup is refused, so nothing extra is stored).
@@ -74,3 +75,12 @@ Prices, quotes and tracking entry only use the shop's own server. `server/invari
 * One shipment per order; split shipments and returns are later features.
 * The weight default (500 g) is a technical default the owner should review; it is not a business fact.
 * No VAT/insurance/cash-on-delivery fees; payment is not active.
+
+## 8. Free shipping: data model and migration
+
+`shipping_settings` gains `freeShippingEnabled`, `freeShippingThresholdToman` (BIGINT) and `freeShippingMethods` (enum list). The old per-method column `shipping_method_configs.freeThresholdToman` is **deprecated** (kept so the migration is additive; no longer read or written). The migration `20261103000000_free_shipping_policy` carries existing per-method thresholds over: if any carried method had one, the policy is enabled with the lowest threshold and exactly those methods; otherwise it is off. Verified on a database holding old thresholds (backfill as described, old column untouched, no schema drift).
+
+## 9. Milestone status (shipping and delivery)
+
+Done: methods (Iran Post, Tipax, local courier, pickup), rates by method × province/city × weight, shop-wide free shipping with admin settings and customer progress message, validated delivery details, server-side fees and totals with tamper refusal, delivery data stored per order, carrier/tracking/status/delivery confirmation in admin, tracking in customer order page and history, tracking SMS outbox (mock provider only, off in production), tests on PostgreSQL 16 and 412 px browsers.
+Open (not part of this MVP): real carrier/postal APIs and automatic tracking updates, label printing, split shipments/returns, automatic retry job for failed SMS, a real SMS gateway (owner decision), delivery-area map/ETA by city, VAT/insurance/COD, payment.

@@ -63,9 +63,10 @@ export const FREE_SHIPPING: ShippingConfigInput = {
   expectedVersion: 1,
   defaultItemWeightGrams: 500,
   packagingWeightGrams: 0,
+  freeShipping: { enabled: false, thresholdToman: null, methods: [] },
   methods: [
-    { method: "post", enabled: true, freeThresholdToman: null, etaMinDays: null, etaMaxDays: null, note: null, rates: [{ provinces: [], cities: [], minWeightGrams: 0, maxWeightGrams: null, priceToman: 0 }] },
-    { method: "pickup", enabled: true, freeThresholdToman: null, etaMinDays: null, etaMaxDays: null, note: null, rates: [] },
+    { method: "post", enabled: true, etaMinDays: null, etaMaxDays: null, note: null, rates: [{ provinces: [], cities: [], minWeightGrams: 0, maxWeightGrams: null, priceToman: 0 }] },
+    { method: "pickup", enabled: true, etaMinDays: null, etaMaxDays: null, note: null, rates: [] },
   ],
 };
 

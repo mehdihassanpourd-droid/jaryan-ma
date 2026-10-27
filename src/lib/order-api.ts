@@ -1,6 +1,6 @@
 import type { CheckoutRequest, LineProblem } from "@/domain/customer/checkout";
 import type { CarrierKey, ShippingMethodKey } from "@/domain/shipping/methods";
-import type { MethodQuote } from "@/domain/shipping/pricing";
+import type { FreeShippingProgress, MethodQuote } from "@/domain/shipping/pricing";
 import { ORDER_STATUS_LABEL as STATUS_LABEL, type OrderActorType, type OrderStatusValue } from "@/domain/customer/order-status";
 
 /**
@@ -98,6 +98,7 @@ export interface ApiCartQuote {
   subtotalToman: number;
   weightGrams: number;
   quotes: MethodQuote[];
+  freeShipping: FreeShippingProgress;
 }
 
 export function createOrderApi(baseUrl: string, fetchImpl: typeof fetch = fetch) {
@@ -169,3 +170,17 @@ export function createOrderApi(baseUrl: string, fetchImpl: typeof fetch = fetch)
   };
 }
 export type OrderApi = ReturnType<typeof createOrderApi>;
+
+/** The shop's free shipping promise (public, no sign-in, no cookie): lets the cart say how much more to buy. Null when it cannot be read. */
+export async function fetchFreeShippingPolicy(baseUrl: string, fetchImpl: typeof fetch = fetch): Promise<FreeShippingProgress | null> {
+  try {
+    const response = await fetchImpl(`${baseUrl.replace(/\/+$/, "")}/api/v1/public/shipping/free-shipping`, { headers: { accept: "application/json" }, credentials: "omit" });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { freeShipping?: FreeShippingProgress };
+    const f = data.freeShipping;
+    if (!f || typeof f.enabled !== "boolean") return null;
+    return f.enabled && typeof f.thresholdToman === "number" && Array.isArray(f.methods) ? f : { enabled: false, thresholdToman: null, methods: [], remainingToman: null, qualified: false };
+  } catch {
+    return null;
+  }
+}

@@ -3,7 +3,7 @@ export const SHIPPING_METHODS = ["post", "tipax", "local_courier", "pickup"] as 
 export type ShippingMethodKey = (typeof SHIPPING_METHODS)[number];
 
 export const SHIPPING_METHOD_LABEL: Record<ShippingMethodKey, string> = {
-  post: "پست",
+  post: "پست ایران",
   tipax: "تیپاکس",
   local_courier: "پیک محلی",
   pickup: "تحویل حضوری",

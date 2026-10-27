@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { shippingConfigSchema } from "./config";
 
 const method = (over: Record<string, unknown> = {}) => ({ method: "post", enabled: true, rates: [{ provinces: [], cities: [], priceToman: 1000 }], ...over });
-const config = (methods: unknown[], over: Record<string, unknown> = {}) => ({ expectedVersion: 1, defaultItemWeightGrams: 500, packagingWeightGrams: 0, methods, ...over });
+const config = (methods: unknown[], over: Record<string, unknown> = {}) => ({ expectedVersion: 1, defaultItemWeightGrams: 500, packagingWeightGrams: 0, freeShipping: { enabled: false, thresholdToman: null, methods: [] }, methods, ...over });
 const messages = (input: unknown) => {
   const r = shippingConfigSchema.safeParse(input);
   return r.success ? [] : r.error.issues.map((i) => `${i.path.join(".")}:${i.message}`);
@@ -18,9 +18,22 @@ describe("shipping configuration rules", () => {
     expect(messages(config([method({ rates: [], enabled: false })]))).toEqual([]);
   });
 
-  it("refuses pickup rates and pickup free thresholds (pickup is always free)", () => {
+  it("refuses pickup rates (pickup is always free)", () => {
     expect(messages(config([{ method: "pickup", enabled: true, rates: [{ priceToman: 1 }] }]))).toContain("methods.0.rates:pickup_has_no_rates");
-    expect(messages(config([{ method: "pickup", enabled: true, freeThresholdToman: 100 }]))).toContain("methods.0.freeThresholdToman:pickup_has_no_threshold");
+  });
+
+  it("free shipping: off needs nothing; on needs a threshold of at least 1 Toman and a carried method; pickup cannot be listed", () => {
+    const free = (over: Record<string, unknown>) => messages(config([method()], { freeShipping: { enabled: true, thresholdToman: 3_000_000, methods: ["post"], ...over } }));
+    expect(free({})).toEqual([]);
+    expect(free({ enabled: false, thresholdToman: null, methods: [] })).toEqual([]);
+    expect(free({ thresholdToman: null })).toContain("freeShipping.thresholdToman:free_threshold_required");
+    expect(free({ thresholdToman: 0 })).toContain("freeShipping.thresholdToman:free_threshold_required");
+    expect(free({ methods: [] })).toContain("freeShipping.methods:free_methods_required");
+    expect(free({ methods: ["pickup"] })).toEqual(expect.arrayContaining(["freeShipping.methods:pickup_is_always_free", "freeShipping.methods:free_methods_required"]));
+    expect(free({ methods: ["post", "post"] })).toContain("freeShipping.methods:duplicate_method");
+    expect(free({ thresholdToman: 1.5 })).not.toEqual([]);
+    expect(free({ thresholdToman: -5 })).not.toEqual([]);
+    expect(free({ thresholdToman: 10 ** 16 })).not.toEqual([]);
   });
 
   it("refuses unknown provinces, cities without a province, backwards weight bands and backwards day ranges", () => {
@@ -38,8 +51,7 @@ describe("shipping configuration rules", () => {
   });
 
   it("refuses money outside the supported range and extra keys", () => {
-    expect(messages(config([method({ freeThresholdToman: -1 })]))).not.toEqual([]);
-    expect(messages(config([method({ rates: [{ provinces: [], cities: [], priceToman: 10 ** 16 }] })]))).not.toEqual([]);
+        expect(messages(config([method({ rates: [{ provinces: [], cities: [], priceToman: 10 ** 16 }] })]))).not.toEqual([]);
     expect(messages(config([method({ surprise: true })]))).not.toEqual([]);
   });
 });
