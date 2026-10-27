@@ -6,10 +6,10 @@ name: Admin PWA
 on:
   push:
     branches: [main]
-    paths: ["admin/**", "scripts/admin/**", "server/**", "src/domain/**", "src/seo/**", "prisma/**", "vitest.e2e.config.mts", "package-lock.json", ".github/workflows/admin.yml"]
+    paths: ["admin/**", "scripts/admin/**", "server/**", "src/**", "public/**", "next.config.ts", "prisma/**", "vitest.e2e.config.mts", "package-lock.json", ".github/workflows/admin.yml"]
   pull_request:
     branches: [main]
-    paths: ["admin/**", "scripts/admin/**", "server/**", "src/domain/**", "src/seo/**", "prisma/**", "vitest.e2e.config.mts", "package-lock.json", ".github/workflows/admin.yml"]
+    paths: ["admin/**", "scripts/admin/**", "server/**", "src/**", "public/**", "next.config.ts", "prisma/**", "vitest.e2e.config.mts", "package-lock.json", ".github/workflows/admin.yml"]
 
 permissions:
   contents: read
@@ -71,3 +71,13 @@ jobs:
         env:
           DATABASE_URL: postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci
           E2E_DATABASE_URL: postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci
+
+      # Publishing pipeline: the real admin UI publishes, a real static storefront build (made once, before anything is
+      # published) shows it to a customer's browser; no rebuild. Needs its own EMPTY database (first-run setup).
+      - name: Storefront publishing pipeline on real PostgreSQL 16 (publish, edit, unpublish, archive; no redeploy)
+        run: |
+          PGPASSWORD=ci-only-throwaway psql -h 127.0.0.1 -U ci -d ci -c "create database ci_storefront"
+          DATABASE_URL=postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci_storefront npx prisma migrate deploy
+          npx vitest run --config vitest.e2e.config.mts admin/e2e/storefront-publish.e2e.ts
+        env:
+          E2E_DATABASE_URL: postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci_storefront

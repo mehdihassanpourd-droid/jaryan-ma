@@ -1,3 +1,5 @@
+import { LIVE_CATALOG_BASE } from "@/lib/live-config";
+
 /**
  * REAL business information. Only the brand name, slogan and Instagram account
  * are confirmed. Everything else is unknown and must stay `null` (the UI then
@@ -19,10 +21,13 @@ export const site = {
   },
 } as const;
 
-export const navLinks = [
+const allNavLinks = [
   { href: "/#collections", label: "مجموعه‌ها" },
   { href: "/#featured", label: "آثار منتخب" },
   { href: "/#story", label: "داستان ما" },
   { href: "/#trust", label: "اطمینان" },
   { href: "/#contact", label: "تماس" },
 ] as const;
+
+/** The sample "collections" section is not rendered once a live catalogue is connected, so its link goes too. */
+export const navLinks = LIVE_CATALOG_BASE ? allNavLinks.filter((l) => l.href !== "/#collections") : allNavLinks;

@@ -62,7 +62,9 @@ export function createNodeHandler(handle: (request: Request) => Promise<Response
 
       if (options.media && method === "GET" && url.pathname.startsWith("/media/")) {
         const file = await options.media.read(decodeURIComponent(url.pathname.slice("/media/".length)));
-        if (!file) return send(res, 404, '{"error":"not_found"}');
+        // A missing file must carry the CORS header too: a browser hides a 404 without it behind a CORS error, so the storefront
+        // could not tell "not published (yet)" from "store unreachable". (Real object stores/CDNs must do the same; see docs.)
+        if (!file) return send(res, 404, '{"error":"not_found"}', { "access-control-allow-origin": "*" });
         res.writeHead(200, { "content-type": file.contentType, "x-content-type-options": "nosniff", "cache-control": "no-cache", "access-control-allow-origin": "*" });
         return void res.end(file.body);
       }
