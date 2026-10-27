@@ -15,7 +15,8 @@ import { buildStorefront, serveStatic } from "./storefront";
  * the owner sets prices in the real admin screen (methods, destinations, weights, free-shipping threshold, pickup); the
  * customer sees the SERVER's prices before ordering and pays what was shown; a price changed meanwhile is refused with the new
  * fee; free shipping, pickup (no address) and "not served" destinations; the order keeps its fee when prices change later;
- * the owner enters carrier and tracking and the customer sees them. No request leaves the local servers.
+ * the owner enters carrier and tracking and the customer sees them; the tracking SMS is queued once per code, "sent" through the
+ * development console provider (printed to the server log, never to a real gateway), and a failed one is retried from the admin screen. No request leaves the local servers.
  */
 const ADMIN_PORT = 47834;
 const CUSTOMER = { local: "09121234567", e164: "+989121234567", name: "علی رضایی" };
@@ -28,7 +29,8 @@ const hosts = new Set<string>();
 beforeAll(async () => {
   const dir = buildStorefront({ NEXT_PUBLIC_CATALOG_URL: `http://127.0.0.1:${ADMIN_PORT}/media`, NEXT_PUBLIC_ORDER_API_URL: `http://127.0.0.1:${ADMIN_PORT}` });
   site = { dir, ...(await serveStatic(dir)) };
-  h = await startHarness({ port: ADMIN_PORT, customerOrigins: site.url, ...(process.env.E2E_DATABASE_URL ? { databaseUrl: process.env.E2E_DATABASE_URL } : {}) });
+  h = await startHarness({ port: ADMIN_PORT, customerOrigins: site.url, env: { SHIPMENT_SMS_ENABLED: "true" }, // the console provider prints the SMS to the server log: nothing is sent anywhere
+     ...(process.env.E2E_DATABASE_URL ? { databaseUrl: process.env.E2E_DATABASE_URL } : {}) });
 }, 600_000);
 afterEach((context) => {
   if (context.task.result?.state === "fail") console.error(`--- server log (tail) after "${context.task.name}":\n${h?.serverLog(80)}`);
@@ -390,6 +392,20 @@ describe("shipping and delivery (phones, real PostgreSQL)", () => {
     await pw(page.getByTestId("tracking-code")).toHaveText("TX-5551234");
     expect(sql(`select count(*) from order_shipments where "orderId" = (select id from orders where number = ${o})`)).toBe(REAL ? "1" : null);
 
+    // the tracking SMS: one per distinct code (PK-2024/778, then the corrected TX-5551234), both "sent", visible to the owner
+    const notes = admin.getByTestId("notification");
+    await pw(notes).toHaveCount(2);
+    await pw(admin.locator('[data-testid="notification"][data-status="sent"]')).toHaveCount(2);
+    await pw(admin.getByTestId("sms-disabled")).toHaveCount(0);
+    const tracked = () => [...h.serverLog(400).matchAll(/\[dev sms\] to \+989121234567: (جریان ما سفارش JM-\d+ ارسال شد\. حامل: [^\n]*?کد رهگیری: \S+)/g)].map((m) => m[1]);
+    await expect.poll(tracked, { timeout: 10_000 }).toHaveLength(2);
+    expect(tracked()[0]).toMatch(new RegExp(`^جریان ما سفارش JM-${100000 + o} ارسال شد\\. حامل: پیک فروشگاه کد رهگیری: PK-2024/778$`));
+    expect(tracked()[1]).toContain("حامل: تیپاکس کد رهگیری: TX-5551234");
+    expect(sql(`select status || ':' || attempts from order_notifications order by "createdAt"`)).toBe(REAL ? "sent:1\nsent:1" : null);
+    await admin.getByText("متن پیامک").first().tap();
+    await pw(admin.locator(".sms-text").first()).toContainText("جریان ما");
+    await noSideScroll(admin, "notifications");
+
     await actions.getByRole("button", { name: "ثبت تحویل" }).tap();
     await pw(admin.getByText("وضعیت سفارش: تحویل داده شده").first()).toBeVisible();
     await page.reload();
@@ -416,6 +432,28 @@ describe("shipping and delivery (phones, real PostgreSQL)", () => {
     await page.goto(`${site.url}/order?number=${o}`);
     await pw(page.getByTestId("delivery-status")).toContainText("آمادهٔ تحویل حضوری است");
     await pw(page.getByTestId("tracking-code")).toHaveCount(0);
+  });
+
+  it("a failed tracking SMS shows why and is retried from the admin screen: one SMS, no duplicate", async () => {
+    if (!REAL) return;
+    // The console provider cannot fail, so put the stored outcome of a failed gateway call in the database, as the app itself would have.
+    sql(`update order_notifications set status = 'failed', "lastError" = 'sms_gateway_status_502', attempts = 1, "sentAt" = null, "providerMessageId" = null where id = (select id from order_notifications order by "createdAt" desc limit 1)`);
+    const o = orders.post as number;
+    const before = h.serverLog(600).split("کد رهگیری: TX-5551234").length;
+    await admin.goto(`${h.baseUrl}/admin/#/orders/${o}`);
+    const failed = admin.locator('[data-testid="notification"][data-status="failed"]');
+    await pw(failed).toHaveCount(1);
+    await pw(failed.getByTestId("notification-error")).toContainText("sms_gateway_status_502");
+    await shot(admin, "ship-sms-failed");
+    await noSideScroll(admin, "failed notification");
+    await failed.getByTestId("retry-notification").tap();
+    await toast(admin, "پیامک دوباره بررسی و ارسال شد");
+    await pw(admin.locator('[data-testid="notification"][data-status="sent"]')).toHaveCount(2);
+    await pw(admin.getByTestId("retry-notification")).toHaveCount(0); // a sent message cannot be sent again
+    expect(sql(`select status || ':' || attempts from order_notifications order by "createdAt"`)).toBe("sent:1\nsent:2");
+    await expect.poll(() => h.serverLog(600).split("کد رهگیری: TX-5551234").length, { timeout: 10_000 }).toBeGreaterThan(before - 1);
+    expect(sql(`select count(*) from audit_log where action = 'notification.retry'`)).toBe("1");
+    expect(sql(`select count(*) from audit_log where action like 'notification.%' and detail::text like '%+98%'`)).toBe("0");
   });
 
   it("orders from before shipping existed still read well (no method, fee 0)", async () => {

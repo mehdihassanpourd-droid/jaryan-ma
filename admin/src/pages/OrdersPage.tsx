@@ -4,6 +4,7 @@ import type { AdminOrderJson as Order } from "@/domain/customer/order-admin";
 import { needsReason, nextStatuses, ORDER_ACTION_LABEL, ORDER_REASON_MAX, ORDER_STATUS_LABEL, ORDER_STATUSES, type OrderStatusValue } from "@/domain/customer/order-status";
 import { formatOrderNumber } from "@/domain/customer/schema";
 import { CARRIERS, CARRIER_LABEL, CARRIER_NAME_MAX, SHIPPING_METHOD_LABEL, TRACKING_CODE_MAX, type CarrierKey } from "@/domain/shipping/methods";
+import { MAX_NOTIFICATION_ATTEMPTS, NOTIFICATION_STATUS_LABEL, STALE_SENDING_MS } from "@/domain/shipping/notification";
 import { ApiError, api } from "../api/client";
 import { apiErrorMessage } from "../lib/errors";
 import { hrefFor, navigate, useRoute } from "../router";
@@ -243,6 +244,7 @@ function OrderDetail({ number, onChanged }: { number: number; onChanged: () => v
           ) : (
             <p className="muted">هنوز حامل یا کد رهگیری ثبت نشده است.</p>
           )}
+          <NotificationsBox order={o} canManage={can("order:manage")} onChanged={(order) => setState({ number, tick, value: { order } })} />
           {can("order:manage") && (
             <ShipmentEditor
               key={o.shipment?.updatedAt ?? "none"}
@@ -331,5 +333,82 @@ function ShipmentEditor({ initial, pickup, number, hasShipment, onSaved }: { ini
       <ShipmentFields form={form} onChange={setForm} pickup={pickup} />
       <div><Button type="submit" loading={busy}>{hasShipment ? "اصلاح حامل و کد رهگیری" : "ذخیرهٔ حامل و کد رهگیری"}</Button></div>
     </form>
+  );
+}
+
+const SKIP_TEXT: Record<string, string> = {
+  notifications_disabled: "پیامک رهگیری فعال نبود، پس فرستاده نشد.",
+  no_recipient: "گیرنده‌ای برای پیامک نیست (حساب مشتری حذف یا مسدود شده است).",
+};
+const ERROR_TEXT = (code: string) => (code === "sms_not_configured" ? "پیامک‌رسان تنظیم نشده است." : code === "sms_gateway_unreachable" ? "ارتباط با پیامک‌رسان برقرار نشد." : code.startsWith("sms_gateway_status_") ? "پیامک‌رسان خطا برگرداند." : "ارسال ناموفق بود.");
+
+/** The tracking SMS of this order: status of each message, and a safe retry (at most one SMS is ever sent per press). */
+function NotificationsBox({ order, canManage, onChanged }: { order: Order; canManage: boolean; onChanged: (order: Order) => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [now] = useState(() => Date.now()); // when this screen was loaded: enough to tell a long-stuck send from a fresh one
+  const { enabled, items } = order.notifications;
+  // A message is sent in the background right after the order changes: look again shortly, a few times, until it is no longer waiting.
+  const waiting = items.some((n) => n.status === "pending" || n.status === "sending");
+  const [looks, setLooks] = useState(0);
+  useEffect(() => {
+    if (!waiting || looks >= 6) return;
+    const timer = window.setTimeout(() => {
+      api<{ order: Order }>("GET", `/orders/${order.number}`).then((r) => onChanged(r.order), () => undefined);
+      setLooks((n) => n + 1);
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [waiting, looks, order.number, onChanged]);
+  async function retry(id: string) {
+    setBusy(id);
+    try {
+      onChanged((await api<{ order: Order }>("POST", `/orders/${order.number}/notifications/${id}/retry`, { body: {} })).order);
+      toast.success("پیامک دوباره بررسی و ارسال شد.");
+    } catch (e) {
+      toast.error(apiErrorMessage(e));
+      try {
+        onChanged((await api<{ order: Order }>("GET", `/orders/${order.number}`)).order);
+      } catch {
+        /* the next reload shows the truth */
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+  return (
+    <div className="stack" data-testid="notifications">
+      <h3>پیامک رهگیری</h3>
+      {!enabled && <p className="hint" data-testid="sms-disabled">ارسال پیامک رهگیری فعال نیست (تا زمانی که پیامک‌رسان تنظیم نشده). کد رهگیری در حساب مشتری دیده می‌شود.</p>}
+      {items.length === 0 ? (
+        <p className="muted">برای این سفارش پیامکی ساخته نشده است (پیامک وقتی ساخته می‌شود که سفارش «ارسال شده» و کد رهگیری ثبت شده باشد).</p>
+      ) : (
+        <ul className="product-list" aria-label="پیامک‌های رهگیری">
+          {items.map((n) => {
+            const stuck = n.status === "sending" && n.lastAttemptAt !== null && now - new Date(n.lastAttemptAt).getTime() > STALE_SENDING_MS;
+            const retryable = enabled && canManage && n.attempts < MAX_NOTIFICATION_ATTEMPTS && (n.status === "failed" || stuck || (n.status === "skipped" && n.skipReason === "notifications_disabled"));
+            return (
+              <li key={n.id} className="product-row" data-testid="notification" data-status={n.status}>
+                <div className="stack">
+                  <div className="product-meta">
+                    <Badge tone={n.status === "sent" ? "olive" : n.status === "failed" ? "warn" : "muted"}>{NOTIFICATION_STATUS_LABEL[n.status]}</Badge>
+                    <span>{dateFormat.format(new Date(n.sentAt ?? n.lastAttemptAt ?? n.createdAt))}</span>
+                    <span>{n.attempts.toLocaleString("fa-IR")} بار تلاش</span>
+                  </div>
+                  {n.status === "failed" && n.lastError && <p className="error" data-testid="notification-error">{ERROR_TEXT(n.lastError)} <span dir="ltr" className="muted">({n.lastError})</span></p>}
+                  {n.status === "skipped" && n.skipReason && <p className="muted">{SKIP_TEXT[n.skipReason] ?? n.skipReason}</p>}
+                  {stuck && <p className="muted">نتیجهٔ این ارسال معلوم نیست؛ ممکن است پیامک رفته باشد.</p>}
+                  {n.attempts >= MAX_NOTIFICATION_ATTEMPTS && n.status !== "sent" && <p className="muted">به سقف تلاش رسیده است.</p>}
+                  <details>
+                    <summary>متن پیامک</summary>
+                    <pre className="sms-text">{n.message}</pre>
+                  </details>
+                </div>
+                {retryable && <div className="product-actions"><Button small loading={busy === n.id} disabled={busy !== null} onClick={() => void retry(n.id)} data-testid="retry-notification">تلاش دوباره برای ارسال</Button></div>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }

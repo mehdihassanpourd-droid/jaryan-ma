@@ -1,17 +1,32 @@
 import type { AdminRouter } from "../api";
 import { can } from "../auth/rbac";
 import { errorResponse, json } from "../http";
+import { NotifierError, type ShipmentNotifier } from "../notifications/shipment-notifier";
 import { adminOrderListQuery, type OrderAdminService } from "../orders/order-admin";
 import { OrderLifecycleError, shipmentInputSchema, staffTransitionSchema, type OrderLifecycleService } from "../orders/order-lifecycle";
 import { parseBody, parseQuery } from "./common";
 
-const ORDER_PATH = /^\/orders\/(\d{1,10})(\/transition|\/shipment)?$/;
+const ORDER_PATH = /^\/orders\/(\d{1,10})(\/transition|\/shipment|\/notifications\/[0-9a-f-]{36}\/retry)?$/;
 
 /** Staff-facing order endpoints. They show customers' names, phones and addresses (`order:read`) and change orders (`order:manage`). */
-export function createOrderAdminRoutes(orders: OrderAdminService, lifecycle: OrderLifecycleService): AdminRouter {
+export function createOrderAdminRoutes(orders: OrderAdminService, lifecycle: OrderLifecycleService, notifier: ShipmentNotifier): AdminRouter {
   return async ({ request, url, method, path, principal }) => {
     const match = ORDER_PATH.exec(path);
     if (path !== "/orders" && path !== "/orders/summary" && !match) return null;
+
+    if (match?.[2]?.startsWith("/notifications/")) {
+      if (method !== "POST") return errorResponse("method_not_allowed", 405);
+      if (!can(principal.role, "order:manage")) return errorResponse("forbidden", 403);
+      const number = Number(match[1]);
+      try {
+        await notifier.retry(number, match[2].split("/")[2] as string, principal.email);
+      } catch (error) {
+        if (error instanceof NotifierError) return errorResponse(error.code, error.code === "not_found" ? 404 : 409);
+        throw error;
+      }
+      const order = await orders.get(number);
+      return order ? json({ order }) : errorResponse("not_found", 404);
+    }
 
     if (match?.[2] === "/shipment") {
       if (method !== "PUT") return errorResponse("method_not_allowed", 405);

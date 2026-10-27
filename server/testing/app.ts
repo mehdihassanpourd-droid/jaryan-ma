@@ -70,7 +70,7 @@ export const FREE_SHIPPING: ShippingConfigInput = {
 };
 
 /** Builds the whole server (without HTTP sockets) on a test database. */
-export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string; customerAccountsEnabled?: boolean; firstRunSetup?: boolean; originHostSuffixes?: string[]; originDebug?: boolean; build?: string; rewrittenOriginPort?: number; shipping?: "free" | "none" } = {}): Promise<TestApp> {
+export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string; customerAccountsEnabled?: boolean; firstRunSetup?: boolean; originHostSuffixes?: string[]; originDebug?: boolean; build?: string; rewrittenOriginPort?: number; shipping?: "free" | "none"; shipmentSms?: boolean; sms?: MemorySmsProvider } = {}): Promise<TestApp> {
   await testDb.reset();
   const vendorId = await ensureDefaultVendor(testDb.db);
   let clock = new Date("2026-03-01T10:00:00.000Z");
@@ -95,9 +95,10 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
     log: (event, detail) => void logs.push({ event, detail }),
   };
   const limiter = new RateLimiter(() => clock.getTime());
-  const sms = new MemorySmsProvider();
+  const memorySms = overrides.sms ?? new MemorySmsProvider();
+  const sms = memorySms;
   const platform = createPlatformServices({
-    db: testDb.db, masterKey: randomBytes(32), sms, limiter, customerCookie: { name: CUSTOMER_COOKIE, secure: true }, catalog: repo, vendorId, clock: () => clock, onStockChanged: (ids) => void pending.push(publisher.sync(ids.map((id) => ({ id })))),
+    db: testDb.db, masterKey: randomBytes(32), sms, limiter, customerCookie: { name: CUSTOMER_COOKIE, secure: true }, catalog: repo, vendorId, clock: () => clock, shipmentSms: overrides.shipmentSms ?? false, log: (event, detail) => void logs.push({ event, detail }), background: (task) => void pending.push(task), onStockChanged: (ids) => void pending.push(publisher.sync(ids.map((id) => ({ id })))),
     probes: {
       database: async () => void (await testDb.db.$queryRaw`SELECT 1`),
       migrations: async () => ({ name: "migrations", status: "ok", message: "all migrations applied" }),
@@ -123,7 +124,7 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
   const sessions = new Map<Role, Session>();
 
   return {
-    handle: (request) => handle(request), platform, sms, customerApi, storage, catalog, repo, auth, adminStore, deps, logs,
+    handle: (request) => handle(request), platform, sms: memorySms, customerApi, storage, catalog, repo, auth, adminStore, deps, logs,
     now: () => clock,
     advance: (ms) => void (clock = new Date(clock.getTime() + ms)),
     async settle() {

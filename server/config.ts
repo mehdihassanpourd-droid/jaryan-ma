@@ -49,6 +49,8 @@ const schema = z.object({
   APP_COMMIT: z.string().regex(/^[0-9a-f]{7,40}$/).optional(),
   // ---- customers, SMS, support, maintenance
   CUSTOMER_ACCOUNTS_ENABLED: bool(),
+  /** Tracking SMS when an order ships. Off by default everywhere; in production it also needs a real gateway (SMS_PROVIDER=http). */
+  SHIPMENT_SMS_ENABLED: bool(),
   /** Storefront origin(s) allowed to call the customer API with credentials. */
   CUSTOMER_ORIGINS: z.string().optional(),
   SMS_PROVIDER: z.enum(["disabled", "console", "http"]).optional(),
@@ -112,6 +114,8 @@ export interface Config {
   /** Commit shown in development (never exposed in production). */
   appCommit: string | null;
   customerAccountsEnabled: boolean;
+  /** Send the shipment tracking SMS (see ShipmentNotifier). */
+  shipmentSmsEnabled: boolean;
   customerOrigins: string;
   sms: SmsConfig;
   release: string | null;
@@ -157,6 +161,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     problems.push("ADMIN_ORIGIN_HOST_SUFFIXES must be a comma-separated list of suffixes like .app.github.dev (leading dot, at least two labels)");
   }
   const accounts = e.CUSTOMER_ACCOUNTS_ENABLED ?? !production;
+  const shipmentSms = e.SHIPMENT_SMS_ENABLED ?? false;
   const smsProvider = e.SMS_PROVIDER ?? (production ? "disabled" : "console");
   if (production && smsProvider === "console") problems.push("SMS_PROVIDER=console prints sign-in codes to the log and is not allowed in production");
   if (smsProvider === "http") {
@@ -178,6 +183,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     need("CUSTOMER_ORIGINS", e.CUSTOMER_ORIGINS);
     if (smsProvider !== "http") problems.push("CUSTOMER_ACCOUNTS_ENABLED=true needs a real SMS gateway (SMS_PROVIDER=http); customers could not receive codes otherwise");
   }
+  // The tracking SMS must never "work" by printing to a log or by silently dropping messages: in production it needs a real gateway.
+  if (production && shipmentSms && smsProvider !== "http") problems.push("SHIPMENT_SMS_ENABLED=true needs a real SMS gateway (SMS_PROVIDER=http); it stays off until one is configured");
   if (e.CUSTOMER_ORIGINS && e.CUSTOMER_ORIGINS.split(",").some((o) => o.includes("*") || (production && !o.trim().startsWith("https://")))) {
     problems.push("CUSTOMER_ORIGINS must list explicit origins (https:// in production, no wildcards)");
   }
@@ -223,6 +230,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     scryptLogN: e.SCRYPT_LOG_N,
     devDataDir: e.DEV_DATA_DIR,
     customerAccountsEnabled: accounts,
+    shipmentSmsEnabled: shipmentSms,
     customerOrigins: e.CUSTOMER_ORIGINS ?? (production ? "" : "http://127.0.0.1:3000,http://localhost:3000"),
     sms: {
       provider: smsProvider,

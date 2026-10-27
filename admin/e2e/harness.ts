@@ -50,7 +50,7 @@ async function waitFor(url: string, child: ChildProcess, logs: () => string): Pr
 }
 
 /** Boots the REAL server (embedded PostgreSQL, or the real one in `databaseUrl`; local-disk media, mandatory TOTP) and the built admin UI. Nothing is mocked. */
-export async function startHarness(options: { seedAccounts?: boolean; firstRunSetup?: boolean; databaseUrl?: string; port?: number; customerOrigins?: string } = {}): Promise<Harness> {
+export async function startHarness(options: { seedAccounts?: boolean; firstRunSetup?: boolean; databaseUrl?: string; port?: number; customerOrigins?: string; env?: Record<string, string> } = {}): Promise<Harness> {
   const { seedAccounts = true, firstRunSetup = false, databaseUrl } = options;
   const dir = mkdtempSync(join(tmpdir(), "jm-e2e-"));
   // A fixed port is for tests that must bake the server's address into something built beforehand (the storefront).
@@ -74,6 +74,7 @@ export async function startHarness(options: { seedAccounts?: boolean; firstRunSe
     ...(firstRunSetup ? { FIRST_RUN_SETUP: "true" } : {}),
     // A migrated, empty, throw-away PostgreSQL; without it the embedded one is used.
     ...(databaseUrl ? { DATABASE_URL: databaseUrl } : {}),
+    ...(options.env ?? {}),
   };
   const accountsFile = join(dir, "accounts.json");
   if (seedAccounts) execFileSync(tsx, [join(root, "admin/e2e/seed.ts"), accountsFile], { env, cwd: root, stdio: "pipe" });

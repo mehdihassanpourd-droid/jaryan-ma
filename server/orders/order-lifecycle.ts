@@ -4,6 +4,7 @@ import { CARRIERS, CARRIER_NAME_MAX, TRACKING_CODE_MAX } from "../../src/domain/
 import { toLatinDigits, fixPersianLetters } from "../../src/domain/persian";
 import { Prisma } from "../../src/generated/prisma/client";
 import type { Db } from "../db/client";
+import type { ShipmentNotifier } from "../notifications/shipment-notifier";
 import { releaseStock, type StockLine } from "./stock";
 
 export type OrderLifecycleErrorCode = "not_found" | "invalid_transition" | "order_changed" | "shipment_not_allowed";
@@ -98,6 +99,8 @@ export interface TransitionResult {
   to: OrderStatusValue;
   /** Products whose stock changed (their public availability may need refreshing). */
   productIds: string[];
+  /** Tracking SMS queued by this change, to be delivered after it committed. */
+  notifications: string[];
 }
 
 const TX = { timeout: 30_000, maxWait: 10_000 };
@@ -115,6 +118,8 @@ export class OrderLifecycleService {
     /** Called AFTER a change that moved stock, with the affected products (the app refreshes their public availability). */
     private readonly onStockChanged: (productIds: string[]) => void = () => undefined,
     private readonly clock: () => Date = () => new Date(),
+    /** Queues the tracking SMS when an order that has shipped gets (or already has) a carrier and tracking code. */
+    private readonly notifier: ShipmentNotifier | null = null,
   ) {}
 
   async transition(request: TransitionRequest): Promise<TransitionResult> {
@@ -123,6 +128,7 @@ export class OrderLifecycleService {
       try {
         const result = await this.attempt(request);
         if (result.productIds.length > 0) this.onStockChanged(result.productIds);
+        this.notifier?.dispatch(result.notifications);
         return result;
       } catch (error) {
         // A deadlock or write conflict between concurrent transactions is rolled back by PostgreSQL: simply try again.
@@ -178,7 +184,14 @@ export class OrderLifecycleService {
           at: now,
         },
       });
-      return { number: order.number, from, to: request.to, productIds: [...new Set(give.map((l) => l.productId))] };
+      // Shipped with a tracking code (entered now, or earlier while the order was being prepared): queue the SMS in this same transaction.
+      const queued: string[] = [];
+      if (request.to === "shipped" && this.notifier) {
+        const shipment = await tx.orderShipment.findUnique({ where: { orderId: order.id } });
+        const id = shipment ? await this.notifier.enqueue(tx, { id: order.id, number: order.number }, shipment, now) : null;
+        if (id) queued.push(id);
+      }
+      return { number: order.number, from, to: request.to, productIds: [...new Set(give.map((l) => l.productId))], notifications: queued };
     }, TX);
   }
 
@@ -202,12 +215,16 @@ export class OrderLifecycleService {
   /** Staff enter or correct the carrier and tracking code of an order that has been confirmed (also after it shipped). */
   async setShipment(number: number, input: ShipmentInput, actorLabel: string | null): Promise<void> {
     const now = this.clock();
-    await this.db.$transaction(async (tx) => {
+    const queued = await this.db.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { number }, select: { id: true, status: true } });
       if (!order) throw new OrderLifecycleError("not_found");
       if (!["confirmed", "preparing", "shipped", "delivered"].includes(order.status)) throw new OrderLifecycleError("shipment_not_allowed", order.status);
       await this.writeShipment(tx, order.id, number, input, actorLabel, now);
+      // A SMS goes out only while the order is "shipped": a code saved earlier waits for the shipping step; corrections after delivery stay silent.
+      const id = order.status === "shipped" && this.notifier ? await this.notifier.enqueue(tx, { id: order.id, number }, { carrier: input.carrier, carrierName: input.carrier === "other" ? input.carrierName : null, trackingCode: input.trackingCode }, now) : null;
+      return id ? [id] : [];
     }, TX);
+    this.notifier?.dispatch(queued);
   }
 
   /** Orders waiting for a decision: what the admin's "new orders" indicator shows. */

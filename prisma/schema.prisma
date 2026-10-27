@@ -472,6 +472,7 @@ model Order {
   tickets       SupportTicket[]
   statusHistory OrderStatusEvent[]
   shipment      OrderShipment?
+  notifications OrderNotification[]
 
   @@unique([customerId, requestId])
   @@index([customerId, placedAt(sort: Desc)])
@@ -573,6 +574,43 @@ model OrderShipment {
   order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("order_shipments")
+}
+
+enum NotificationStatus {
+  pending
+  /// A send attempt is in flight (or its outcome is unknown after a crash).
+  sending
+  sent
+  failed
+  /// Deliberately not sent: notifications switched off, or nobody to send to. `skipReason` says which.
+  skipped
+}
+
+/// Outbox of customer notifications (today: the shipment tracking SMS). One row per distinct message; `dedupeKey` is unique, so the
+/// same message can never be queued twice. It holds the text (order number, carrier, tracking code: nothing personal) but never the phone number.
+model OrderNotification {
+  id                String             @id @default(uuid())
+  orderId           String
+  /// shipment_tracking
+  kind              String
+  /// e.g. shipment:<orderId>:<carrier>:<tracking code>
+  dedupeKey         String             @unique
+  status            NotificationStatus
+  attempts          Int                @default(0)
+  message           String
+  /// A short code (sms_gateway_status_502, sms_not_configured...), never a response body or a phone number.
+  lastError         String?
+  skipReason        String?
+  providerMessageId String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @default(now())
+  lastAttemptAt     DateTime?
+  sentAt            DateTime?
+  order             Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@map("order_notifications")
 }
 
 /// Every status an order has been in, who changed it and why. Written in the same transaction as the change.

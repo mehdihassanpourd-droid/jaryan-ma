@@ -978,3 +978,12 @@ a.attention-banner:hover {
   padding-top: 0.5rem;
   border-top: 1px solid var(--sand-200);
 }
+
+.sms-text {
+  white-space: pre-wrap;
+  margin: 0.4rem 0 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--sand-100);
+  border-radius: 8px;
+  font-family: inherit;
+}

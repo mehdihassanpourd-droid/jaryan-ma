@@ -25,6 +25,8 @@ export interface AdminOrderJson {
   shippingFeeToman: number;
   delivery: { method: ShippingMethodKey | null; free: boolean; etaMinDays: number | null; etaMaxDays: number | null; note: string | null; weightGrams: number | null };
   shipment: { carrier: CarrierKey; carrierName: string | null; trackingCode: string | null; updatedBy: string | null; updatedAt: string } | null;
+  /** Tracking SMS for this order (newest first) and whether the feature is switched on. */
+  notifications: { enabled: boolean; items: Array<{ id: string; status: "pending" | "sending" | "sent" | "failed" | "skipped"; attempts: number; lastError: string | null; skipReason: string | null; createdAt: string; sentAt: string | null; lastAttemptAt: string | null; message: string }> };
   placedAt: string;
   customerNote: string | null;
   shipping: ShippingSnapshot;

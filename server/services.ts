@@ -1,4 +1,5 @@
 import { createShippingAdminRoutes } from "./routes/admin-shipping";
+import { ShipmentNotifier } from "./notifications/shipment-notifier";
 import { PrismaShippingConfigStore } from "./shipping/config-store";
 import { ManualRatesProvider } from "./shipping/manual-provider";
 import { ShippingService } from "./shipping/service";
@@ -45,6 +46,10 @@ export interface PlatformOptions {
   /** Called after orders move stock (placed, rejected, cancelled) with the affected product ids, so the app can refresh their public availability. */
   onStockChanged?: (productIds: string[]) => void;
   clock?: () => Date;
+  /** Tracking SMS when an order ships. Off unless the owner enables it (SHIPMENT_SMS_ENABLED); never on in production without a real gateway. */
+  shipmentSms?: boolean;
+  /** Runs work that must not block a request (sending an SMS after an order change). */
+  background?: (task: Promise<unknown>) => void;
   log?: (event: string, detail?: Record<string, unknown>) => void;
   otpPolicy?: OtpPolicy;
   customerAuth?: Partial<CustomerAuthSettings>;
@@ -71,8 +76,9 @@ export function createPlatformServices(o: PlatformOptions) {
   const shippingConfig = new PrismaShippingConfigStore(o.db);
   const shipping = new ShippingService([new ManualRatesProvider(shippingConfig)], shippingConfig, o.log);
   const checkout = new CheckoutService(o.catalog, accountStore, customerStore, shipping, o.vendorId, clock, onStockChanged);
-  const orderLifecycle = new OrderLifecycleService(o.db, onStockChanged, clock);
-  const orderAdmin = new OrderAdminService(o.db);
+  const shipmentNotifier = new ShipmentNotifier(o.db, o.sms, { enabled: o.shipmentSms ?? false, ...(o.background ? { background: o.background } : {}), clock, ...(o.log ? { log: (event, detail) => o.log?.(event, detail) } : {}) });
+  const orderLifecycle = new OrderLifecycleService(o.db, onStockChanged, clock, shipmentNotifier);
+  const orderAdmin = new OrderAdminService(o.db, shipmentNotifier.enabled);
   const maintenance = new MaintenanceService(
     maintenanceStore,
     { ...o.probes, overdueDeletions: async () => (await accountStore.listDueDeletions(new Date(clock().getTime() - 24 * 3600_000), 1000)).length },
@@ -80,8 +86,8 @@ export function createPlatformServices(o: PlatformOptions) {
     clock,
   );
 
-  const adminRoutes: AdminRouter[] = [createSupportAdminRoutes(support), createMaintenanceAdminRoutes(maintenance), createOrderAdminRoutes(orderAdmin, orderLifecycle), createShippingAdminRoutes(shippingConfig, clock)];
-  return { shippingConfig, shipping, customerStore, accountStore, supportStore, maintenanceStore, customerAuth, customerAuthenticator, support, accounts, checkout, orderLifecycle, orderAdmin, maintenance, adminRoutes };
+  const adminRoutes: AdminRouter[] = [createSupportAdminRoutes(support), createMaintenanceAdminRoutes(maintenance), createOrderAdminRoutes(orderAdmin, orderLifecycle, shipmentNotifier), createShippingAdminRoutes(shippingConfig, clock)];
+  return { shipmentNotifier, shippingConfig, shipping, customerStore, accountStore, supportStore, maintenanceStore, customerAuth, customerAuthenticator, support, accounts, checkout, orderLifecycle, orderAdmin, maintenance, adminRoutes };
 }
 
 export type PlatformServices = ReturnType<typeof createPlatformServices>;
