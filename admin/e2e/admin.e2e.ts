@@ -90,7 +90,14 @@ describe("admin PWA end to end (real server, real database, real TOTP)", () => {
 
   it("exports and re-imports CSV (with a bad row reported in Persian)", async () => {
     await owner.goto(`${h.baseUrl}/admin/#/data`);
-    const [download] = await Promise.all([owner.waitForEvent("download"), owner.getByRole("button", { name: "دریافت خروجی" }).click()]);
+    // Race the download against the page's own error alert so a failure says WHY instead of timing out blindly.
+    const downloadPromise = owner.waitForEvent("download");
+    downloadPromise.catch(() => undefined);
+    await owner.getByRole("button", { name: "دریافت خروجی" }).click();
+    const failure = owner.getByRole("alert").first();
+    const outcome = await Promise.race([downloadPromise, failure.waitFor({ timeout: 25_000 }).then(async () => `export failed: ${await failure.innerText()}`)]);
+    if (typeof outcome === "string") throw new Error(outcome);
+    const download = outcome;
     const path = await download.path();
     expect(path).toBeTruthy();
     const { readFileSync } = await import("node:fs");
