@@ -270,12 +270,12 @@ describe("customer shopping journey, start to finish, on a phone", () => {
     await pw(page.getByTestId("cart-count")).toHaveCount(0); // the cart was emptied by the order
     expect(await page.evaluate(() => window.localStorage.getItem("jm-cart-v1"))).toBe("[]");
 
-    // the order is a real row: pending, exact total, vendor on the line; stock untouched; nothing about payment exists
+    // the order is a real row: pending, exact total, vendor on the line; the 2 pieces are reserved (4 → 2); nothing about payment exists
     if (process.env.E2E_DATABASE_URL) {
       expect(sql(`select count(*) from orders`)).toBe("1");
       expect(sql(`select status, "totalToman" from orders`)).toBe("pending|1300000");
       expect(sql(`select "skuSnapshot", quantity, "unitPriceToman", ("vendorId" is not null) from order_items`)).toBe("CU-M|2|650000|t");
-      expect(sql(`select inventory from product_variants where sku = 'CU-M'`)).toBe("4");
+      expect(sql(`select inventory from product_variants where sku = 'CU-M'`)).toBe("2");
       expect(sql(`select count(*) from information_schema.columns where table_name = 'orders' and column_name ilike '%pay%'`)).toBe("0");
       expect(sql(`select count(*) from addresses`)).toBe("1");
     }
