@@ -1,0 +1,55 @@
+# Verifies the GitHub Codespaces test environment (.devcontainer + scripts/codespace) on a clean Ubuntu 24.04 runner,
+# the same OS as the dev container: installs PostgreSQL 16 from Ubuntu, creates a real administrator with TOTP through
+# the real script, starts the real server on a simulated private origin and checks login, cookies, CSP, upload and
+# the database. Nothing is deployed and no secret is used.
+name: Codespace test environment
+
+on:
+  push:
+    branches: [main]
+    paths: [".devcontainer/**", "scripts/codespace/**", "admin/**", "server/**", "prisma/**", "package-lock.json", ".github/workflows/codespace-env.yml"]
+  pull_request:
+    branches: [main]
+    paths: [".devcontainer/**", "scripts/codespace/**", "admin/**", "server/**", "prisma/**", "package-lock.json", ".github/workflows/codespace-env.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codespace-env-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Setup scripts on Ubuntu 24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      # The setup step and the smoke test must share one throw-away state directory (`runner` is not available in
+      # job-level `env`, so it is exported from a step).
+      - name: Choose the throw-away state directory
+        run: echo "JARYAN_STATE_DIR=$RUNNER_TEMP/codespace-state" >> "$GITHUB_ENV"
+
+      # A fresh Codespace has no PostgreSQL; remove the runner's preinstalled copy so the install path is exercised.
+      - name: Remove preinstalled PostgreSQL
+        run: |
+          sudo systemctl stop postgresql || true
+          sudo apt-get purge -y 'postgresql*' >/dev/null
+          test ! -x /usr/lib/postgresql/16/bin/initdb
+
+      - name: Setup (what the dev container runs on creation)
+        run: npm run codespace:setup
+
+      - name: Verify login, TOTP, cookies, CSP, upload and PostgreSQL
+        run: npx tsx scripts/codespace/smoke.ts

@@ -33,7 +33,10 @@
     "admin:build": "node scripts/admin/build.mjs",
     "admin:dev": "node scripts/admin/build.mjs --watch",
     "admin:icons": "node scripts/admin/make-icons.mjs",
-    "admin:e2e": "npm run admin:build && vitest run --config vitest.e2e.config.mts"
+    "admin:e2e": "npm run admin:build && vitest run --config vitest.e2e.config.mts",
+    "codespace:setup": "bash scripts/codespace/setup.sh",
+    "codespace:admin": "bash scripts/codespace/create-admin.sh",
+    "codespace:start": "bash scripts/codespace/start.sh"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1157.0",

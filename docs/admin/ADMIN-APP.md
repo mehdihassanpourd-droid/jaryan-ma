@@ -20,6 +20,7 @@ DEV_ADMIN_EMAIL=you@example.test DEV_ADMIN_PASSWORD='a long throw-away password'
 - Development uses the embedded PostgreSQL and local disk media — no production server, cloud account or paid service.
 - `DEV_ADMIN_*` creates a development-only owner **without** 2FA and is refused in production. To exercise mandatory TOTP locally, create accounts with `npm run admin -- create --email … --role owner` and run with `REQUIRE_TOTP=true` (this is what the E2E tests do).
 - `npm run admin:dev` rebuilds on change. Env: `ADMIN_UI_DIR` (default `dist/admin`), `ADMIN_UI_ENABLED=false` to switch the UI off.
+- **From an Android phone with no PC:** a free, throw-away GitHub Codespaces setup (Node 22 + PostgreSQL 16, private forwarded port, mandatory TOTP) is described in [CODESPACES-FA.md](CODESPACES-FA.md); CI verifies its scripts on Ubuntu 24.04 (`codespace-env.yml`).
 - In production the same server serves `/admin/` behind your TLS reverse proxy (see SELF-HOSTING.md). Add the admin origin to `ADMIN_ORIGINS`.
 
 ## Features

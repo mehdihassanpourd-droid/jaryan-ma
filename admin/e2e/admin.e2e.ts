@@ -89,21 +89,34 @@ describe("admin PWA end to end (real server, real database, real TOTP)", () => {
   });
 
   it("exports and re-imports CSV (with a bad row reported in Persian)", async () => {
-    await owner.goto(`${h.baseUrl}/admin/#/data`);
-    const [download] = await Promise.all([owner.waitForEvent("download"), owner.getByRole("button", { name: "دریافت خروجی" }).click()]);
-    const path = await download.path();
-    expect(path).toBeTruthy();
-    const { readFileSync } = await import("node:fs");
-    const csv = readFileSync(path!, "utf8");
-    expect(csv.charCodeAt(0)).toBe(0xfeff);
-    expect(csv).toContain("پرده بافته دستی");
+    try {
+      await owner.goto(`${h.baseUrl}/admin/#/data`);
+      // Race the download against the page's own error alert so a failure says WHY instead of timing out blindly.
+      const downloadPromise = owner.waitForEvent("download");
+      downloadPromise.catch(() => undefined);
+      await owner.getByRole("button", { name: "دریافت خروجی" }).click({ timeout: 15_000 });
+      const failure = owner.getByRole("alert").first();
+      const outcome = await Promise.race([downloadPromise, failure.waitFor({ timeout: 25_000 }).then(async () => `export failed: ${await failure.innerText()}`)]);
+      if (typeof outcome === "string") throw new Error(outcome);
+      const download = outcome;
+      const path = await download.path();
+      expect(path).toBeTruthy();
+      const { readFileSync } = await import("node:fs");
+      const csv = readFileSync(path!, "utf8");
+      expect(csv.charCodeAt(0)).toBe(0xfeff);
+      expect(csv).toContain("پرده بافته دستی");
 
-    await owner.locator("#csv-file").setInputFiles({ name: "bad.csv", mimeType: "text/csv", buffer: Buffer.from("slug,name,fulfillment,price_toman\r\nx,نمونه,unique,12.5\r\n") });
-    await pw(owner.getByRole("alert").first()).toContainText("مشکل");
-    await pw(owner.getByRole("region", { name: "فهرست مشکلات فایل" })).toContainText("عدد معتبر نیست");
+      await owner.locator("#csv-file").setInputFiles({ name: "bad.csv", mimeType: "text/csv", buffer: Buffer.from("slug,name,fulfillment,price_toman\r\nx,نمونه,unique,12.5\r\n") });
+      await pw(owner.getByRole("alert").first()).toContainText("مشکل");
+      await pw(owner.getByRole("region", { name: "فهرست مشکلات فایل" })).toContainText("عدد معتبر نیست");
 
-    await owner.locator("#csv-file").setInputFiles({ name: "ok.csv", mimeType: "text/csv", buffer: Buffer.from("slug,name,fulfillment,price_toman,inventory\r\ncsv-one,نمونه یک,unique,1500000,1\r\ncsv-two,نمونه دو,unique,,0\r\n") });
-    await owner.getByRole("button", { name: /^ثبت/ }).click();
-    await owner.getByText(/ورود انجام شد/).waitFor();
+      await owner.locator("#csv-file").setInputFiles({ name: "ok.csv", mimeType: "text/csv", buffer: Buffer.from("slug,name,fulfillment,price_toman,inventory\r\ncsv-one,نمونه یک,unique,1500000,1\r\ncsv-two,نمونه دو,unique,,0\r\n") });
+      await owner.getByRole("button", { name: /^ثبت/ }).click();
+      await owner.getByText(/ورود انجام شد/).waitFor();
+    } catch (error) {
+      // CI-only stalls have been seen here: say what the page and the server were doing instead of a bare timeout.
+      const pageText = await owner.locator("body").innerText().catch(() => "(page unreadable)");
+      throw new Error(`${error instanceof Error ? error.message.split("\n")[0] : String(error)}\n--- url: ${owner.url()}\n--- page: ${pageText.slice(0, 600)}\n--- server log (tail):\n${h.serverLog()}`);
+    }
   });
 });

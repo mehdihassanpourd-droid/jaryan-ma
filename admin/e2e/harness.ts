@@ -18,6 +18,8 @@ export interface Harness {
   /** A TOTP code never used before for this account (the server refuses replays), or throws when the window is exhausted. */
   code(account: Account): string;
   login(context: BrowserContext, account: Account): Promise<Page>;
+  /** Last lines of the server's own output (JSON log lines), for failure diagnostics. */
+  serverLog(lines?: number): string;
   stop(): Promise<void>;
 }
 
@@ -93,6 +95,7 @@ export async function startHarness(): Promise<Harness> {
     accounts,
     browser,
     code,
+    serverLog: (lines = 40) => output.split("\n").slice(-lines).join("\n"),
     async login(context, account) {
       const page = await context.newPage();
       await page.goto(`${baseUrl}/admin/`);
