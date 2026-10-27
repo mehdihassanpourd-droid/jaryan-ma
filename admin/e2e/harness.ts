@@ -49,9 +49,9 @@ async function waitFor(url: string, child: ChildProcess, logs: () => string): Pr
   throw new Error(`server did not start:\n${logs()}`);
 }
 
-/** Boots the REAL server (embedded PostgreSQL, local-disk media, mandatory TOTP) and the built admin UI. Nothing is mocked. */
-export async function startHarness(options: { seedAccounts?: boolean; firstRunSetup?: boolean } = {}): Promise<Harness> {
-  const { seedAccounts = true, firstRunSetup = false } = options;
+/** Boots the REAL server (embedded PostgreSQL, or the real one in `databaseUrl`; local-disk media, mandatory TOTP) and the built admin UI. Nothing is mocked. */
+export async function startHarness(options: { seedAccounts?: boolean; firstRunSetup?: boolean; databaseUrl?: string } = {}): Promise<Harness> {
+  const { seedAccounts = true, firstRunSetup = false, databaseUrl } = options;
   const dir = mkdtempSync(join(tmpdir(), "jm-e2e-"));
   const port = await freePort();
   const env: NodeJS.ProcessEnv = {
@@ -69,6 +69,8 @@ export async function startHarness(options: { seedAccounts?: boolean; firstRunSe
     ADMIN_ORIGINS: `http://127.0.0.1:${port}`,
     IMPORT_CHUNK_MAX: "50",
     ...(firstRunSetup ? { FIRST_RUN_SETUP: "true" } : {}),
+    // A migrated, empty, throw-away PostgreSQL; without it the embedded one is used.
+    ...(databaseUrl ? { DATABASE_URL: databaseUrl } : {}),
   };
   const accountsFile = join(dir, "accounts.json");
   if (seedAccounts) execFileSync(tsx, [join(root, "admin/e2e/seed.ts"), accountsFile], { env, cwd: root, stdio: "pipe" });

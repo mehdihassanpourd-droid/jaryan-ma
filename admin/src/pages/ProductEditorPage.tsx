@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { ProductStatus, StoredProduct } from "@/domain/product/types";
 import { ApiError, api } from "../api/client";
 import { apiErrorMessage } from "../lib/errors";
@@ -41,6 +41,12 @@ export function ProductEditorPage({ id }: { id: string | null }) {
   const [tab, setTab] = useState<TabId>("basics");
 
   const readOnly = !can("product:write");
+  // Messages from the last save describe the form as it WAS: once the person changes anything (e.g. uploads the missing photo)
+  // they are stale, and leaving the red banner and tab dots up until the next save made a fixed form look broken.
+  const editForm = useCallback<Dispatch<SetStateAction<ProductForm>>>((update) => {
+    setForm(update);
+    setErrors((current) => (Object.keys(current).length === 0 ? current : {}));
+  }, []);
   const dirty = useMemo(() => serializeForm(form) !== saved, [form, saved]);
 
   const adopt = useCallback((p: StoredProduct) => {
@@ -168,11 +174,11 @@ export function ProductEditorPage({ id }: { id: string | null }) {
       </div>
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="card">
-        {tab === "basics" && <BasicsTab form={form} setForm={setForm} errors={errors} categories={categories ?? []} readOnly={readOnly} />}
-        {tab === "variants" && <VariantsTab form={form} setForm={setForm} errors={errors} categories={categories ?? []} readOnly={readOnly} />}
-        {tab === "images" && <ImagesTab form={form} setForm={setForm} errors={errors} categories={categories ?? []} readOnly={readOnly} productId={product?.id ?? null} />}
-        {tab === "seo" && <SeoTab form={form} setForm={setForm} errors={errors} categories={categories ?? []} readOnly={readOnly} />}
-        {tab === "preview" && <PreviewTab form={form} setForm={setForm} errors={errors} categories={categories ?? []} readOnly={readOnly} />}
+        {tab === "basics" && <BasicsTab form={form} setForm={editForm} errors={errors} categories={categories ?? []} readOnly={readOnly} />}
+        {tab === "variants" && <VariantsTab form={form} setForm={editForm} errors={errors} categories={categories ?? []} readOnly={readOnly} />}
+        {tab === "images" && <ImagesTab form={form} setForm={editForm} errors={errors} categories={categories ?? []} readOnly={readOnly} productId={product?.id ?? null} />}
+        {tab === "seo" && <SeoTab form={form} setForm={editForm} errors={errors} categories={categories ?? []} readOnly={readOnly} />}
+        {tab === "preview" && <PreviewTab form={form} setForm={editForm} errors={errors} categories={categories ?? []} readOnly={readOnly} />}
       </div>
 
       {!readOnly && (
