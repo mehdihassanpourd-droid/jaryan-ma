@@ -152,6 +152,20 @@ describe("the Codespaces test environment stays private and uses real authentica
     expect(read("server/http.ts")).toContain("requestedHosts(request).includes(host)");
   });
 
+  it("the rewritten-origin rule is development-only, port-bound, Host-checked and Referer-vetoed, and never enabled by deploy docs or workflows", () => {
+    const config = read("server/config.ts");
+    expect(config).toContain("ADMIN_ACCEPT_REWRITTEN_ORIGIN is development-only and not allowed in production");
+    expect(config).toMatch(/adminAcceptRewrittenOrigin: !production &&/);
+    expect(read("scripts/codespace/start.sh")).toContain("ADMIN_ACCEPT_REWRITTEN_ORIGIN=true");
+    const http = read("server/http.ts");
+    expect(http).toContain("url.port !== String(port)"); // only this server own port
+    expect(http).toContain("requestedHosts(request).includes(url.host)"); // Host must agree
+    expect(http).toContain('request.headers.get("referer")'); // a foreign Referer vetoes
+    for (const file of [".github/workflows/cloudflare-pages.yml", ".github/workflows/admin.yml", "docs/admin/SELF-HOSTING.md"]) {
+      expect(read(file), file).not.toContain("ADMIN_ACCEPT_REWRITTEN_ORIGIN");
+    }
+  });
+
   it("keeps the database password out of the repository (random, in the git-ignored state dir)", () => {
     expect(read("scripts/codespace/setup.sh")).toMatch(/openssl rand -hex/);
     expect(read(".gitignore")).toMatch(/^\/\.data\/$/m);

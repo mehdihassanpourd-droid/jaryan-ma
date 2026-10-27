@@ -31,6 +31,8 @@ const schema = z.object({
   ADMIN_ORIGINS: z.string().optional(),
   /** Development only: hosts ending in these suffixes are accepted as the SAME origin (see originAllowed), e.g. ".app.github.dev". */
   ADMIN_ORIGIN_HOST_SUFFIXES: z.string().optional(),
+  /** Development only: the forwarder (GitHub Codespaces) rewrites Origin/Host to http://localhost:<port>; accept exactly that. Refused in production. */
+  ADMIN_ACCEPT_REWRITTEN_ORIGIN: bool(false),
   COOKIE_SECURE: bool(),
   TRUST_PROXY: bool(false),
   IMPORT_CHUNK_MAX: z.coerce.number().int().min(1).max(200).default(50),
@@ -94,6 +96,8 @@ export interface Config {
   adminOrigins: string;
   /** Development only (empty in production): see ADMIN_ORIGIN_HOST_SUFFIXES. */
   adminOriginHostSuffixes: string[];
+  /** Development only (false in production): accept the loopback origin of this server own port; see OriginPolicy. */
+  adminAcceptRewrittenOrigin: boolean;
   cookieSecure: boolean;
   trustProxy: boolean;
   importChunkMax: number;
@@ -143,6 +147,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     if (e.COOKIE_SECURE === false) problems.push("COOKIE_SECURE=false is not allowed in production");
     if (e.DEV_ADMIN_EMAIL || e.DEV_ADMIN_PASSWORD) problems.push("DEV_ADMIN_* must not be set in production (create administrators with the admin CLI)");
     if (e.ADMIN_ORIGIN_HOST_SUFFIXES) problems.push("ADMIN_ORIGIN_HOST_SUFFIXES is development-only and not allowed in production (list the exact origin in ADMIN_ORIGINS)");
+    if (e.ADMIN_ACCEPT_REWRITTEN_ORIGIN) problems.push("ADMIN_ACCEPT_REWRITTEN_ORIGIN is development-only and not allowed in production (list the exact origin in ADMIN_ORIGINS)");
     if (e.FIRST_RUN_SETUP) problems.push("FIRST_RUN_SETUP is development-only and not allowed in production (create administrators with the admin CLI)");
     if (e.DATABASE_URL?.startsWith("pglite")) problems.push("DATABASE_URL must point to a PostgreSQL server in production");
   }
@@ -208,6 +213,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     encryptionKey: e.APP_ENCRYPTION_KEY ?? null,
     adminOrigins: e.ADMIN_ORIGINS ?? (production ? "" : devOrigins),
     adminOriginHostSuffixes: production ? [] : suffixes,
+    adminAcceptRewrittenOrigin: !production && e.ADMIN_ACCEPT_REWRITTEN_ORIGIN === true,
     cookieSecure: e.COOKIE_SECURE ?? production,
     trustProxy: e.TRUST_PROXY ?? false,
     importChunkMax: e.IMPORT_CHUNK_MAX,

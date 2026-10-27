@@ -196,6 +196,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
   const adminApi = createApi({
     setup,
     originHostSuffixes: config.adminOriginHostSuffixes,
+    ...(config.adminAcceptRewrittenOrigin ? { rewrittenOriginPort: config.port } : {}),
     originDebug: !config.production,
     ...(config.appCommit ? { build: config.appCommit } : {}),
     adminRoutes: platform.adminRoutes,
