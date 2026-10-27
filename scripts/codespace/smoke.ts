@@ -5,7 +5,7 @@
 //   export JARYAN_STATE_DIR=<throw-away dir>; npm run codespace:setup; npx tsx scripts/codespace/smoke.ts
 import { spawn, execFileSync } from "node:child_process";
 import { request as httpRequest } from "node:http";
-import { rmSync, statSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { totpAt, totpStep } from "../../server/auth/totp";
 import { solidPng } from "../../admin/e2e/png";
@@ -96,8 +96,13 @@ async function main() {
     check("state directory is private (700) and DB password file is 600", (statSync(state).mode & 0o777) === 0o700 && (statSync(join(state, "db.pass")).mode & 0o777) === 0o600);
 
     // 2. first-run setup in the browser flow: same rules as the CLI, TOTP proven before anything is stored
-    const open = (await (await fetch(`${BASE}/api/v1/setup/status`)).json()) as { open: boolean };
+    const open = (await (await fetch(`${BASE}/api/v1/setup/status`)).json()) as { open: boolean; build?: string };
     check("first-run setup is open while there is no administrator", open.open === true);
+    const commit = execFileSync("git", ["rev-parse", "--short=7", "HEAD"], { cwd: ROOT }).toString().trim();
+    check("the sign-in page can show the exact commit the server runs (development only)", open.build === commit, `${open.build} vs ${commit}`);
+    const watcherPid = existsSync(join(state, "watch.pid")) ? Number(readFileSync(join(state, "watch.pid"), "utf8")) : 0;
+    check("the background update watcher is running", watcherPid > 0 && (() => { try { process.kill(watcherPid, 0); return true; } catch { return false; } })());
+    check("the update step ran at start and never blocked it", existsSync(join(state, "update.log")) && /\[update\]/.test(readFileSync(join(state, "update.log"), "utf8")));
     // The browser's Origin is the external host it addressed; it must be accepted even if it differs from the computed
     // ADMIN_ORIGINS (the Codespaces failure), and a page on any other site, or another Codespace, must still be refused.
     const external = "renamed-3001.app.github.dev";
@@ -150,8 +155,8 @@ async function main() {
     const count = execFileSync(join(PG_BIN, "psql"), ["-h", "127.0.0.1", "-p", process.env.JARYAN_PG_PORT ?? "5433", "-U", "jaryan", "-d", "jaryan", "-tAc", "SELECT (SELECT count(*) FROM products) || ' ' || (SELECT count(*) FROM admin_users) || ' ' || current_setting('server_version_num')::int/10000"], { env: { ...process.env, PGPASSWORD: execFileSync("cat", [join(state, "db.pass")]).toString().trim() } }).toString().trim();
     check("data is in PostgreSQL 16 (1 product, 2 admins)", count === "1 2 16", count);
   } finally {
-    const down = await run("down.sh", []);
-    check("down.sh stops the background app", down.code === 0 && (await fetch(`${BASE}/healthz`).then(() => false, () => true)), `exit ${down.code}`);
+    const down = await run("down.sh", ["--all"]);
+    check("down.sh --all stops the app and the update watcher", down.code === 0 && (await fetch(`${BASE}/healthz`).then(() => false, () => true)) && !existsSync(join(state, "watch.pid")), `exit ${down.code}`);
     try { execFileSync(join(PG_BIN, "pg_ctl"), ["-D", join(state, "pg"), "stop", "-m", "fast"], { stdio: "ignore" }); } catch { /* not running */ }
   }
 }

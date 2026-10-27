@@ -16,10 +16,14 @@ export function LoginPage({ expired }: { expired: boolean }) {
   const [error, setError] = useState<string | null>(null);
   // Only a development server with ZERO administrators answers `open: true`; anything else (or an error) means "sign in".
   const [setupOpen, setSetupOpen] = useState(false);
+  const [build, setBuild] = useState<string | null>(null); // development servers say which commit they run
 
   useEffect(() => {
-    api<{ open: boolean }>("GET", "/setup/status", { anonymous: true }).then(
-      (r) => setSetupOpen(r.open === true),
+    api<{ open: boolean; build?: string }>("GET", "/setup/status", { anonymous: true }).then(
+      (r) => {
+        setSetupOpen(r.open === true);
+        setBuild(typeof r.build === "string" ? r.build : null);
+      },
       () => setSetupOpen(false),
     );
   }, []);
@@ -39,7 +43,7 @@ export function LoginPage({ expired }: { expired: boolean }) {
     }
   }
 
-  if (setupOpen) return <SetupPage onDone={() => setSetupOpen(false)} />;
+  if (setupOpen) return <SetupPage onDone={() => setSetupOpen(false)} build={build} />;
 
   return (
     <div className="login-wrap">
@@ -67,6 +71,7 @@ export function LoginPage({ expired }: { expired: boolean }) {
             ورود
           </Button>
         </form>
+        {build ? <p className="hint">نسخهٔ سرور آزمایشی: <bdi dir="ltr">{build}</bdi></p> : null}
       </main>
     </div>
   );

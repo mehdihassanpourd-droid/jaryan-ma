@@ -95,6 +95,16 @@ describe("first-run setup (development only)", () => {
     expect(last).toBe(429);
   });
 
+  it("tells a development sign-in page which commit runs, and says nothing in production", async () => {
+    const dev = await buildTestApp(testDb, { firstRunSetup: true, originDebug: true, build: "abc1234" });
+    expect((await call(dev, { path: "/api/v1/setup/status" })).body).toEqual({ open: true, build: "abc1234" });
+    const prod = await buildTestApp(testDb, { firstRunSetup: true, build: "abc1234" }); // originDebug (development) off
+    expect((await call(prod, { path: "/api/v1/setup/status" })).body).toEqual({ open: true });
+    expect(loadConfig({ APP_COMMIT: "abc1234" }).appCommit).toBe("abc1234");
+    expect(() => loadConfig({ APP_COMMIT: "not a sha; rm -rf" })).toThrow(ConfigError);
+    expect(loadConfig({}).appCommit).toBeNull();
+  });
+
   it("does not exist unless configured, and the configuration refuses it in production", async () => {
     const plain = await buildTestApp(testDb);
     expect((await call(plain, { path: "/api/v1/setup/status" })).body).toEqual({ open: false });

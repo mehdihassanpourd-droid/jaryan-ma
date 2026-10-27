@@ -47,6 +47,8 @@ export interface ApiDeps {
   setup?: FirstRunSetup;
   /** Development hosting behind a TLS-terminating forwarder (GitHub Codespaces): see `originAllowed`. Empty in production. */
   originHostSuffixes?: readonly string[];
+  /** Development only: the commit this server runs, shown on the sign-in page so an update can be confirmed at a glance. */
+  build?: string;
   /** Development only: say WHY an Origin was refused (received origin, requested host, allow-list). Never in production. */
   originDebug?: boolean;
   catalog: CatalogService;
@@ -140,7 +142,7 @@ export function createApi(deps: ApiDeps) {
   async function firstRunSetup(path: string, method: string, request: Request): Promise<Response | null> {
     if (!path.startsWith("/setup/")) return null;
     const setup = deps.setup;
-    if (path === "/setup/status" && method === "GET") return json({ open: setup ? await setup.isOpen() : false });
+    if (path === "/setup/status" && method === "GET") return json({ open: setup ? await setup.isOpen() : false, ...(deps.originDebug && deps.build ? { build: deps.build } : {}) });
     if (!setup || method !== "POST" || (path !== "/setup/begin" && path !== "/setup/finish")) return errorResponse("not_found", 404);
     try {
       if (path === "/setup/begin") {

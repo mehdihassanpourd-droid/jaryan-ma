@@ -11,6 +11,8 @@ export ADMIN_ORIGINS="$origin" PUBLIC_MEDIA_URL="$origin/media"
 host="${origin#https://}"
 export ADMIN_ORIGIN_HOST_SUFFIXES=".${host#*.}"
 cd "$ROOT"
+export APP_COMMIT="$(git rev-parse --short=7 HEAD 2>/dev/null || true)"
+[ -n "$APP_COMMIT" ] || unset APP_COMMIT
 
 # Build when missing OR older than the sources (a pulled update must not run a stale app).
 if [ ! -f dist/admin/index.html ] || [ -n "$(find admin/src admin/index.html admin/public scripts/admin -type f -newer dist/admin/index.html -print -quit 2>/dev/null)" ]; then

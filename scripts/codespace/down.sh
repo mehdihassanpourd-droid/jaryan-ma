@@ -7,5 +7,10 @@ if [ -f "$STATE/server.pid" ]; then
   kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
   rm -f "$STATE/server.pid"
 fi
+# `down.sh --all` also stops the background update watcher (used when you want everything off).
+if [ "${1:-}" = "--all" ] && [ -f "$STATE/watch.pid" ]; then
+  kill -TERM -- "-$(cat "$STATE/watch.pid")" 2>/dev/null || kill -TERM "$(cat "$STATE/watch.pid")" 2>/dev/null || true
+  rm -f "$STATE/watch.pid"
+fi
 for _ in $(seq 1 20); do app_up || { say "برنامهٔ مدیریت متوقف شد."; exit 0; }; sleep 0.5; done
 die "برنامه هنوز در حال اجراست."
