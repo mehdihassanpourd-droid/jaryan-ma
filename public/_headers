@@ -12,3 +12,7 @@
 # Which commit is live (written by the deploy workflow; public and harmless). Never cached, so the post-deploy check sees the truth.
 /build-info.json
   Cache-Control: no-store
+
+# Design-review prototypes (not the storefront): never indexed, even if a crawler finds them.
+/design-preview/*
+  X-Robots-Tag: noindex, nofollow

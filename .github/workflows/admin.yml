@@ -121,3 +121,8 @@ jobs:
       # honest demo-only checkout, nothing private or foreign in the published files.
       - name: Public preview build on an Android phone (412px)
         run: npx vitest run --config vitest.e2e.config.mts admin/e2e/preview.e2e.ts
+
+      # The two design concepts (public/design-preview) as deployed, on an Android phone: every page, accessibility (axe), no foreign hosts,
+      # sample labelling, mobile interactions, and the real storefront left untouched.
+      - name: Design concepts on an Android phone (412px)
+        run: npx vitest run --config vitest.e2e.config.mts admin/e2e/design-preview.e2e.ts
