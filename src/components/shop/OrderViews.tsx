@@ -9,6 +9,8 @@ import { formatNumber, formatToman } from "@/lib/format";
 import { LIVE_CATALOG_BASE } from "@/lib/live-config";
 import { ORDER_STATUS_LABEL, OrderApiError, type ApiOrder } from "@/lib/order-api";
 import { nextStatuses } from "@/domain/customer/order-status";
+import { CARRIER_LABEL, SHIPPING_METHOD_LABEL } from "@/domain/shipping/methods";
+import { etaText, feeText } from "@/lib/delivery-text";
 import { NO_PAYMENT_NOTE } from "./CartView";
 import { orderApi } from "./orderClient";
 import { SignInPanel } from "./SignInPanel";
@@ -46,10 +48,39 @@ function useGate(title: string) {
 
 const STATUS_NOTE: Partial<Record<ApiOrder["status"], string>> = {
   confirmed: "گالری این سفارش را تأیید کرد.",
-  preparing: "سفارش شما در حال آماده‌سازی است.",
-  shipped: "سفارش شما ارسال شد.",
-  delivered: "این سفارش تحویل داده شد.",
 };
+
+/** What the customer should read about the delivery right now (nothing before the gallery has confirmed the order). */
+function deliveryStatus(order: ApiOrder): string | null {
+  const pickup = order.delivery.method === "pickup";
+  switch (order.status) {
+    case "preparing": return "سفارش شما در حال آماده‌سازی است.";
+    case "shipped": return pickup ? "سفارش شما آمادهٔ تحویل حضوری است." : "سفارش شما تحویل حامل شد و در راه است.";
+    case "delivered": return pickup ? "سفارش را تحویل گرفتید." : "سفارش به دست شما رسید.";
+    default: return null;
+  }
+}
+
+function TrackingBlock({ shipment }: { shipment: NonNullable<ApiOrder["shipment"]> }) {
+  const carrier = shipment.carrier === "other" ? (shipment.carrierName ?? CARRIER_LABEL.other) : CARRIER_LABEL[shipment.carrier];
+  return (
+    <p className="mt-2" data-testid="tracking">
+      حامل: <strong>{carrier}</strong>
+      {shipment.trackingCode && (
+        <>
+          <br />
+          کد رهگیری: <strong dir="ltr" className="select-all" data-testid="tracking-code">{shipment.trackingCode}</strong>
+          {shipment.trackingUrl && (
+            <>
+              {" "}
+              <a href={shipment.trackingUrl} target="_blank" rel="noopener noreferrer" className="underline">پیگیری مرسوله</a>
+            </>
+          )}
+        </>
+      )}
+    </p>
+  );
+}
 
 function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrder; onCancel: () => void; cancelling: boolean; cancelError: string | null }) {
   const s = order.shipping;
@@ -90,17 +121,42 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
           );
         })}
       </ul>
-      <p className="flex items-baseline justify-between gap-3">
-        <span className="text-bark-700">جمع کالاها (بدون هزینهٔ ارسال)</span>
-        <strong className="text-xl text-bark-900" data-testid="order-total">{formatToman(order.totalToman)}</strong>
-      </p>
-      <section aria-labelledby="ship-title" className="rounded-2xl border border-sand-200 bg-ivory-50 p-5 text-sm leading-8 text-bark-800">
-        <h2 id="ship-title" className="mb-2 text-base font-bold text-bark-900">نشانی تحویل</h2>
+      <dl className="space-y-2 rounded-2xl border border-sand-200 bg-ivory-50 p-5 text-sm" data-testid="order-amounts">
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-bark-700">جمع کالاها</dt>
+          <dd className="text-bark-900" data-testid="order-subtotal">{formatToman(order.subtotalToman)}</dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-bark-700">هزینهٔ ارسال{order.delivery.method ? ` (${SHIPPING_METHOD_LABEL[order.delivery.method]})` : ""}</dt>
+          <dd className="text-bark-900" data-testid="order-shipping-fee">
+            {order.delivery.method === null ? "ثبت نشده" : order.delivery.method === "pickup" ? "بدون هزینه" : feeText(order.shippingFeeToman)}
+            {order.delivery.free && <span className="ms-2 text-olive-800">(ارسال رایگان)</span>}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3 border-t border-sand-200 pt-3">
+          <dt className="font-medium text-bark-900">جمع کل سفارش</dt>
+          <dd><strong className="text-xl text-bark-900" data-testid="order-total">{formatToman(order.totalToman)}</strong></dd>
+        </div>
+      </dl>
+      <section aria-labelledby="ship-title" className="rounded-2xl border border-sand-200 bg-ivory-50 p-5 text-sm leading-8 text-bark-800" data-testid="delivery-details">
+        <h2 id="ship-title" className="mb-2 text-base font-bold text-bark-900">{order.delivery.method === "pickup" ? "تحویل حضوری" : "نشانی تحویل"}</h2>
+        {order.delivery.method && <p data-testid="delivery-method">روش ارسال: <strong>{SHIPPING_METHOD_LABEL[order.delivery.method]}</strong>{etaText(order.delivery.etaMinDays, order.delivery.etaMaxDays) && <span className="text-bark-600"> · {etaText(order.delivery.etaMinDays, order.delivery.etaMaxDays)}</span>}</p>}
+        {order.delivery.note && <p className="text-bark-700">{order.delivery.note}</p>}
         <p>{s.recipientName}</p>
         {s.recipientPhone && <p dir="ltr" className="text-start">{s.recipientPhone}</p>}
-        <p>{[s.province, s.city, s.street, s.plaque ? `پلاک ${s.plaque}` : null, s.unit ? `واحد ${s.unit}` : null].filter(Boolean).join("، ")}</p>
-        {s.postalCode && <p>کد پستی: <span dir="ltr">{s.postalCode}</span></p>}
+        {order.delivery.method !== "pickup" && (
+          <>
+            <p>{[s.province, s.city, s.street, s.plaque ? `پلاک ${s.plaque}` : null, s.unit ? `واحد ${s.unit}` : null].filter(Boolean).join("، ")}</p>
+            {s.postalCode && <p>کد پستی: <span dir="ltr">{s.postalCode}</span></p>}
+          </>
+        )}
         {order.customerNote && <p className="mt-2 text-bark-700">توضیحات: {order.customerNote}</p>}
+        {deliveryStatus(order) && (
+          <div className="mt-3 border-t border-sand-200 pt-3" data-testid="delivery-status">
+            <p className="font-medium text-bark-900">{deliveryStatus(order)}</p>
+            {order.shipment && <TrackingBlock shipment={order.shipment} />}
+          </div>
+        )}
       </section>
       <section aria-labelledby="history-title" className="rounded-2xl border border-sand-200 bg-ivory-50 p-5 text-sm leading-8 text-bark-800">
         <h2 id="history-title" className="mb-2 text-base font-bold text-bark-900">روند سفارش</h2>

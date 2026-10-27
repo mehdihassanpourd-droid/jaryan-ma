@@ -43,6 +43,7 @@ export function BasicsTab({ form, setForm, errors, categories, readOnly }: TabPr
       ) : (
         <NumberField label="موجودی" inputMode="numeric" dir="ltr" className="ltr-input" hint={INVENTORY_HINT[form.fulfillment]} value={form.inventory} readOnly={readOnly} error={errors.inventory} onChange={(e) => set("inventory", e.target.value)} />
       )}
+      <NumberField label="وزن یک عدد (گرم)" hint="وزن همراه بسته‌بندی، برای محاسبهٔ هزینهٔ ارسال. خالی بگذارید تا وزن پیش‌فرض فروشگاه (در بخش «ارسال») حساب شود." inputMode="numeric" dir="ltr" className="ltr-input" value={form.weightGrams} readOnly={readOnly} error={errors.weightGrams} onChange={(e) => set("weightGrams", e.target.value)} />
       <TextField label="نشانی (اسلاگ)" hint="اختیاری. خالی بگذارید تا از نام ساخته شود. با انتشار، نشانی در آدرس صفحه می‌آید." dir="ltr" className="ltr-input" value={form.slug} readOnly={readOnly} error={errors.slug} onChange={(e) => set("slug", e.target.value)} />
     </div>
   );

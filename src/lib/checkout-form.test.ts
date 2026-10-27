@@ -47,3 +47,13 @@ describe("order text for an Instagram message", () => {
     expect(text).toContain("کد پستی 1459813176");
   });
 });
+
+describe("pickup contact", () => {
+  it("needs only a name and a phone (nothing about an address)", async () => {
+    const { validatePickup, emptyShippingForm } = await import("./checkout-form");
+    const ok = validatePickup({ ...emptyShippingForm(), recipientName: "علی رضایی", recipientPhone: "۰۹۱۲۳۴۵۶۷۸۹" });
+    expect(ok.ok && ok.shipping).toEqual({ recipientName: "علی رضایی", recipientPhone: "+989123456789" });
+    const bad = validatePickup({ ...emptyShippingForm(), recipientName: "ع", recipientPhone: "12" });
+    expect(!bad.ok && Object.keys(bad.errors).sort()).toEqual(["recipientName", "recipientPhone"]);
+  });
+});

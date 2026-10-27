@@ -15,7 +15,7 @@ import { SeoTab } from "./editor/SeoTab";
 import { VariantsTab } from "./editor/VariantsTab";
 
 const TABS = [
-  { id: "basics", label: "اطلاعات", fields: ["name", "description", "categoryId", "fulfillment", "priceToman", "inventory", "leadTimeDays", "slug"] },
+  { id: "basics", label: "اطلاعات", fields: ["name", "description", "categoryId", "fulfillment", "priceToman", "inventory", "leadTimeDays", "weightGrams", "slug"] },
   { id: "variants", label: "گونه‌ها", fields: ["variants"] },
   { id: "images", label: "تصاویر", fields: ["images"] },
   { id: "seo", label: "سئو", fields: ["seoTitle", "seoDescription"] },

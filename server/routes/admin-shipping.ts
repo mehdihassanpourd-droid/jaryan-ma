@@ -21,7 +21,7 @@ export function createShippingAdminRoutes(config: ShippingConfigStore, clock: ()
         return json({ config: await config.save(body.data, principal.email, clock()) });
       } catch (error) {
         // Someone saved a newer table since this screen loaded: send the current one so nothing is silently overwritten.
-        if (error instanceof ShippingConfigConflictError) return errorResponse("shipping_config_changed", 409, { config: await config.load() });
+        if (error instanceof ShippingConfigConflictError) return errorResponse("shipping_config_changed", 409, { detail: { config: await config.load() } });
         throw error;
       }
     }

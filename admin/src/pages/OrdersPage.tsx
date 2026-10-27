@@ -3,11 +3,12 @@ import { formatToman } from "@/lib/format";
 import type { AdminOrderJson as Order } from "@/domain/customer/order-admin";
 import { needsReason, nextStatuses, ORDER_ACTION_LABEL, ORDER_REASON_MAX, ORDER_STATUS_LABEL, ORDER_STATUSES, type OrderStatusValue } from "@/domain/customer/order-status";
 import { formatOrderNumber } from "@/domain/customer/schema";
+import { CARRIERS, CARRIER_LABEL, CARRIER_NAME_MAX, SHIPPING_METHOD_LABEL, TRACKING_CODE_MAX, type CarrierKey } from "@/domain/shipping/methods";
 import { ApiError, api } from "../api/client";
 import { apiErrorMessage } from "../lib/errors";
 import { hrefFor, navigate, useRoute } from "../router";
 import { useSession } from "../session";
-import { Button, SelectField, TextAreaField } from "../ui/controls";
+import { Button, SelectField, TextAreaField, TextField } from "../ui/controls";
 import { Alert, Badge, EmptyState, Loading, Pagination, useToast } from "../ui/feedback";
 
 const PAGE_SIZE = 20;
@@ -72,7 +73,8 @@ function OrderList() {
                   </div>
                   <div className="product-meta">
                     <span>{o.shipping.recipientName ?? o.customer.name ?? "—"}</span>
-                    <span>{o.shipping.city}</span>
+                    <span>{o.shipping.city || "—"}</span>
+                    <span>{o.delivery.method ? SHIPPING_METHOD_LABEL[o.delivery.method] : "روش ارسال ثبت نشده"}</span>
                     <span>{formatToman(o.totalToman)}</span>
                     <span>{o.items.reduce((n, i) => n + i.quantity, 0).toLocaleString("fa-IR")} کالا</span>
                   </div>
@@ -96,6 +98,7 @@ function OrderDetail({ number, onChanged }: { number: number; onChanged: () => v
   const [asking, setAsking] = useState<OrderStatusValue | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [shipForm, setShipForm] = useState<ShipForm | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -116,12 +119,13 @@ function OrderDetail({ number, onChanged }: { number: number; onChanged: () => v
   const actions = can("order:manage") ? nextStatuses(o.status, "staff") : [];
   const held = o.items.reduce((n, i) => n + i.reservedQuantity, 0);
 
-  async function move(to: OrderStatusValue, why: string) {
+  async function move(to: OrderStatusValue, why: string, shipment?: Record<string, unknown>) {
     setBusy(true);
     try {
-      const r = await api<{ order: Order }>("POST", `/orders/${number}/transition`, { body: { to, expectedStatus: o.status, reason: why.trim() } });
+      const r = await api<{ order: Order }>("POST", `/orders/${number}/transition`, { body: { to, expectedStatus: o.status, reason: why.trim(), ...(shipment ? { shipment } : {}) } });
       setState({ number, tick, value: { order: r.order } });
       setAsking(null);
+      setShipForm(null);
       setReason("");
       toast.success(`وضعیت سفارش: ${ORDER_STATUS_LABEL[to]}`);
       onChanged();
@@ -158,12 +162,22 @@ function OrderDetail({ number, onChanged }: { number: number; onChanged: () => v
           <h2 id="o-actions">اقدام</h2>
           <div className="row">
             {actions.map((to) => (
-              <Button key={to} variant={to === "confirmed" || to === "preparing" || to === "shipped" || to === "delivered" ? "primary" : "danger"} disabled={busy} loading={busy && asking === null} onClick={() => (needsReason(to) ? (setAsking(to), setReason("")) : void move(to, ""))}>
+              <Button key={to} variant={to === "confirmed" || to === "preparing" || to === "shipped" || to === "delivered" ? "primary" : "danger"} disabled={busy} loading={busy && asking === null} onClick={() => (to === "shipped" ? (setAsking(to), setShipForm(shipFormFor(o))) : needsReason(to) ? (setAsking(to), setReason("")) : void move(to, ""))}>
                 {ORDER_ACTION_LABEL[to]}
               </Button>
             ))}
           </div>
-          {asking && (
+          {asking === "shipped" && shipForm && (
+            <form className="stack" onSubmit={(e) => { e.preventDefault(); const built = shipmentBody(shipForm); if (built) void move("shipped", "", built); else toast.error("برای «سایر» نام حامل را بنویسید."); }} aria-label="ثبت ارسال" data-testid="ship-form">
+              <ShipmentFields form={shipForm} onChange={setShipForm} pickup={o.delivery.method === "pickup"} />
+              <p className="hint">حامل و کد رهگیری اختیاری است و بعداً هم می‌شود آن را اضافه یا اصلاح کرد.</p>
+              <div className="row">
+                <Button type="submit" variant="primary" loading={busy}>{o.delivery.method === "pickup" ? "آمادهٔ تحویل حضوری است" : "ثبت ارسال"}</Button>
+                <Button onClick={() => { setAsking(null); setShipForm(null); }} disabled={busy}>انصراف</Button>
+              </div>
+            </form>
+          )}
+          {asking && asking !== "shipped" && (
             <form className="stack" onSubmit={(e) => { e.preventDefault(); void move(asking, reason); }} aria-label={ORDER_ACTION_LABEL[asking]} data-testid="reason-form">
               <TextAreaField label="دلیل (برای مشتری نمایش داده می‌شود؛ اختیاری)" rows={3} value={reason} counter={{ value: reason.length, max: ORDER_REASON_MAX }} onChange={(e) => setReason(e.target.value)} hint="اطلاعات شخصی ننویسید." />
               <div className="row">
@@ -192,18 +206,55 @@ function OrderDetail({ number, onChanged }: { number: number; onChanged: () => v
             </li>
           ))}
         </ul>
-        <p><strong>جمع کالاها: {formatToman(o.totalToman)}</strong> <span className="muted">(هزینهٔ ارسال لحاظ نشده)</span></p>
+        <dl className="amounts" data-testid="order-amounts">
+          <div><dt>جمع کالاها</dt><dd data-testid="order-subtotal">{formatToman(o.subtotalToman)}</dd></div>
+          <div>
+            <dt>هزینهٔ ارسال{o.delivery.method ? ` (${SHIPPING_METHOD_LABEL[o.delivery.method]})` : ""}</dt>
+            <dd data-testid="order-shipping-fee">{o.delivery.method === null ? "ثبت نشده (سفارش قدیمی)" : o.delivery.method === "pickup" ? "بدون هزینه" : o.shippingFeeToman === 0 ? "رایگان" : formatToman(o.shippingFeeToman)}{o.delivery.free && <> <Badge tone="olive">ارسال رایگان</Badge></>}</dd>
+          </div>
+          <div className="amounts-total"><dt>جمع کل</dt><dd><strong data-testid="order-total">{formatToman(o.totalToman)}</strong></dd></div>
+        </dl>
         {(o.status === "cancelled" || o.status === "rejected") && <p className="muted">موجودی این سفارش به انبار برگردانده شد.</p>}
         {held === 0 && o.status !== "cancelled" && o.status !== "rejected" && <p className="muted">این سفارش موجودی رزرو‌شده‌ای ندارد (ساخت پس از سفارش، یا پیش از ساخت سامانهٔ رزرو ثبت شده).</p>}
       </section>
 
       <section className="card stack" aria-labelledby="o-ship">
-        <h2 id="o-ship">گیرنده و نشانی</h2>
+        <h2 id="o-ship">{o.delivery.method === "pickup" ? "تحویل حضوری" : "گیرنده و نشانی"}</h2>
+        {o.delivery.method && <p data-testid="delivery-method">روش ارسال: <strong>{SHIPPING_METHOD_LABEL[o.delivery.method]}</strong>{o.delivery.weightGrams !== null && <span className="muted"> · وزن محاسبه‌شده {o.delivery.weightGrams.toLocaleString("fa-IR")} گرم</span>}</p>}
         <p>{s.recipientName}{s.recipientPhone && <> · <span dir="ltr">{s.recipientPhone}</span></>}</p>
-        <p>{[s.province, s.city, s.street, s.plaque ? `پلاک ${s.plaque}` : null, s.unit ? `واحد ${s.unit}` : null].filter(Boolean).join("، ")}</p>
-        {s.postalCode && <p>کد پستی: <span dir="ltr">{s.postalCode}</span></p>}
+        {o.delivery.method !== "pickup" && (
+          <>
+            <p>{[s.province, s.city, s.street, s.plaque ? `پلاک ${s.plaque}` : null, s.unit ? `واحد ${s.unit}` : null].filter(Boolean).join("، ")}</p>
+            {s.postalCode && <p>کد پستی: <span dir="ltr">{s.postalCode}</span></p>}
+          </>
+        )}
         {o.customerNote && <p>توضیحات مشتری: {o.customerNote}</p>}
       </section>
+
+      {["confirmed", "preparing", "shipped", "delivered"].includes(o.status) && (
+        <section className="card stack" aria-labelledby="o-carrier" data-testid="shipment-section">
+          <h2 id="o-carrier">حامل و کد رهگیری</h2>
+          {o.shipment ? (
+            <p data-testid="shipment-current">
+              {o.shipment.carrier === "other" ? (o.shipment.carrierName ?? CARRIER_LABEL.other) : CARRIER_LABEL[o.shipment.carrier]}
+              {o.shipment.trackingCode && <> · کد رهگیری: <strong dir="ltr" data-testid="shipment-code">{o.shipment.trackingCode}</strong></>}
+              <span className="muted"> · مشتری این را در صفحهٔ سفارش خودش می‌بیند</span>
+            </p>
+          ) : (
+            <p className="muted">هنوز حامل یا کد رهگیری ثبت نشده است.</p>
+          )}
+          {can("order:manage") && (
+            <ShipmentEditor
+              key={o.shipment?.updatedAt ?? "none"}
+              initial={shipFormFor(o)}
+              pickup={o.delivery.method === "pickup"}
+              onSaved={(order) => { setState({ number, tick, value: { order } }); toast.success("حامل و کد رهگیری ذخیره شد."); }}
+              number={number}
+              hasShipment={o.shipment !== null}
+            />
+          )}
+        </section>
+      )}
 
       <section className="card stack" aria-labelledby="o-customer">
         <h2 id="o-customer">مشتری</h2>
@@ -223,5 +274,62 @@ function OrderDetail({ number, onChanged }: { number: number; onChanged: () => v
         </ol>
       </section>
     </div>
+  );
+}
+
+interface ShipForm {
+  carrier: CarrierKey;
+  carrierName: string;
+  trackingCode: string;
+}
+
+/** Starts from what is saved, else from the delivery method the customer chose. */
+function shipFormFor(o: Order): ShipForm {
+  return o.shipment
+    ? { carrier: o.shipment.carrier, carrierName: o.shipment.carrierName ?? "", trackingCode: o.shipment.trackingCode ?? "" }
+    : { carrier: o.delivery.method ?? "post", carrierName: "", trackingCode: "" };
+}
+
+/** The request body, or null when it is incomplete ("other" needs a name). */
+function shipmentBody(form: ShipForm): Record<string, unknown> | null {
+  if (form.carrier === "other" && !form.carrierName.trim()) return null;
+  return { carrier: form.carrier, carrierName: form.carrier === "other" ? form.carrierName.trim() : null, trackingCode: form.trackingCode.trim() };
+}
+
+function ShipmentFields({ form, onChange, pickup }: { form: ShipForm; onChange: (next: ShipForm) => void; pickup: boolean }) {
+  return (
+    <>
+      <SelectField label="حامل" value={form.carrier} onChange={(e) => onChange({ ...form, carrier: e.target.value as CarrierKey })} options={CARRIERS.map((c) => ({ value: c, label: CARRIER_LABEL[c] }))} />
+      {form.carrier === "other" && <TextField label="نام حامل" required value={form.carrierName} maxLength={CARRIER_NAME_MAX} onChange={(e) => onChange({ ...form, carrierName: e.target.value })} />}
+      {!pickup && (
+        <TextField label="کد رهگیری (اختیاری)" hint="حروف، رقم و - _ . / فاصله؛ حداکثر ۶۴ نویسه." dir="ltr" className="ltr-input" value={form.trackingCode} maxLength={TRACKING_CODE_MAX} onChange={(e) => onChange({ ...form, trackingCode: e.target.value })} />
+      )}
+    </>
+  );
+}
+
+/** Enter or correct the carrier and tracking code of an order that is already confirmed. */
+function ShipmentEditor({ initial, pickup, number, hasShipment, onSaved }: { initial: ShipForm; pickup: boolean; number: number; hasShipment: boolean; onSaved: (order: Order) => void }) {
+  const toast = useToast();
+  const [form, setForm] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    const body = shipmentBody(form);
+    if (!body) return toast.error("برای «سایر» نام حامل را بنویسید.");
+    setBusy(true);
+    try {
+      onSaved((await api<{ order: Order }>("PUT", `/orders/${number}/shipment`, { body })).order);
+    } catch (e) {
+      toast.error(e instanceof ApiError && e.status === 422 ? "کد رهگیری یا نام حامل معتبر نیست؛ فقط حروف، رقم و - _ . / مجاز است." : apiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="stack" onSubmit={save} aria-label="ثبت حامل و کد رهگیری" data-testid="shipment-form">
+      <ShipmentFields form={form} onChange={setForm} pickup={pickup} />
+      <div><Button type="submit" loading={busy}>{hasShipment ? "اصلاح حامل و کد رهگیری" : "ذخیرهٔ حامل و کد رهگیری"}</Button></div>
+    </form>
   );
 }

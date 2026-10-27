@@ -1,4 +1,6 @@
 import type { CheckoutRequest, LineProblem } from "@/domain/customer/checkout";
+import type { CarrierKey, ShippingMethodKey } from "@/domain/shipping/methods";
+import type { MethodQuote } from "@/domain/shipping/pricing";
 import { ORDER_STATUS_LABEL as STATUS_LABEL, type OrderActorType, type OrderStatusValue } from "@/domain/customer/order-status";
 
 /**
@@ -26,7 +28,7 @@ export class OrderApiError extends Error {
     /** HTTP status; 0 = the server could not be reached. */
     public status: number,
     public code: string,
-    public detail: { items?: LineProblem[]; retryAfterSeconds?: number; issues?: Array<{ path: string; code: string }> } = {},
+    public detail: { items?: LineProblem[]; quotes?: MethodQuote[]; retryAfterSeconds?: number; issues?: Array<{ path: string; code: string }> } = {},
   ) {
     super(code);
     this.name = "OrderApiError";
@@ -49,10 +51,25 @@ export interface ApiOrderEvent {
   by: OrderActorType;
 }
 
+export interface ApiShipment {
+  carrier: CarrierKey;
+  carrierName: string | null;
+  trackingCode: string | null;
+  updatedAt: string;
+  /** A public tracking page when one is known for the carrier (none today). */
+  trackingUrl: string | null;
+}
+
 export interface ApiOrder {
   number: number;
   status: OrderStatusValue;
+  /** What the order costs: goods + delivery. */
   totalToman: number;
+  subtotalToman: number;
+  shippingFeeToman: number;
+  /** method is null for orders made before shipping existed. */
+  delivery: { method: ShippingMethodKey | null; free: boolean; etaMinDays: number | null; etaMaxDays: number | null; note: string | null };
+  shipment: ApiShipment | null;
   placedAt: string;
   customerNote: string | null;
   shipping: { recipientName: string | null; recipientPhone: string | null; province: string; city: string; street: string | null; plaque: string | null; unit: string | null; postalCode: string | null };
@@ -75,6 +92,13 @@ export interface ApiAddress {
 }
 
 export const ORDER_STATUS_LABEL = STATUS_LABEL;
+
+/** What delivery would cost for the cart, as the server prices it (nothing is stored). */
+export interface ApiCartQuote {
+  subtotalToman: number;
+  weightGrams: number;
+  quotes: MethodQuote[];
+}
 
 export function createOrderApi(baseUrl: string, fetchImpl: typeof fetch = fetch) {
   const base = baseUrl.replace(/\/+$/, "");
@@ -100,6 +124,7 @@ export function createOrderApi(baseUrl: string, fetchImpl: typeof fetch = fetch)
     if (!response.ok) {
       throw new OrderApiError(response.status, typeof data?.error === "string" ? data.error : `http_${response.status}`, {
         ...(Array.isArray(data?.items) ? { items: data.items as LineProblem[] } : {}),
+        ...(Array.isArray(data?.quotes) ? { quotes: data.quotes as MethodQuote[] } : {}),
         ...(typeof data?.retryAfterSeconds === "number" ? { retryAfterSeconds: data.retryAfterSeconds } : {}),
         ...(Array.isArray(data?.issues) ? { issues: data.issues as Array<{ path: string; code: string }> } : {}),
       });
@@ -134,6 +159,8 @@ export function createOrderApi(baseUrl: string, fetchImpl: typeof fetch = fetch)
     },
     addresses: async () => (await request<{ addresses: ApiAddress[] }>("GET", "/addresses")).addresses,
     createAddress: (address: Record<string, unknown>) => request("POST", "/addresses", address),
+    quoteShipping: (items: Array<{ slug: string; sku: string | null; quantity: number }>, destination: { province: string; city: string } | null) =>
+      request<ApiCartQuote>("POST", "/shipping/quote", { items, destination }),
     placeOrder: (order: CheckoutRequest) => request<{ order: ApiOrder; created: boolean }>("POST", "/orders", order),
     listOrders: (page = 1) => request<{ items: ApiOrder[]; total: number }>("GET", `/orders?page=${page}&pageSize=20`),
     getOrder: async (number: number) => (await request<{ order: ApiOrder }>("GET", `/orders/${number}`)).order,

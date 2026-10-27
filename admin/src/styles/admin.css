@@ -899,3 +899,82 @@ a.attention-banner:hover {
 .timeline p {
   margin: 0.15rem 0 0;
 }
+
+/* Shipping screen */
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+  font-weight: 600;
+}
+.check input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--olive-500);
+}
+.label-like {
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0;
+}
+.chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.3rem 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: var(--sand-100);
+  border: 1px solid var(--sand-200);
+}
+.chip-x {
+  min-width: 32px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.sticky-actions {
+  position: sticky;
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 0.5rem);
+  z-index: 5;
+  padding: 0.6rem 0.75rem;
+  background: var(--ivory-50);
+  border: 1px solid var(--sand-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+@media (min-width: 900px) {
+  .sticky-actions {
+    bottom: 1rem;
+  }
+}
+
+.amounts {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+}
+.amounts > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.amounts dt,
+.amounts dd {
+  margin: 0;
+}
+.amounts-total {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--sand-200);
+}

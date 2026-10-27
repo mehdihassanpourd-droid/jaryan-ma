@@ -99,8 +99,8 @@ describe("the owner's shipping table", () => {
     const stale = await adminCall(app, { method: "PUT", path: "/api/v1/shipping/config", as: owner, body: { expectedVersion: first.version, defaultItemWeightGrams: 500, packagingWeightGrams: 0, methods: [method("tipax")] } });
     expect(stale.status).toBe(409);
     expect(stale.body.error).toBe("shipping_config_changed");
-    expect(stale.body.config.version).toBe(first.version + 1);
-    expect(stale.body.config.methods.find((m: any) => m.method === "tipax").enabled).toBe(false);
+    expect(stale.body.detail.config.version).toBe(first.version + 1);
+    expect(stale.body.detail.config.methods.find((m: any) => m.method === "tipax").enabled).toBe(false);
   });
 });
 
