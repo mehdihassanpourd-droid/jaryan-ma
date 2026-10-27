@@ -1,7 +1,7 @@
 import { tomanFromDb, tomanFromDbOrNull, tomanToDb, tomanToDbOrNull } from "../../src/domain/money";
 import type { ShippingConfigInput, ShippingConfigJson } from "../../src/domain/shipping/config";
-import { SHIPPING_METHODS } from "../../src/domain/shipping/methods";
-import type { MethodRules, WeightSettings } from "../../src/domain/shipping/pricing";
+import { SHIPPING_METHODS, type ShippingMethodKey } from "../../src/domain/shipping/methods";
+import type { FreeShippingRule, MethodRules, WeightSettings } from "../../src/domain/shipping/pricing";
 import type { Db } from "../db/client";
 
 export class ShippingConfigConflictError extends Error {
@@ -27,18 +27,22 @@ export class PrismaShippingConfigStore implements ShippingConfigStore {
       this.db.shippingMethodConfig.findMany({ include: { rates: { orderBy: { position: "asc" } } } }),
     ]);
     // A database that predates the migration seed (never in practice) still yields a valid, all-disabled table.
-    const s = settings ?? { defaultItemWeightGrams: 500, packagingWeightGrams: 0, version: 1 };
+    const s = settings ?? { defaultItemWeightGrams: 500, packagingWeightGrams: 0, version: 1, freeShippingEnabled: false, freeShippingThresholdToman: null, freeShippingMethods: [] as ShippingMethodKey[] };
     const byMethod = new Map(configs.map((c) => [c.method, c]));
     return {
       version: s.version,
       defaultItemWeightGrams: s.defaultItemWeightGrams,
       packagingWeightGrams: s.packagingWeightGrams,
+      freeShipping: {
+        enabled: s.freeShippingEnabled,
+        thresholdToman: tomanFromDbOrNull(s.freeShippingThresholdToman),
+        methods: SHIPPING_METHODS.filter((m) => s.freeShippingMethods.includes(m)),
+      },
       methods: SHIPPING_METHODS.map((method) => {
         const c = byMethod.get(method);
         return {
           method,
           enabled: c?.enabled ?? false,
-          freeThresholdToman: tomanFromDbOrNull(c?.freeThresholdToman ?? null),
           etaMinDays: c?.etaMinDays ?? null,
           etaMaxDays: c?.etaMaxDays ?? null,
           note: c?.note ?? null,
@@ -61,12 +65,18 @@ export class PrismaShippingConfigStore implements ShippingConfigStore {
         await tx.shippingSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
         const claimed = await tx.shippingSettings.updateMany({
           where: { id: 1, version: input.expectedVersion },
-          data: { defaultItemWeightGrams: input.defaultItemWeightGrams, packagingWeightGrams: input.packagingWeightGrams, version: { increment: 1 }, updatedAt: now },
+          data: {
+            defaultItemWeightGrams: input.defaultItemWeightGrams,
+            packagingWeightGrams: input.packagingWeightGrams,
+            freeShippingEnabled: input.freeShipping.enabled,
+            freeShippingThresholdToman: tomanToDbOrNull(input.freeShipping.thresholdToman),
+            freeShippingMethods: input.freeShipping.methods,
+            version: { increment: 1 }, updatedAt: now },
         });
         if (claimed.count !== 1) throw new ShippingConfigConflictError();
         // Methods the screen did not send keep what they have (it sends all four).
         for (const m of input.methods) {
-          const data = { enabled: m.enabled, freeThresholdToman: tomanToDbOrNull(m.freeThresholdToman), etaMinDays: m.etaMinDays, etaMaxDays: m.etaMaxDays, note: m.note };
+          const data = { enabled: m.enabled, etaMinDays: m.etaMinDays, etaMaxDays: m.etaMaxDays, note: m.note };
           await tx.shippingMethodConfig.upsert({ where: { method: m.method }, create: { method: m.method, ...data }, update: data });
           await tx.shippingRate.deleteMany({ where: { method: m.method } });
           if (m.rates.length > 0) {
@@ -101,12 +111,12 @@ export class PrismaShippingConfigStore implements ShippingConfigStore {
   }
 }
 
-export const toRules = (config: ShippingConfigJson): { rules: MethodRules[]; weight: WeightSettings } => ({
+export const toRules = (config: ShippingConfigJson): { rules: MethodRules[]; weight: WeightSettings; free: FreeShippingRule } => ({
+  free: { enabled: config.freeShipping.enabled, thresholdToman: config.freeShipping.thresholdToman, methods: config.freeShipping.methods },
   weight: { defaultItemWeightGrams: config.defaultItemWeightGrams, packagingWeightGrams: config.packagingWeightGrams },
   rules: config.methods.map((m) => ({
     method: m.method,
     enabled: m.enabled,
-    freeThresholdToman: m.freeThresholdToman,
     etaMinDays: m.etaMinDays,
     etaMaxDays: m.etaMaxDays,
     note: m.note,

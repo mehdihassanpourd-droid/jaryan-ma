@@ -20,8 +20,6 @@ export interface RateRule {
 export interface MethodRules {
   method: ShippingMethodKey;
   enabled: boolean;
-  /** Items subtotal at or above which the delivery is free. null = never free. */
-  freeThresholdToman: number | null;
   etaMinDays: number | null;
   etaMaxDays: number | null;
   note: string | null;
@@ -83,11 +81,46 @@ export type MethodQuote =
     }
   | { method: ShippingMethodKey; available: false; reason: UnavailableReason };
 
+/** The shop-wide free shipping policy (admin screen «ارسال رایگان»). */
+export interface FreeShippingRule {
+  enabled: boolean;
+  /** Items subtotal (whole Toman) at or above which the fee is waived. null only while disabled. */
+  thresholdToman: number | null;
+  /** Methods that qualify (pickup never needs it: it is always free). */
+  methods: ShippingMethodKey[];
+}
+
+/** What a shopper is told about free shipping for the cart they hold. */
+export interface FreeShippingProgress {
+  enabled: boolean;
+  thresholdToman: number | null;
+  methods: ShippingMethodKey[];
+  /** Toman still to add to the items subtotal to qualify (0 = qualified). null when the policy is off. */
+  remainingToman: number | null;
+  qualified: boolean;
+}
+
+export function freeShippingProgress(rule: FreeShippingRule, subtotalToman: number): FreeShippingProgress {
+  if (!rule.enabled || rule.thresholdToman === null || rule.methods.length === 0) return { enabled: false, thresholdToman: null, methods: [], remainingToman: null, qualified: false };
+  const remaining = Math.max(0, rule.thresholdToman - subtotalToman);
+  return { enabled: true, thresholdToman: rule.thresholdToman, methods: rule.methods, remainingToman: remaining, qualified: remaining === 0 };
+}
+
 /**
- * One method's price for this cart. `destination` null = no address typed yet. Free shipping only waives the fee: the
- * destination must still be inside the area the owner priced.
+ * The policy applied to a quote from ANY provider: an available, qualifying method costs nothing once the items subtotal reaches
+ * the threshold. A destination the method does not serve stays unavailable (free shipping never invents coverage).
  */
-export function quoteMethod(rules: MethodRules, destination: Destination | null, weightGrams: number, subtotalToman: number): MethodQuote {
+export function applyFreeShipping(quote: MethodQuote, rule: FreeShippingRule, subtotalToman: number): MethodQuote {
+  if (!quote.available || quote.method === "pickup") return quote;
+  const progress = freeShippingProgress(rule, subtotalToman);
+  if (!progress.qualified || !progress.methods.includes(quote.method)) return quote;
+  return { ...quote, feeToman: 0, free: true };
+}
+
+/**
+ * One method's price for this cart (before the free shipping policy, see `applyFreeShipping`). `destination` null = no address typed yet.
+ */
+export function quoteMethod(rules: MethodRules, destination: Destination | null, weightGrams: number): MethodQuote {
   const { method } = rules;
   if (!rules.enabled) return { method, available: false, reason: "disabled" };
   const eta = { etaMinDays: rules.etaMinDays, etaMaxDays: rules.etaMaxDays, note: rules.note };
@@ -95,10 +128,9 @@ export function quoteMethod(rules: MethodRules, destination: Destination | null,
   if (!destination || !destination.province || !destination.city) return { method, available: false, reason: "address_required" };
   const rate = matchRate(rules.rates, destination, weightGrams);
   if (!rate) return { method, available: false, reason: "not_served" };
-  const free = rules.freeThresholdToman !== null && subtotalToman >= rules.freeThresholdToman;
-  return { method, available: true, feeToman: free ? 0 : rate.priceToman, free, rateId: rate.id, ...eta };
+  return { method, available: true, feeToman: rate.priceToman, free: false, rateId: rate.id, ...eta };
 }
 
-export function quoteAll(all: MethodRules[], destination: Destination | null, weightGrams: number, subtotalToman: number): MethodQuote[] {
-  return all.map((rules) => quoteMethod(rules, destination, weightGrams, subtotalToman));
+export function quoteAll(all: MethodRules[], destination: Destination | null, weightGrams: number): MethodQuote[] {
+  return all.map((rules) => quoteMethod(rules, destination, weightGrams));
 }

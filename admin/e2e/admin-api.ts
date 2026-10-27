@@ -37,7 +37,7 @@ export async function adminCatalog(admin: Page, baseUrl: string) {
     /** Replaces the owner's shipping table through the real API (read the version, then PUT), like the admin screen does. */
     async shipping(methods: Json[], over: Json = {}): Promise<Json> {
       const current = (await (await admin.request.get(`${baseUrl}/api/v1/shipping/config`)).json()) as { config: { version: number } };
-      return (await ok("shipping", await admin.request.put(`${baseUrl}/api/v1/shipping/config`, { headers, data: { expectedVersion: current.config.version, defaultItemWeightGrams: 500, packagingWeightGrams: 0, methods, ...over } }))).config as Json;
+      return (await ok("shipping", await admin.request.put(`${baseUrl}/api/v1/shipping/config`, { headers, data: { expectedVersion: current.config.version, defaultItemWeightGrams: 500, packagingWeightGrams: 0, freeShipping: { enabled: false, thresholdToman: null, methods: [] }, methods, ...over } }))).config as Json;
     },
 
     /** Post (anywhere, free) and pickup, both on: for tests whose subject is not shipping prices. */

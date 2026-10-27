@@ -61,6 +61,21 @@ function deliveryStatus(order: ApiOrder): string | null {
   }
 }
 
+/** When it was handed to the carrier and when delivery was confirmed (from the order's own history). */
+function DeliveryDates({ order }: { order: ApiOrder }) {
+  const at = (status: ApiOrder["status"]) => order.history.findLast((h) => h.status === status)?.at;
+  const shipped = at("shipped");
+  const delivered = at("delivered");
+  if (!shipped && !delivered) return null;
+  return (
+    <p className="mt-2 text-bark-700" data-testid="delivery-dates">
+      {shipped && <>تاریخ ارسال: <span data-testid="shipped-at">{dateFormat.format(new Date(shipped))}</span></>}
+      {shipped && delivered && <br />}
+      {delivered && <>تاریخ تحویل: <span data-testid="delivered-at">{dateFormat.format(new Date(delivered))}</span></>}
+    </p>
+  );
+}
+
 function TrackingBlock({ shipment }: { shipment: NonNullable<ApiOrder["shipment"]> }) {
   const carrier = shipment.carrier === "other" ? (shipment.carrierName ?? CARRIER_LABEL.other) : CARRIER_LABEL[shipment.carrier];
   return (
@@ -155,6 +170,7 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
           <div className="mt-3 border-t border-sand-200 pt-3" data-testid="delivery-status">
             <p className="font-medium text-bark-900">{deliveryStatus(order)}</p>
             {order.shipment && <TrackingBlock shipment={order.shipment} />}
+            <DeliveryDates order={order} />
           </div>
         )}
       </section>
@@ -323,6 +339,12 @@ export function OrdersPageView() {
                   </span>
                   <span className="text-end">
                     <span className="block text-sm font-medium text-bark-800">{ORDER_STATUS_LABEL[o.status]}</span>
+                    {o.shipment && (o.status === "shipped" || o.status === "delivered") && (
+                      <span className="block text-xs text-bark-700" data-testid="list-tracking">
+                        {o.shipment.carrier === "other" ? (o.shipment.carrierName ?? CARRIER_LABEL.other) : CARRIER_LABEL[o.shipment.carrier]}
+                        {o.shipment.trackingCode && <> · <span dir="ltr">{o.shipment.trackingCode}</span></>}
+                      </span>
+                    )}
                     <span className="text-sm text-bark-700">{formatToman(o.totalToman)}</span>
                   </span>
                 </Link>

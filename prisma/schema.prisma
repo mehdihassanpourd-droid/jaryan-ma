@@ -185,31 +185,31 @@ model Category {
 }
 
 model Product {
-  id           String        @id @default(uuid())
-  vendorId     String
-  slug         String        @unique
-  name         String
-  description  String        @default("")
+  id             String        @id @default(uuid())
+  vendorId       String
+  slug           String        @unique
+  name           String
+  description    String        @default("")
   /// Optional page title / meta description chosen by an editor. Null = generated automatically (src/seo).
   seoTitle       String?
   seoDescription String?
-  categoryId   String?
-  status       ProductStatus @default(draft)
-  fulfillment  Fulfillment
+  categoryId     String?
+  status         ProductStatus @default(draft)
+  fulfillment    Fulfillment
   /// Whole Toman (BIGINT). Null = price not announced. App range: 0..MAX_TOMAN (src/domain/money.ts).
-  priceToman   BigInt?
+  priceToman     BigInt?
   /// unique: 0 or 1. stocked: stock (null when variants carry it). made_to_order: always null.
-  inventory    Int?
-  leadTimeDays Int?
+  inventory      Int?
+  leadTimeDays   Int?
   /// Packed weight of one unit in grams, for shipping rates. Null = the shop-wide default item weight applies.
-  weightGrams  Int?
+  weightGrams    Int?
   /// Normalised name + description + SKUs for search (see normalizeForSearch).
-  searchText   String        @default("")
+  searchText     String        @default("")
   /// Optimistic concurrency: updates must present the version they read.
-  version      Int           @default(1)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @default(now())
-  publishedAt  DateTime?
+  version        Int           @default(1)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now())
+  publishedAt    DateTime?
 
   vendor     Vendor           @relation(fields: [vendorId], references: [id])
   category   Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -443,31 +443,31 @@ model CustomerDataRequest {
 // ---------------------------------------------------------------------------------------------
 
 model Order {
-  id           String      @id @default(uuid())
+  id               String          @id @default(uuid())
   /// Human-friendly number (shown as e.g. JM-100001).
-  number       Int         @unique @default(autoincrement())
-  customerId   String
-  status       OrderStatus @default(pending)
+  number           Int             @unique @default(autoincrement())
+  customerId       String
+  status           OrderStatus     @default(pending)
   /// Sum of the lines, whole Toman (BIGINT).
   /// What the customer pays: subtotal + shippingFeeToman (whole Toman, BIGINT). Orders made before shipping existed have fee 0.
-  totalToman   BigInt
+  totalToman       BigInt
   /// Sum of the lines.
-  subtotalToman    BigInt   @default(0)
+  subtotalToman    BigInt          @default(0)
   /// Delivery fee as quoted by the server at order time (0 = free, pickup, or an order from before shipping existed).
-  shippingFeeToman BigInt   @default(0)
+  shippingFeeToman BigInt          @default(0)
   /// How the order is delivered; null only for orders made before shipping existed.
   deliveryMethod   ShippingMethod?
   /// Quote details frozen with the order: { rateId, weightGrams, free, etaMinDays, etaMaxDays, note }.
   deliveryDetails  Json?
   /// Delivery address and contact as they were at order time. Personal fields are scrubbed on anonymisation.
-  shipping     Json
-  customerNote String?
+  shipping         Json
+  customerNote     String?
   /// Chosen by the browser once per checkout attempt; a retry of the same attempt finds this order instead of creating another.
-  requestId    String?
-  placedAt     DateTime    @default(now())
-  updatedAt    DateTime    @default(now())
+  requestId        String?
+  placedAt         DateTime        @default(now())
+  updatedAt        DateTime        @default(now())
 
-  customer      Customer           @relation(fields: [customerId], references: [id])
+  customer      Customer            @relation(fields: [customerId], references: [id])
   items         OrderItem[]
   tickets       SupportTicket[]
   statusHistory OrderStatusEvent[]
@@ -518,12 +518,16 @@ enum ShippingMethod {
 
 /// One row (id = 1): weight assumptions used when a product has no weight of its own.
 model ShippingSettings {
-  id                     Int      @id @default(1)
-  defaultItemWeightGrams Int      @default(500)
-  packagingWeightGrams   Int      @default(0)
+  id                         Int              @id @default(1)
+  defaultItemWeightGrams     Int              @default(500)
+  packagingWeightGrams       Int              @default(0)
+  /// Free shipping policy (one for the whole shop): from this items subtotal the delivery fee of the listed methods is 0.
+  freeShippingEnabled        Boolean          @default(false)
+  freeShippingThresholdToman BigInt?
+  freeShippingMethods        ShippingMethod[]
   /// Optimistic concurrency for the admin screen: a save presents the version it read.
-  version                Int      @default(1)
-  updatedAt              DateTime @default(now())
+  version                    Int              @default(1)
+  updatedAt                  DateTime         @default(now())
 
   @@map("shipping_settings")
 }
@@ -532,7 +536,7 @@ model ShippingSettings {
 model ShippingMethodConfig {
   method             ShippingMethod @id
   enabled            Boolean        @default(false)
-  /// Items subtotal at or above which this method is free. Null = no free shipping.
+  /// DEPRECATED (replaced by the shop-wide free shipping policy in shipping_settings; no longer read or written). Kept so the migration is additive.
   freeThresholdToman BigInt?
   etaMinDays         Int?
   etaMaxDays         Int?

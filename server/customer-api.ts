@@ -113,6 +113,11 @@ export function createCustomerApi(deps: CustomerApiDeps) {
       const response = json({ categories: await deps.support.publicFaq() }, 200, { "cache-control": "public, max-age=300" });
       return withHeaders(response, corsFor(request, false));
     }
+    if (url.pathname === `${PREFIX}public/shipping/free-shipping` && method === "GET") {
+      // The shop's free shipping promise (so the cart can say "add X Toman for free shipping"): public, small, always revalidated so a changed threshold shows at once.
+      const response = json({ freeShipping: await deps.shipping.freeShippingPolicy() }, 200, { "cache-control": "no-cache" });
+      return withHeaders(response, corsFor(request, false));
+    }
     if (url.pathname === `${PREFIX}public/client-errors` && method === "POST") {
       // Credentialless and unauthenticated: strictly rate limited, size limited, sanitised before storage.
       const headers = corsFor(request, true);

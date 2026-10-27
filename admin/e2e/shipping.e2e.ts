@@ -64,10 +64,13 @@ const sql = (query: string): string | null => (REAL ? execFileSync("psql", [proc
 const shot = async (page: Page, name: string) => { if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/${name}.png`, fullPage: true }); };
 const toast = (page: Page, text: string | RegExp) => page.locator(".toast", { hasText: text }).first().waitFor();
 
+const FREE = { enabled: true, thresholdToman: 3_000_000, methods: ["post"] };
+const SETTINGS = { defaultItemWeightGrams: 500, packagingWeightGrams: 100, freeShipping: FREE };
+
 /** The shipping table the UI test builds, as the API takes it (used to change prices mid-checkout). */
 const table = (postTehran: number) => [
   {
-    method: "post", enabled: true, freeThresholdToman: 3_000_000, etaMinDays: 3, etaMaxDays: 7,
+    method: "post", enabled: true, etaMinDays: 3, etaMaxDays: 7,
     rates: [{ provinces: ["تهران"], cities: [], priceToman: postTehran }, { provinces: [], cities: [], priceToman: 150_000 }],
   },
   { method: "tipax", enabled: true, rates: [{ provinces: ["تهران"], cities: [], minWeightGrams: 0, maxWeightGrams: 3000, priceToman: 120_000 }] },
@@ -129,7 +132,6 @@ describe("shipping and delivery (phones, real PostgreSQL)", () => {
     await post.getByTestId("enable-post").check();
     await post.getByLabel("زمان تحویل: حداقل (روز)").fill("3");
     await post.getByLabel("زمان تحویل: حداکثر (روز)").fill("7");
-    await post.getByLabel(/ارسال رایگان از جمع/).fill("3000000");
     await post.getByTestId("add-rate-post").tap();
     const r0 = admin.getByTestId("rate-post-0");
     await r0.getByLabel("افزودن استان").selectOption("تهران");
@@ -163,11 +165,17 @@ describe("shipping and delivery (phones, real PostgreSQL)", () => {
     await pickup.getByLabel(/توضیحات برای مشتری/).fill("تحویل در گالری، ساعت ۱۰ تا ۱۸");
     await pw(pickup.getByTestId("add-rate-pickup")).toHaveCount(0);
 
-    // a text where a number belongs is explained on that field, not swallowed
-    await post.getByLabel(/ارسال رایگان از جمع/).fill("سه میلیون");
+    // free shipping: switched on with a minimum, for the post only. A text where a number belongs is explained on that field, not swallowed.
+    const free = admin.getByTestId("free-shipping");
+    await free.getByTestId("enable-free").check();
+    await free.getByLabel(/حداقل جمع کالاها/).fill("سه میلیون");
     await admin.getByTestId("save-shipping").tap();
-    await pw(post.getByText("مبلغ را فقط با رقم بنویسید.")).toBeVisible();
-    await post.getByLabel(/ارسال رایگان از جمع/).fill("3,000,000");
+    await pw(free.getByText("مبلغ را فقط با رقم بنویسید.")).toBeVisible();
+    await free.getByLabel(/حداقل جمع کالاها/).fill("3,000,000");
+    await admin.getByTestId("save-shipping").tap();
+    await pw(free.getByText("دست‌کم یک روش ارسال را انتخاب کنید.")).toBeVisible(); // on, but no method chosen
+    await free.getByTestId("free-method-post").check();
+    await pw(free.getByTestId("free-method-pickup")).toHaveCount(0); // pickup is always free: not a choice
 
     await shot(admin, "ship-admin");
     await noSideScroll(admin, "shipping (filled)");
@@ -178,7 +186,10 @@ describe("shipping and delivery (phones, real PostgreSQL)", () => {
     // reload: everything is exactly as saved
     await admin.reload();
     await pw(admin.getByTestId("enable-post")).toBeChecked();
-    await pw(admin.getByTestId("method-post").getByLabel(/ارسال رایگان از جمع/)).toHaveValue("۳٬۰۰۰٬۰۰۰");
+    await pw(admin.getByTestId("enable-free")).toBeChecked();
+    await pw(admin.getByTestId("free-shipping").getByLabel(/حداقل جمع کالاها/)).toHaveValue("۳٬۰۰۰٬۰۰۰");
+    await pw(admin.getByTestId("free-method-post")).toBeChecked();
+    await pw(admin.getByTestId("free-method-tipax")).not.toBeChecked();
     await pw(admin.getByTestId("rate-post-0").getByLabel(/^هزینهٔ ارسال/)).toHaveValue("۹۰٬۰۰۰");
     await pw(admin.getByTestId("rate-post-0")).toContainText("تهران");
     await pw(admin.getByTestId("rate-post-1")).toContainText("همهٔ کشور");
@@ -251,7 +262,7 @@ describe("shipping and delivery (phones, real PostgreSQL)", () => {
   });
 
   it("the owner changes the price while the customer is on the page: the order is refused with the new fee, then goes through", async () => {
-    await catalog.shipping(table(95_000), { defaultItemWeightGrams: 500, packagingWeightGrams: 100 });
+    await catalog.shipping(table(95_000), SETTINGS);
     await page.getByTestId("place-order").tap();
     await pw(page.getByTestId("checkout-failure")).toContainText("هزینهٔ ارسال تغییر کرده است");
     await pw(page.getByTestId("checkout-shipping-fee")).toHaveText("۹۵٬۰۰۰ تومان");
@@ -279,10 +290,57 @@ describe("shipping and delivery (phones, real PostgreSQL)", () => {
     }
 
     // later price changes never touch an order that exists
-    await catalog.shipping(table(111_000), { defaultItemWeightGrams: 500, packagingWeightGrams: 100 });
+    await catalog.shipping(table(111_000), SETTINGS);
     await page.reload();
     await pw(page.getByTestId("order-shipping-fee")).toContainText("۹۵٬۰۰۰ تومان");
     await pw(page.getByTestId("order-total")).toHaveText("۶۹۵٬۰۰۰ تومان");
+  });
+
+  it("the cart says how much more to buy for free shipping; the owner changes or switches it off in the admin screen, no code involved", async () => {
+    await addToCart(mug.slug, 1); // 2 mugs = 600,000
+    await page.goto(`${site.url}/cart`);
+    const note = page.getByTestId("free-shipping-note");
+    await pw(note).toContainText("خرید بیشتر", { timeout: 15_000 });
+    await pw(page.getByTestId("free-shipping-remaining")).toHaveText("۲٬۴۰۰٬۰۰۰ تومان"); // 3,000,000 - 600,000
+    await pw(note).toContainText("پست ایران");
+    await pw(note).not.toContainText("تیپاکس"); // only the methods the owner chose
+    await pw(note.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "20");
+    await shot(page, "ship-free-cart");
+    await noSideScroll(page, "cart with free shipping note");
+    expect(await axeViolations(page)).toEqual([]);
+
+    // the checkout shows the same promise; the server still decides the fee
+    await page.goto(`${site.url}/checkout`);
+    await pw(page.getByTestId("free-shipping-remaining")).toHaveText("۲٬۴۰۰٬۰۰۰ تومان", { timeout: 15_000 });
+
+    // the owner lowers the minimum to 500,000 in the real screen: the cart now says it qualifies
+    await admin.goto(`${h.baseUrl}/admin/#/shipping`);
+    await admin.getByTestId("free-shipping").getByLabel(/حداقل جمع کالاها/).fill("500000");
+    await admin.getByTestId("save-shipping").tap();
+    await toast(admin, "تنظیمات ارسال ذخیره شد");
+    await page.goto(`${site.url}/cart`);
+    await pw(page.getByTestId("free-shipping-note")).toHaveAttribute("data-qualified", "true", { timeout: 15_000 });
+    await pw(page.getByTestId("free-shipping-note")).toContainText("رایگان است");
+    await pw(page.getByTestId("free-shipping-remaining")).toHaveCount(0);
+    expect(sql(`select "freeShippingThresholdToman" from shipping_settings`)).toBe(REAL ? "500000" : null);
+
+    // ... and the server agrees: the post is free for this cart; switched off, it is not
+    await page.goto(`${site.url}/checkout`);
+    await fillAddress("تهران", "تهران");
+    await pw(feeOf("post")).toHaveText("رایگان", { timeout: 15_000 });
+    await admin.reload();
+    await admin.getByTestId("enable-free").uncheck();
+    await admin.getByTestId("save-shipping").tap();
+    await toast(admin, "تنظیمات ارسال ذخیره شد");
+    await page.goto(`${site.url}/cart`);
+    await pw(page.getByTestId("cart-total")).toBeVisible();
+    await page.waitForTimeout(1500);
+    await pw(page.getByTestId("free-shipping-note")).toHaveCount(0); // nothing is promised while it is off
+    expect(sql(`select "freeShippingEnabled" from shipping_settings`)).toBe(REAL ? "f" : null);
+
+    // back to the real policy for the next steps; the cart is emptied
+    await catalog.shipping(table(95_000), SETTINGS);
+    await page.evaluate(() => window.localStorage.setItem("jm-cart-v1", "[]"));
   });
 
   it("free shipping from the threshold, and a cart too heavy for a method", async () => {
@@ -368,10 +426,15 @@ describe("shipping and delivery (phones, real PostgreSQL)", () => {
     await pw(admin.getByText("وضعیت سفارش: ارسال شده").first()).toBeVisible();
     await pw(admin.getByTestId("shipment-current")).toContainText("پیک فروشگاه");
     await pw(admin.getByTestId("shipment-code")).toHaveText("PK-2024/778");
+    await pw(admin.getByTestId("shipment-status")).toContainText("ارسال‌شده");
+    await pw(admin.getByTestId("shipped-at")).toBeVisible();
+    await pw(admin.getByTestId("shipment-dates")).toContainText(h.accounts.owner.email);
     expect(sql(`select carrier, "carrierName", "trackingCode" from order_shipments`)).toBe(REAL ? "other|پیک فروشگاه|PK-2024/778" : null);
 
     await page.reload();
     await pw(page.getByTestId("delivery-status")).toContainText("تحویل حامل شد");
+    await pw(page.getByTestId("shipped-at")).toBeVisible();
+    await pw(page.getByTestId("delivered-at")).toHaveCount(0);
     await pw(page.getByTestId("tracking")).toContainText("پیک فروشگاه");
     await pw(page.getByTestId("tracking-code")).toHaveText("PK-2024/778");
     await shot(page, "ship-tracking");
@@ -408,9 +471,19 @@ describe("shipping and delivery (phones, real PostgreSQL)", () => {
 
     await actions.getByRole("button", { name: "ثبت تحویل" }).tap();
     await pw(admin.getByText("وضعیت سفارش: تحویل داده شده").first()).toBeVisible();
+    await pw(admin.getByTestId("shipment-status")).toContainText("تحویل‌شده");
+    await pw(admin.getByTestId("delivered-at")).toBeVisible(); // delivery confirmation: when, and by whom
+    await pw(admin.getByTestId("shipment-dates")).toContainText("تأیید تحویل");
     await page.reload();
     await pw(page.getByTestId("delivery-status")).toContainText("به دست شما رسید");
     await pw(page.getByTestId("tracking-code")).toHaveText("TX-5551234");
+    await pw(page.getByTestId("delivered-at")).toBeVisible();
+
+    // the order history list shows the carrier and the tracking code too
+    await page.goto(`${site.url}/orders`);
+    await pw(page.getByTestId("list-tracking").first()).toContainText("تیپاکس");
+    await pw(page.getByTestId("list-tracking").first()).toContainText("TX-5551234");
+    await noSideScroll(page, "order history with tracking");
   });
 
   it("a pickup order is 'ready for pickup' rather than 'shipped', with no tracking code to enter", async () => {

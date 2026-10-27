@@ -1,5 +1,5 @@
 import { MAX_OPEN_ORDERS, type CheckoutRequest, type LineProblem } from "../../src/domain/customer/checkout";
-import type { Destination, MethodQuote } from "../../src/domain/shipping/pricing";
+import type { Destination, FreeShippingProgress, MethodQuote } from "../../src/domain/shipping/pricing";
 import type { ShippingService } from "../shipping/service";
 import { newOrderSchema } from "../../src/domain/customer/schema";
 import { lineTotal, MoneyRangeError, sumToman } from "../../src/domain/money";
@@ -38,6 +38,8 @@ export interface CartQuote {
   subtotalToman: number;
   weightGrams: number;
   quotes: MethodQuote[];
+  /** Free shipping for this cart: qualified, or how many Toman more to buy. */
+  freeShipping: FreeShippingProgress;
 }
 
 export interface PlacedOrder {
@@ -161,8 +163,8 @@ export class CheckoutService {
   /** What delivery would cost for this cart (shown before the customer orders). Nothing is stored or reserved. */
   async quote(request: { items: CheckoutRequest["items"]; destination: Destination | null }): Promise<CartQuote> {
     const priced = await this.priceItems(request.items);
-    const { weightGrams, quotes } = await this.shipping.quote({ destination: request.destination, lines: priced.weights, subtotalToman: priced.subtotalToman });
-    return { subtotalToman: priced.subtotalToman, weightGrams, quotes };
+    const { weightGrams, quotes, freeShipping } = await this.shipping.quote({ destination: request.destination, lines: priced.weights, subtotalToman: priced.subtotalToman });
+    return { subtotalToman: priced.subtotalToman, weightGrams, quotes, freeShipping };
   }
 
   /** Re-reads the catalogue to explain which lines lost the race and how many units are left (never reports a line as fine). */

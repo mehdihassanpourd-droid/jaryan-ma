@@ -8,9 +8,11 @@ import { cartTotal, priceLine, quantityLimit, UNAVAILABLE_TEXT, type PricedLine 
 import { formatNumber, formatToman } from "@/lib/format";
 import { liveProductHref, safeImageUrl } from "@/lib/live-catalog";
 import { LIVE_CATALOG_BASE } from "@/lib/live-config";
+import { FreeShippingNote } from "./FreeShippingNote";
 import { QuantityStepper } from "./QuantityStepper";
 import { useCart } from "./useCart";
 import { useCartProducts } from "./useCartProducts";
+import { useFreeShippingPolicy } from "./useFreeShipping";
 
 /** Honest status line used on the cart and the checkout: what this store can and cannot do today. */
 export const NO_PAYMENT_NOTE = "پرداخت آنلاین هنوز فعال نیست و هیچ مبلغی از شما دریافت نمی‌شود.";
@@ -18,6 +20,7 @@ export const NO_PAYMENT_NOTE = "پرداخت آنلاین هنوز فعال نی
 export function CartView() {
   const cart = useCart();
   const { products, retry } = useCartProducts(cart.lines.map((l) => l.slug));
+  const freeShipping = useFreeShippingPolicy();
 
   if (!LIVE_CATALOG_BASE) return <Shell><p className="rounded-2xl border border-sand-300 bg-ivory-50 p-6 text-bark-700">سبد خرید فقط برای فروشگاه متصل به فهرست محصولات کار می‌کند.</p></Shell>;
   if (!cart.hydrated) return <Shell><p role="status" className="text-bark-600">در حال بارگذاری سبد خرید…</p></Shell>;
@@ -65,6 +68,7 @@ export function CartView() {
             <span aria-disabled="true" className="inline-flex cursor-not-allowed items-center rounded-full bg-sand-300 px-7 py-3.5 text-base font-medium text-bark-600">کالای قابل سفارشی در سبد نیست</span>
           )}
         </div>
+        {orderable.length > 0 && <FreeShippingNote policy={freeShipping} subtotalToman={total} />}
         <p className="mt-3 text-xs leading-6 text-bark-600">هزینهٔ ارسال در این مبلغ لحاظ نشده است. {NO_PAYMENT_NOTE}</p>
         {priced.some((p) => !p.ok) && <p className="mt-2 text-xs leading-6 text-bark-700">کالاهای ناموجود یا حذف‌شده در جمع کل حساب نمی‌شوند و سفارش داده نخواهند شد.</p>}
       </section>

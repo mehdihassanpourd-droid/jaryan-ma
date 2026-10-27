@@ -235,6 +235,10 @@ function OrderDetail({ number, onChanged }: { number: number; onChanged: () => v
       {["confirmed", "preparing", "shipped", "delivered"].includes(o.status) && (
         <section className="card stack" aria-labelledby="o-carrier" data-testid="shipment-section">
           <h2 id="o-carrier">حامل و کد رهگیری</h2>
+          <p data-testid="shipment-status">
+            وضعیت ارسال: <Badge tone={o.status === "delivered" ? "neutral" : o.status === "shipped" ? "olive" : "warn"}>{o.status === "delivered" ? "تحویل‌شده" : o.status === "shipped" ? "ارسال‌شده" : "در انتظار ارسال"}</Badge>
+          </p>
+          <ShipmentDates order={o} />
           {o.shipment ? (
             <p data-testid="shipment-current">
               {o.shipment.carrier === "other" ? (o.shipment.carrierName ?? CARRIER_LABEL.other) : CARRIER_LABEL[o.shipment.carrier]}
@@ -410,5 +414,20 @@ function NotificationsBox({ order, canManage, onChanged }: { order: Order; canMa
         </ul>
       )}
     </div>
+  );
+}
+
+/** Shipped and delivery-confirmed times (and who confirmed), straight from the order's status history. */
+function ShipmentDates({ order }: { order: Order }) {
+  const find = (to: OrderStatusValue) => order.history.findLast((h) => h.to === to);
+  const shipped = find("shipped");
+  const delivered = find("delivered");
+  if (!shipped && !delivered) return null;
+  const who = (h: NonNullable<typeof shipped>) => (h.actor === "staff" ? (h.actorLabel ?? "کارمند") : ACTOR_LABEL[h.actor]);
+  return (
+    <ul className="stack" data-testid="shipment-dates">
+      {shipped && <li>ارسال: <span data-testid="shipped-at">{dateFormat.format(new Date(shipped.at))}</span> <span className="muted">· ثبت‌کننده: {who(shipped)}</span></li>}
+      {delivered && <li>تأیید تحویل: <span data-testid="delivered-at">{dateFormat.format(new Date(delivered.at))}</span> <span className="muted">· ثبت‌کننده: {who(delivered)}</span></li>}
+    </ul>
   );
 }

@@ -12,6 +12,6 @@ export class ManualRatesProvider implements ShippingProvider {
 
   async quote(context: QuoteContext): Promise<MethodQuote[]> {
     const { rules } = toRules(await this.config.load());
-    return quoteAll(rules, context.destination, context.weightGrams, context.subtotalToman);
+    return quoteAll(rules, context.destination, context.weightGrams);
   }
 }
