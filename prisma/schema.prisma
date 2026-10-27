@@ -182,6 +182,9 @@ model Product {
   slug         String        @unique
   name         String
   description  String        @default("")
+  /// Optional page title / meta description chosen by an editor. Null = generated automatically (src/seo).
+  seoTitle       String?
+  seoDescription String?
   categoryId   String?
   status       ProductStatus @default(draft)
   fulfillment  Fulfillment

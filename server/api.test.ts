@@ -45,7 +45,8 @@ describe("authentication", () => {
 
   it("returns the session with its CSRF token and sets a hardened cookie on login", async () => {
     const me = await api({ path: "/api/v1/auth/session" });
-    expect(me.body).toEqual({ email: "owner@example.test", role: "owner", csrfToken: owner.csrf });
+    expect(me.body).toMatchObject({ email: "owner@example.test", role: "owner", csrfToken: owner.csrf, mediaBaseUrl: "https://media.example.test" });
+    expect(me.body.permissions).toEqual(expect.arrayContaining(["product:write", "product:publish", "product:import", "maintenance:write"]));
 
     app.advance(30_000);
     const secret = generateTotpSecret();

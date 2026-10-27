@@ -32,6 +32,9 @@ export interface StoredProduct {
   slug: string;
   name: string;
   description: string;
+  /** Editor-chosen page title / meta description; null = generated automatically. */
+  seoTitle: string | null;
+  seoDescription: string | null;
   categoryId: string | null;
   status: ProductStatus;
   fulfillment: Fulfillment;

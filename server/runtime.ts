@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createAdminUiHandler, type AdminUiHandler } from "./admin-ui";
 import { createApi } from "./api";
 import { DEFAULT_OTP_POLICY } from "../src/domain/customer/otp-policy";
 import { createCustomerApi, isCustomerApiPath } from "./customer-api";
@@ -146,6 +147,8 @@ export async function checkMigrations(db: Db, production: boolean): Promise<Chec
 export interface Runtime {
   handle: (request: Request) => Promise<Response>;
   media?: LocalDiskStorage;
+  /** The built admin PWA at /admin/, when it has been built (`npm run admin:build`). */
+  adminUi?: AdminUiHandler;
   shutdown(): Promise<void>;
 }
 
@@ -196,6 +199,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     cookie: auth.cookie,
     sessionMaxAgeSeconds: config.sessionAbsoluteHours * 3600,
     adminOrigins: config.adminOrigins,
+    mediaBaseUrl: config.publicMediaUrl ?? "",
     importChunkMax: config.importChunkMax,
     background: (task) => {
       pending.add(task);
@@ -243,9 +247,25 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     every("prune_maintenance", 24 * 3600_000, () => platform.maintenance.prune());
   }
 
+  let adminUi: AdminUiHandler | undefined;
+  if (config.adminUiDir) {
+    if (existsSync(join(config.adminUiDir, "index.html"))) {
+      let mediaOrigin: string | null = null;
+      try {
+        mediaOrigin = config.publicMediaUrl ? new URL(config.publicMediaUrl).origin : null;
+      } catch {
+        mediaOrigin = null;
+      }
+      adminUi = createAdminUiHandler({ dir: config.adminUiDir, mediaOrigin });
+    } else {
+      log("warn", "admin_ui_not_built", { note: "run `npm run admin:build` to serve the admin app at /admin/" });
+    }
+  }
+
   return {
     handle,
     media,
+    adminUi,
     async shutdown() {
       for (const timer of timers) clearInterval(timer);
       await Promise.allSettled([...pending]);

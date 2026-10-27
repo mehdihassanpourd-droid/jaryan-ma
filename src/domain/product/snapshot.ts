@@ -30,6 +30,9 @@ export interface PublicProduct {
   slug: string;
   name: string;
   description: string;
+  /** Editor-chosen page title / meta description (null = generated automatically by the storefront build). */
+  seoTitle: string | null;
+  seoDescription: string | null;
   category: { slug: string; name: string } | null;
   fulfillment: Fulfillment;
   priceToman: number | null;
@@ -82,6 +85,8 @@ export function toPublicProduct(p: StoredProduct, ctx: SnapshotContext): PublicP
     slug: p.slug,
     name: p.name,
     description: p.description,
+    seoTitle: p.seoTitle,
+    seoDescription: p.seoDescription,
     category: (p.categoryId && ctx.categoryById.get(p.categoryId)) || null,
     fulfillment: p.fulfillment,
     priceToman: p.priceToman,

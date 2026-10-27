@@ -55,6 +55,9 @@ const schema = z.object({
   SMS_DAILY_LIMIT: z.coerce.number().int().min(1).max(100_000).default(300),
   RELEASE: z.string().max(64).optional(),
   SCHEDULER_ENABLED: bool(true),
+  /** Built admin PWA (npm run admin:build). Served at /admin/ when the directory exists. */
+  ADMIN_UI_DIR: z.string().default("dist/admin"),
+  ADMIN_UI_ENABLED: bool(true),
 });
 
 export interface S3Config {
@@ -97,6 +100,7 @@ export interface Config {
   sms: SmsConfig;
   release: string | null;
   schedulerEnabled: boolean;
+  adminUiDir: string | null;
 }
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
@@ -204,6 +208,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     },
     release: e.RELEASE ?? null,
     schedulerEnabled: e.SCHEDULER_ENABLED ?? true,
+    adminUiDir: (e.ADMIN_UI_ENABLED ?? true) ? e.ADMIN_UI_DIR : null,
     devAdmin: !production && e.DEV_ADMIN_EMAIL && e.DEV_ADMIN_PASSWORD ? { email: e.DEV_ADMIN_EMAIL, password: e.DEV_ADMIN_PASSWORD } : null,
   };
 }

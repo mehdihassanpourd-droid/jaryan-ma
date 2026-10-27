@@ -1,0 +1,54 @@
+# Builds the admin PWA (served by the API server at /admin/, never deployed to Cloudflare Pages) and runs its tests:
+# unit tests, then browser end-to-end tests against the REAL server (embedded PostgreSQL, local media, mandatory TOTP)
+# with mobile-viewport and axe accessibility checks. Nothing is deployed and no secret is used.
+name: Admin PWA
+
+on:
+  push:
+    branches: [main]
+    paths: ["admin/**", "scripts/admin/**", "server/**", "src/domain/**", "src/seo/**", "prisma/**", "vitest.e2e.config.mts", "package-lock.json", ".github/workflows/admin.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["admin/**", "scripts/admin/**", "server/**", "src/domain/**", "src/seo/**", "prisma/**", "vitest.e2e.config.mts", "package-lock.json", ".github/workflows/admin.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build, unit tests, browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Build the admin app
+        run: npm run admin:build
+
+      - name: Unit tests (admin libraries, admin UI server, architecture guards)
+        run: npx vitest run admin/src server/admin-ui.test.ts server/seo-fields.test.ts server/invariants.test.ts
+
+      - name: Install Chromium for the browser tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser end-to-end tests (real server, TOTP login, RBAC, upload, CSV, axe, 390px)
+        run: npx vitest run --config vitest.e2e.config.mts

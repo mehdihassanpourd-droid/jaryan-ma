@@ -53,6 +53,58 @@ describe("the public storefront stays separate from the server", () => {
   });
 });
 
+describe("the admin PWA stays private, portable and safe", () => {
+  const adminSources = walk("admin/src", (f) => /\.(ts|tsx)$/.test(f) && !/\.test\./.test(f));
+  const storefront = [...walk("src/app", (f) => /\.(ts|tsx)$/.test(f)), ...walk("src/components", (f) => /\.(ts|tsx)$/.test(f)), ...walk("src/lib", (f) => /\.(ts|tsx)$/.test(f))];
+
+  it("has source files to check", () => {
+    expect(adminSources.length).toBeGreaterThan(20);
+  });
+
+  it("the public storefront never imports admin code and the static export never builds it", () => {
+    expect(storefront.filter((f) => /from\s+["'][^"']*admin\//.test(read(f)) || /["']\/admin\b/.test(read(f)))).toEqual([]);
+    expect(read(".github/workflows/cloudflare-pages.yml")).not.toMatch(/dist\/admin|admin:build|admin\//);
+    expect(read("next.config.ts")).not.toMatch(/admin/);
+  });
+
+  it("never imports server code, Prisma or Node-only modules (it runs in the browser)", () => {
+    const offenders = adminSources.filter((f) => /from\s+["'](?:[^"']*\/server\/|server\/|[^"']*generated\/prisma|@prisma\/|node:|pg["'])/.test(read(f)) || /from\s+["']\.\.?\/(\.\.\/)*server/.test(read(f)));
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps secrets and personal data out of browser storage and avoids CSP-breaking constructs", () => {
+    const hits = (re: RegExp) => adminSources.filter((f) => re.test(read(f)));
+    expect(hits(/\b(localStorage|sessionStorage|indexedDB)\b/)).toEqual([]);
+    expect(hits(/document\.cookie/)).toEqual([]);
+    expect(hits(/dangerouslySetInnerHTML|\binnerHTML\b|\beval\(|new Function\(/)).toEqual([]);
+    expect(hits(/\bstyle=\{/)).toEqual([]); // inline styles are blocked by the strict CSP
+  });
+
+  it("has no default accounts, bypass flags or mock logins", () => {
+    expect(adminSources.filter((f) => /dev[-_ ]?bypass|mockLogin|fakeSession|DEV_ADMIN|skipAuth/i.test(read(f)))).toEqual([]);
+  });
+
+  it("the service worker never touches API or media responses", () => {
+    const code = read("admin/src/sw.ts")
+      .split("\n")
+      .filter((l) => !l.trim().startsWith("//") && !l.trim().startsWith("*") && !l.trim().startsWith("/*"))
+      .join("\n");
+    expect(code).not.toMatch(/\/api\/|\/media/);
+    expect(code).toMatch(/const SCOPE = "\/admin\/"/);
+    expect(code).toMatch(/pathname\.startsWith\(SCOPE\)/);
+  });
+
+  it("the admin server code serves files only from its build directory (no ports, vendors or DB)", () => {
+    const source = read("server/admin-ui.ts");
+    expect(source).not.toMatch(/prisma|@aws-sdk|cloudflare/i);
+    expect(source).toContain("realpath");
+  });
+
+  it("the admin workflow exists", () => {
+    expect(readdirSync(join(ROOT, ".github/workflows"))).toContain("admin.yml");
+  });
+});
+
 describe("secrets stay out of git", () => {
   const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
 

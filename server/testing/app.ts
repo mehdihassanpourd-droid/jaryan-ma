@@ -76,6 +76,7 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
     catalog, storage, publisher, auth, authenticator, cookie,
     sessionMaxAgeSeconds: settings.sessionAbsoluteMs / 1000,
     adminOrigins: overrides.adminOrigins ?? ORIGIN,
+    mediaBaseUrl: "https://media.example.test",
     importChunkMax: overrides.importChunkMax ?? 10,
     background: (task) => void pending.push(task),
     log: (event, detail) => void logs.push({ event, detail }),
