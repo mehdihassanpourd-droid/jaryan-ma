@@ -24,13 +24,22 @@ export async function signInOnCheckout(h: Harness, page: Page, local: string, e1
   await pw(page.getByTestId("shipping-form")).toBeVisible();
 }
 
-export async function fillShipping(page: Page, name: string, phone: string): Promise<void> {
+/** Picks a delivery method once the server has priced it (the options appear after the address is typed). */
+export async function chooseDelivery(page: Page, method = "post"): Promise<void> {
+  const radio = page.getByTestId(`delivery-${method}`);
+  await pw(radio).toBeEnabled({ timeout: 15_000 });
+  await radio.check();
+  await pw(page.getByTestId("checkout-grand-total")).not.toHaveText("—");
+}
+
+export async function fillShipping(page: Page, name: string, phone: string, method = "post"): Promise<void> {
   await page.getByLabel(/نام و نام خانوادگی گیرنده/).fill(name);
   await page.getByLabel(/شمارهٔ موبایل گیرنده/).fill(phone);
-  await page.getByLabel(/استان/).selectOption("تهران");
+  await page.getByRole("combobox", { name: /^استان/ }).selectOption("تهران");
   await page.getByLabel(/^شهر/).fill("تهران");
   await page.getByLabel(/نشانی کامل/).fill("خیابان ولیعصر، کوچه گل");
   await page.getByLabel(/کد پستی/).fill("1459813176");
+  await chooseDelivery(page, method);
 }
 
 /** Reloads `page` until `check` passes: snapshots are written in the background and cached briefly. */

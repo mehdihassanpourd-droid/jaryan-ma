@@ -168,7 +168,7 @@ function OrderDetail({ number, onChanged }: { number: number; onChanged: () => v
             ))}
           </div>
           {asking === "shipped" && shipForm && (
-            <form className="stack" onSubmit={(e) => { e.preventDefault(); const built = shipmentBody(shipForm); if (built) void move("shipped", "", built); else toast.error("برای «سایر» نام حامل را بنویسید."); }} aria-label="ثبت ارسال" data-testid="ship-form">
+            <form className="stack" noValidate onSubmit={(e) => { e.preventDefault(); const built = shipmentBody(shipForm); if (built) void move("shipped", "", built); else toast.error("برای «سایر» نام حامل را بنویسید."); }} aria-label="ثبت ارسال" data-testid="ship-form">
               <ShipmentFields form={shipForm} onChange={setShipForm} pickup={o.delivery.method === "pickup"} />
               <p className="hint">حامل و کد رهگیری اختیاری است و بعداً هم می‌شود آن را اضافه یا اصلاح کرد.</p>
               <div className="row">
@@ -327,7 +327,7 @@ function ShipmentEditor({ initial, pickup, number, hasShipment, onSaved }: { ini
     }
   }
   return (
-    <form className="stack" onSubmit={save} aria-label="ثبت حامل و کد رهگیری" data-testid="shipment-form">
+    <form className="stack" noValidate onSubmit={save} aria-label="ثبت حامل و کد رهگیری" data-testid="shipment-form">
       <ShipmentFields form={form} onChange={setForm} pickup={pickup} />
       <div><Button type="submit" loading={busy}>{hasShipment ? "اصلاح حامل و کد رهگیری" : "ذخیرهٔ حامل و کد رهگیری"}</Button></div>
     </form>

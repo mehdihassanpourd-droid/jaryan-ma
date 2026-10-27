@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MethodQuote } from "@/domain/shipping/pricing";
+import type { LineProblem } from "@/domain/customer/checkout";
 import { OrderApiError, type OrderApi } from "@/lib/order-api";
 
 export type QuoteState =
@@ -21,10 +22,15 @@ interface Line {
  * cart or the province/city change, ignores answers that arrive late, and can be told the current prices after the
  * server refused an order because they had changed.
  */
-export function useShippingQuote(api: OrderApi | null, enabled: boolean, lines: Line[], destination: { province: string; city: string } | null) {
+export function useShippingQuote(api: OrderApi | null, enabled: boolean, lines: Line[], destination: { province: string; city: string } | null, onUnavailable?: (items: LineProblem[]) => void) {
   const [state, setState] = useState<QuoteState>({ status: "idle" });
   const sequence = useRef(0);
+  const unavailable = useRef(onUnavailable);
+  useEffect(() => {
+    unavailable.current = onUnavailable;
+  });
   const key = JSON.stringify([lines, destination]);
+  const typed = destination !== null;
 
   const load = useCallback(() => {
     if (!api || !enabled || lines.length === 0) return;
@@ -36,8 +42,9 @@ export function useShippingQuote(api: OrderApi | null, enabled: boolean, lines: 
       },
       (error: unknown) => {
         if (mine !== sequence.current) return;
-        // A cart the server cannot price (a line sold out meanwhile) is reported by the checkout itself; keep the last prices.
-        setState((s) => ({ status: "error", quotes: error instanceof OrderApiError || s.status === "idle" ? null : s.quotes }));
+        // A line sold out meanwhile: the checkout explains it per line; the last prices stay (the server decides again when ordering).
+        if (error instanceof OrderApiError && error.code === "items_unavailable") unavailable.current?.(error.detail.items ?? []);
+        setState((s) => ({ status: "error", quotes: s.status === "idle" ? null : s.quotes }));
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for lines + destination
@@ -46,9 +53,9 @@ export function useShippingQuote(api: OrderApi | null, enabled: boolean, lines: 
   useEffect(() => {
     if (!enabled) return;
     // The city is typed: wait for a pause before asking.
-    const timer = setTimeout(load, destination ? 350 : 0);
+    const timer = setTimeout(load, typed ? 350 : 0);
     return () => clearTimeout(timer);
-  }, [enabled, load, destination]);
+  }, [enabled, load, typed]);
 
   const replace = useCallback((quotes: MethodQuote[]) => {
     sequence.current++;

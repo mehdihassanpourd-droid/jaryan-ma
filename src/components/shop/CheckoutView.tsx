@@ -100,7 +100,10 @@ export function CheckoutView() {
     [cart.lines, products],
   );
   const destination = isIranProvince(form.province) && form.city.trim().length >= 2 ? { province: form.province, city: form.city.trim() } : null;
-  const shipping = useShippingQuote(orderApi, signedIn && quoteLines.length > 0, quoteLines, destination);
+  const shipping = useShippingQuote(orderApi, signedIn && quoteLines.length > 0, quoteLines, destination, (items) => {
+    setLineProblems(items);
+    refreshProducts();
+  });
   const quotes = shipping.state.status === "idle" ? null : shipping.state.quotes;
   const chosen = method === null ? null : (quotes?.find((q) => q.method === method) ?? null);
   const chosenFee = chosen?.available ? chosen.feeToman : null;
@@ -175,17 +178,23 @@ export function CheckoutView() {
     if (!orderApi) return;
     setFailure(null);
     setLineProblems([]);
-    if (method === null || chosenFee === null) return setFailure("روش ارسال را انتخاب کنید.");
     const items = orderable.map((p) => ({ slug: p.line.slug, sku: p.line.sku, quantity: p.quantity }));
     // In-person pickup sends only who collects it; every carried delivery sends the full, validated address.
     const contact = method === "pickup" ? validatePickup(form) : null;
     const address = method === "pickup" ? null : validateShipping(form);
     const checked = contact ?? address;
-    if (!checked || !checked.ok) return setErrors(checked ? checked.errors : {});
+    if (!checked) return;
+    const needMethod = method === null || chosenFee === null;
+    if (!checked.ok) {
+      setErrors(checked.errors);
+      if (needMethod) setFailure("روش ارسال را انتخاب کنید.");
+      return;
+    }
+    if (needMethod) return setFailure("روش ارسال را انتخاب کنید.");
     setErrors({});
     setBusy(true);
     try {
-      const common = { items, customerNote: checked.customerNote, requestId, expectedFeeToman: chosenFee };
+      const common = { items, customerNote: checked.customerNote, requestId, expectedFeeToman: chosenFee as number };
       const placed = contact?.ok
         ? await orderApi.placeOrder({ ...common, deliveryMethod: "pickup", shipping: contact.shipping })
         : address?.ok

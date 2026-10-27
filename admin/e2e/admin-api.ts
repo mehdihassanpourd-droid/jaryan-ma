@@ -34,6 +34,20 @@ export async function adminCatalog(admin: Page, baseUrl: string) {
       return { id: product.id, slug: product.slug };
     },
 
+    /** Replaces the owner's shipping table through the real API (read the version, then PUT), like the admin screen does. */
+    async shipping(methods: Json[], over: Json = {}): Promise<Json> {
+      const current = (await (await admin.request.get(`${baseUrl}/api/v1/shipping/config`)).json()) as { config: { version: number } };
+      return (await ok("shipping", await admin.request.put(`${baseUrl}/api/v1/shipping/config`, { headers, data: { expectedVersion: current.config.version, defaultItemWeightGrams: 500, packagingWeightGrams: 0, methods, ...over } }))).config as Json;
+    },
+
+    /** Post (anywhere, free) and pickup, both on: for tests whose subject is not shipping prices. */
+    async freeShipping(): Promise<void> {
+      await this.shipping([
+        { method: "post", enabled: true, rates: [{ provinces: [], cities: [], priceToman: 0 }] },
+        { method: "pickup", enabled: true, rates: [] },
+      ]);
+    },
+
     /** Changes stock (a product's, or one variant's) the way the editor would: read, modify, PUT with the version. */
     async setStock(id: string, inventory: number, sku?: string): Promise<void> {
       const { product } = (await (await admin.request.get(`${baseUrl}/api/v1/products/${id}`)).json()) as { product: Json & { version: number; images: Array<{ key: string; alt: string }>; variants: Array<Json & { sku: string }> } };
