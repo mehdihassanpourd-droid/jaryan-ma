@@ -22,7 +22,7 @@ import { CatalogService } from "./catalog/service";
 import { SnapshotPublisher } from "./catalog/snapshot-publisher";
 import type { Config } from "./config";
 import { createDb, type Db } from "./db/client";
-import { startEmbeddedPostgres, type EmbeddedPostgres } from "./db/embedded";
+import { EMBEDDED_POOL, startEmbeddedPostgres, type EmbeddedPostgres } from "./db/embedded";
 import { ensureDefaultVendor } from "./db/vendor";
 import { LocalDiskStorage } from "./storage/local-disk";
 import { createS3Client, S3Storage } from "./storage/s3";
@@ -51,7 +51,7 @@ export async function openDatabase(config: Config, log: Logger = jsonLogger): Pr
     url = embedded.url;
     log("warn", "embedded_postgres", { note: "development only; set DATABASE_URL to use a real PostgreSQL" });
   }
-  const db = createDb(url, { maxConnections: embedded ? 4 : 10 });
+  const db = createDb(url, embedded ? EMBEDDED_POOL : { maxConnections: 10 });
   return {
     db,
     embedded: embedded !== null,
@@ -195,6 +195,8 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
   const pending = new Set<Promise<unknown>>();
   const adminApi = createApi({
     setup,
+    originHostSuffixes: config.adminOriginHostSuffixes,
+    originDebug: !config.production,
     adminRoutes: platform.adminRoutes,
     catalog: new CatalogService(repo),
     storage,

@@ -30,8 +30,20 @@ const API_MESSAGES: Record<string, string> = {
   rate_limited: "درخواست‌ها زیاد است. کمی صبر کنید.",
 };
 
+/** One readable line from the development-only explanation of a refused origin (empty when the server sent none). */
+export function originDetailText(detail: unknown): string {
+  if (typeof detail !== "object" || detail === null) return "";
+  const d = detail as { receivedOrigin?: unknown; requestedHost?: unknown; allowedOrigins?: unknown };
+  const hosts = Array.isArray(d.requestedHost) ? d.requestedHost.join(" , ") : "";
+  return `Origin دریافتی: ${String(d.receivedOrigin ?? "؟")} | Host درخواست: ${hosts || "؟"} | مجاز: ${String(d.allowedOrigins ?? "؟")}`;
+}
+
 export function apiErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.code === "bad_origin") {
+      const detail = originDetailText(error.detail);
+      return detail ? `${API_MESSAGES.bad_origin} (${detail})` : API_MESSAGES.bad_origin!;
+    }
     if (error.status === 429 || error.code === "too_many_attempts") {
       const wait = error.retryAfterSeconds ? ` (حدود ${Math.ceil(error.retryAfterSeconds / 60)} دقیقه)` : "";
       return `${API_MESSAGES.too_many_attempts}${wait}`;

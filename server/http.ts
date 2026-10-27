@@ -24,12 +24,49 @@ export const isMutating = (method: string) => MUTATING.has(method);
  * CSRF defence for cookie-authenticated browsers (one layer; the API also requires the CSRF token): state-changing
  * requests must carry an `Origin` header that is on the allow-list. Fails closed when
  * the allow-list is empty.
+ *
+ * `sameHostSuffixes` (development behind a TLS-terminating forwarder such as GitHub Codespaces, never production) adds
+ * ONE more case: an https Origin that is exactly the host this request was addressed to, and whose host ends with one of
+ * the listed suffixes (e.g. `.app.github.dev`). That is the definition of "same origin": a page on any other site, or on
+ * another Codespace, carries a different Origin than the host it is calling, so it is still refused. It is not a
+ * wildcard and never matches an origin the server is not itself being reached at.
  */
-export function originAllowed(request: Request, allowed: string | undefined): boolean {
-  if (!allowed) return false;
+export function originAllowed(request: Request, allowed: string | undefined, sameHostSuffixes: readonly string[] = []): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return false;
-  return allowed.split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean).includes(origin.replace(/\/+$/, ""));
+  const bare = origin.replace(/\/+$/, "");
+  if (allowed && allowed.split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean).includes(bare)) return true;
+  return sameHostSuffixes.length > 0 && isSameHostOrigin(request, bare, sameHostSuffixes);
+}
+
+/** The host names this request was addressed to: the Host header and the first X-Forwarded-Host value (lower-case). */
+export function requestedHosts(request: Request): string[] {
+  const hosts = [request.headers.get("host"), request.headers.get("x-forwarded-host")?.split(",")[0]]
+    .map((h) => h?.trim().toLowerCase())
+    .filter((h): h is string => Boolean(h));
+  try {
+    hosts.push(new URL(request.url).host.toLowerCase());
+  } catch {
+    /* no usable URL */
+  }
+  return hosts;
+}
+
+const FORWARDED_HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+
+function isSameHostOrigin(request: Request, origin: string, suffixes: readonly string[]): boolean {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return false;
+  }
+  // A bare https origin only: no credentials, no path, no explicit port, nothing but scheme + host.
+  if (url.protocol !== "https:" || url.username || url.password || url.port || url.origin !== origin.toLowerCase()) return false;
+  const host = url.host;
+  if (!FORWARDED_HOST.test(host)) return false;
+  if (!suffixes.some((suffix) => host.length > suffix.length && host.endsWith(suffix.toLowerCase()))) return false;
+  return requestedHosts(request).includes(host);
 }
 
 export class BodyError extends Error {

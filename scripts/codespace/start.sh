@@ -6,9 +6,17 @@ origin="$(public_origin)"
 start_db
 export_server_env
 export ADMIN_ORIGINS="$origin" PUBLIC_MEDIA_URL="$origin/media"
+# Behind GitHub's forwarder the browser's Origin is the host it addressed. Besides the exact origin above, the server (development
+# only) accepts an https Origin that equals the host of the request itself and ends with this suffix (".app.github.dev").
+host="${origin#https://}"
+export ADMIN_ORIGIN_HOST_SUFFIXES=".${host#*.}"
 cd "$ROOT"
 
-[ -f dist/admin/index.html ] || { say "ساخت برنامهٔ مدیریت…"; npm run --silent admin:build; }
+# Build when missing OR older than the sources (a pulled update must not run a stale app).
+if [ ! -f dist/admin/index.html ] || [ -n "$(find admin/src admin/index.html admin/public scripts/admin -type f -newer dist/admin/index.html -print -quit 2>/dev/null)" ]; then
+  say "ساخت برنامهٔ مدیریت…"
+  npm run --silent admin:build
+fi
 
 # The forwarded port must stay private (GitHub login in front of the admin login). Best effort: GitHub's own CLI.
 guard_port() {

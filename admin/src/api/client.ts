@@ -10,6 +10,8 @@ export class ApiError extends Error {
     public code: string,
     public issues: ValidationIssue[] = [],
     public retryAfterSeconds?: number,
+    /** Development servers explain refused origins here (received origin, requested host, allow-list). */
+    public detail?: unknown,
   ) {
     super(code);
     this.name = "ApiError";
@@ -71,10 +73,10 @@ export async function api<T = unknown>(method: string, path: string, options: Re
     }
   }
   if (!response.ok) {
-    const info = (data ?? {}) as { error?: string; issues?: ValidationIssue[] };
+    const info = (data ?? {}) as { error?: string; issues?: ValidationIssue[]; detail?: unknown };
     const retry = Number(response.headers.get("retry-after") ?? "") || undefined;
     if (response.status === 401 && !options.anonymous) onUnauthorized();
-    throw new ApiError(response.status, info.error ?? `http_${response.status}`, info.issues ?? [], retry);
+    throw new ApiError(response.status, info.error ?? `http_${response.status}`, info.issues ?? [], retry, info.detail);
   }
   return data as T;
 }

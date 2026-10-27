@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { Client } from "pg";
 import { createDb, type Db } from "./client";
-import { startEmbeddedPostgres } from "./embedded";
+import { EMBEDDED_POOL, startEmbeddedPostgres } from "./embedded";
 import { readMigrations } from "./migrations";
 
 export interface TestDatabase {
@@ -22,7 +22,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   const external = process.env.TEST_DATABASE_URL;
   if (!external) {
     const embedded = await startEmbeddedPostgres();
-    const db = createDb(embedded.url, { maxConnections: 4 });
+    const db = createDb(embedded.url, EMBEDDED_POOL);
     return finish(db, "public", async () => {
       await db.$disconnect();
       await embedded.stop();

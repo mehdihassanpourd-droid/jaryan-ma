@@ -29,6 +29,8 @@ const schema = z.object({
   PUBLIC_MEDIA_URL: z.string().url().optional(),
   APP_ENCRYPTION_KEY: z.string().optional(),
   ADMIN_ORIGINS: z.string().optional(),
+  /** Development only: hosts ending in these suffixes are accepted as the SAME origin (see originAllowed), e.g. ".app.github.dev". */
+  ADMIN_ORIGIN_HOST_SUFFIXES: z.string().optional(),
   COOKIE_SECURE: bool(),
   TRUST_PROXY: bool(false),
   IMPORT_CHUNK_MAX: z.coerce.number().int().min(1).max(200).default(50),
@@ -88,6 +90,8 @@ export interface Config {
   /** Base64 key, or null in development (a key file is generated). */
   encryptionKey: string | null;
   adminOrigins: string;
+  /** Development only (empty in production): see ADMIN_ORIGIN_HOST_SUFFIXES. */
+  adminOriginHostSuffixes: string[];
   cookieSecure: boolean;
   trustProxy: boolean;
   importChunkMax: number;
@@ -134,8 +138,14 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     if (e.REQUIRE_TOTP === false) problems.push("REQUIRE_TOTP=false is not allowed in production");
     if (e.COOKIE_SECURE === false) problems.push("COOKIE_SECURE=false is not allowed in production");
     if (e.DEV_ADMIN_EMAIL || e.DEV_ADMIN_PASSWORD) problems.push("DEV_ADMIN_* must not be set in production (create administrators with the admin CLI)");
+    if (e.ADMIN_ORIGIN_HOST_SUFFIXES) problems.push("ADMIN_ORIGIN_HOST_SUFFIXES is development-only and not allowed in production (list the exact origin in ADMIN_ORIGINS)");
     if (e.FIRST_RUN_SETUP) problems.push("FIRST_RUN_SETUP is development-only and not allowed in production (create administrators with the admin CLI)");
     if (e.DATABASE_URL?.startsWith("pglite")) problems.push("DATABASE_URL must point to a PostgreSQL server in production");
+  }
+  const suffixes = (e.ADMIN_ORIGIN_HOST_SUFFIXES ?? "").split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
+  // Each suffix must look like ".example.dev": a leading dot and at least two labels (never a bare TLD such as ".dev").
+  if (suffixes.some((v) => !/^\.[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(v))) {
+    problems.push("ADMIN_ORIGIN_HOST_SUFFIXES must be a comma-separated list of suffixes like .app.github.dev (leading dot, at least two labels)");
   }
   const accounts = e.CUSTOMER_ACCOUNTS_ENABLED ?? !production;
   const smsProvider = e.SMS_PROVIDER ?? (production ? "disabled" : "console");
@@ -193,6 +203,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     publicMediaUrl: e.PUBLIC_MEDIA_URL ?? (production ? null : `http://127.0.0.1:${port}/media`),
     encryptionKey: e.APP_ENCRYPTION_KEY ?? null,
     adminOrigins: e.ADMIN_ORIGINS ?? (production ? "" : devOrigins),
+    adminOriginHostSuffixes: production ? [] : suffixes,
     cookieSecure: e.COOKIE_SECURE ?? production,
     trustProxy: e.TRUST_PROXY ?? false,
     importChunkMax: e.IMPORT_CHUNK_MAX,
