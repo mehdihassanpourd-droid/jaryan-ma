@@ -9,6 +9,7 @@ import type { RateLimiter } from "./auth/rate-limit";
 import { clearedSessionCookie, safeEqual, sessionCookie, type CookieSettings } from "./auth/session";
 import type { AccountService } from "./customers/account-service";
 import type { CheckoutService } from "./customers/checkout-service";
+import { OrderLifecycleError, customerCancelSchema, type OrderLifecycleService } from "./orders/order-lifecycle";
 import { CheckoutError } from "./customers/checkout-service";
 import { checkoutRequestSchema } from "../src/domain/customer/checkout";
 import type { CustomerAuthService, CustomerSessionAuthenticator } from "./customers/customer-auth";
@@ -25,6 +26,8 @@ export interface CustomerApiDeps {
   authenticator: CustomerSessionAuthenticator;
   accounts: AccountService;
   checkout: CheckoutService;
+  /** Lets a customer cancel their own PENDING order (stock goes back). */
+  orderLifecycle: OrderLifecycleService;
   support: SupportService;
   maintenance: MaintenanceService;
   cookie: CookieSettings;
@@ -218,6 +221,20 @@ export function createCustomerApi(deps: CustomerApiDeps) {
         }
         throw error;
       }
+    }
+    const cancel = /^\/orders\/(\d{1,10})\/cancel$/.exec(path);
+    if (cancel && method === "POST") {
+      const body = await parseBody(request, customerCancelSchema);
+      if (!body.ok) return body.response;
+      const number = Number(cancel[1]);
+      try {
+        await deps.orderLifecycle.transition({ number, to: "cancelled", by: "customer", customerId: id, reason: body.data.reason });
+      } catch (error) {
+        if (error instanceof OrderLifecycleError) return errorResponse(error.code, error.code === "not_found" ? 404 : 409, error.currentStatus ? { currentStatus: error.currentStatus } : {});
+        throw error;
+      }
+      log("order_cancelled_by_customer", { number });
+      return json({ order: await deps.accounts.getOrder(id, number) });
     }
     if (path === "/orders" && method === "GET") {
       const q = parseQuery(url.searchParams, pageSchema);

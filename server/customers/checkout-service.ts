@@ -3,8 +3,11 @@ import { newOrderSchema } from "../../src/domain/customer/schema";
 import { lineTotal, MoneyRangeError, sumToman } from "../../src/domain/money";
 import type { CatalogRepository } from "../../src/domain/product/ports";
 import type { StoredProduct } from "../../src/domain/product/types";
+
+type StockedProduct = StoredProduct;
 import type { AccountStore, OrderView } from "./account-ports";
 import type { CustomerStore } from "./ports";
+import { StockConflictError } from "../orders/stock";
 
 export type CheckoutErrorCode = "items_unavailable" | "too_many_open_orders" | "order_total_out_of_range" | "account_not_active";
 
@@ -28,9 +31,9 @@ export interface PlacedOrder {
 /**
  * Turns a cart (product, variant, quantity) into a PENDING order. Everything that matters is decided HERE from the
  * database, never from the browser: which products are published, their titles and exact prices, whether they can be
- * ordered, and the total. No payment is taken and no stock is reserved or changed: a pending order is a request that the
- * owner confirms, and stock is only touched when that confirmation exists (PRD phase 2). Availability is re-checked on
- * every attempt, so a sold-out or unpublished piece can never be ordered.
+ * ordered, and the total. No payment is taken. The order RESERVES its stock in the same transaction that creates it
+ * (`UPDATE … WHERE inventory >= quantity`, see `orders/stock.ts`): two shoppers can never both get the last unit, and the
+ * units come back automatically if the order is rejected or cancelled. Made-to-order lines have no stock to reserve.
  */
 export class CheckoutService {
   constructor(
@@ -40,6 +43,8 @@ export class CheckoutService {
     /** The vendor that sells the catalogue this service reads (every order line carries a vendor: multi-vendor readiness). */
     private readonly vendorId: string,
     private readonly clock: () => Date = () => new Date(),
+    /** Called after an order took stock: the affected products' public availability may have changed (e.g. a unique piece is now sold). */
+    private readonly onStockChanged: (productIds: string[]) => void = () => undefined,
   ) {}
 
   async placeOrder(customerId: string, request: CheckoutRequest): Promise<PlacedOrder> {
@@ -71,6 +76,7 @@ export class CheckoutService {
         imageKeySnapshot: [...found.product.images].sort((a, b) => a.position - b.position)[0]?.key ?? null,
         unitPriceToman: found.unitPriceToman,
         quantity: line.quantity,
+        reserveStock: found.product.fulfillment !== "made_to_order",
       });
     }
     if (problems.length > 0) throw new CheckoutError("items_unavailable", problems);
@@ -84,7 +90,30 @@ export class CheckoutService {
     }
 
     const input = newOrderSchema.parse({ customerId, items, shipping: request.shipping, customerNote: request.customerNote, requestId: request.requestId, totalToman: total });
-    return this.accounts.placeOrderOnce({ ...input, requestId: request.requestId }, this.clock());
+    try {
+      const placed = await this.accounts.placeOrderOnce({ ...input, requestId: request.requestId }, this.clock());
+      if (placed.created) this.onStockChanged([...new Set(input.items.filter((i) => i.reserveStock).map((i) => i.productId))]);
+      return placed;
+    } catch (error) {
+      // Someone else took the stock between our check and the reservation (the reservation is the authority): say which lines.
+      if (error instanceof StockConflictError) throw new CheckoutError("items_unavailable", await this.problemsAfterConflict(request, error, products));
+      throw error;
+    }
+  }
+
+  /** Re-reads the catalogue to explain which lines lost the race and how many units are left (never reports a line as fine). */
+  private async problemsAfterConflict(request: CheckoutRequest, conflict: StockConflictError, before: Map<string, StockedProduct>): Promise<LineProblem[]> {
+    const fresh = new Map((await this.catalog.getPublishedBySlugs([...before.keys()])).map((p) => [p.slug, p]));
+    const failedKeys = new Set(conflict.failed.map((f) => `${f.productId}|${f.sku ?? ""}`));
+    const problems: LineProblem[] = [];
+    for (const line of request.items) {
+      const product = before.get(line.slug);
+      if (!product || !failedKeys.has(`${product.id}|${line.sku ?? ""}`)) continue;
+      const now = fresh.get(line.slug);
+      const again: { problem: LineProblem["reason"]; available?: number } = now ? (() => { const r = this.priceLine(now, line.sku, line.quantity); return "problem" in r ? r : { problem: "sold_out" as const }; })() : { problem: "not_found" };
+      problems.push({ slug: line.slug, sku: line.sku, reason: again.problem, ...(again.available !== undefined ? { available: again.available } : {}) });
+    }
+    return problems.length > 0 ? problems : conflict.failed.map((f) => ({ slug: [...before.values()].find((p) => p.id === f.productId)?.slug ?? "", sku: f.sku, reason: "sold_out" as const }));
   }
 
   /** One line against the product as stored: the exact unit price and whether `quantity` of it can be ordered now. */

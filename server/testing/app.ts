@@ -85,7 +85,7 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
   const limiter = new RateLimiter(() => clock.getTime());
   const sms = new MemorySmsProvider();
   const platform = createPlatformServices({
-    db: testDb.db, masterKey: randomBytes(32), sms, limiter, customerCookie: { name: CUSTOMER_COOKIE, secure: true }, catalog: repo, vendorId, clock: () => clock,
+    db: testDb.db, masterKey: randomBytes(32), sms, limiter, customerCookie: { name: CUSTOMER_COOKIE, secure: true }, catalog: repo, vendorId, clock: () => clock, onStockChanged: (ids) => void pending.push(publisher.sync(ids.map((id) => ({ id })))),
     probes: {
       database: async () => void (await testDb.db.$queryRaw`SELECT 1`),
       migrations: async () => ({ name: "migrations", status: "ok", message: "all migrations applied" }),
@@ -101,7 +101,7 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
   if (overrides.firstRunSetup) deps.setup = new FirstRunSetup(true, auth, adminStore, new RateLimiter(() => clock.getTime()), () => clock);
   const customerApi = createCustomerApi({
     enabled: overrides.customerAccountsEnabled ?? true, customers: platform.customerStore, auth: platform.customerAuth, authenticator: platform.customerAuthenticator,
-    accounts: platform.accounts, checkout: platform.checkout, support: platform.support, maintenance: platform.maintenance, cookie: { name: CUSTOMER_COOKIE, secure: true },
+    accounts: platform.accounts, checkout: platform.checkout, orderLifecycle: platform.orderLifecycle, support: platform.support, maintenance: platform.maintenance, cookie: { name: CUSTOMER_COOKIE, secure: true },
     sessionMaxAgeSeconds: 30 * 24 * 3600, customerOrigins: STORE_ORIGIN, environment: "test", limiter, clock: () => clock, healthCacheMs: 0,
     log: (event, detail) => void logs.push({ event, detail }),
   });

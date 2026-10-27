@@ -16,6 +16,7 @@ import { MaintenanceService, type HealthProbes, type MaintenanceSettings, DEFAUL
 import { createMaintenanceAdminRoutes } from "./routes/admin-maintenance";
 import { createOrderAdminRoutes } from "./routes/admin-orders";
 import { OrderAdminService } from "./orders/order-admin";
+import { OrderLifecycleService } from "./orders/order-lifecycle";
 import { createSupportAdminRoutes } from "./routes/admin-support";
 import type { SmsProvider } from "./sms/provider";
 import { PrismaSupportStore } from "./support/prisma-store";
@@ -37,6 +38,8 @@ export interface PlatformOptions {
   /** Checkout reads published products (prices, stock) from here, never from the browser. */
   catalog: Pick<CatalogRepository, "getPublishedBySlugs">;
   vendorId: string;
+  /** Called after orders move stock (placed, rejected, cancelled) with the affected product ids, so the app can refresh their public availability. */
+  onStockChanged?: (productIds: string[]) => void;
   clock?: () => Date;
   log?: (event: string, detail?: Record<string, unknown>) => void;
   otpPolicy?: OtpPolicy;
@@ -60,7 +63,10 @@ export function createPlatformServices(o: PlatformOptions) {
 
   const support = new SupportService(supportStore, o.limiter, (entry) => adminAudit(o.db, entry), undefined, clock);
   const accounts = new AccountService(accountStore, customerStore, DEFAULT_ACCOUNT_SETTINGS, clock, (customerId) => support.exportForCustomer(customerId));
-  const checkout = new CheckoutService(o.catalog, accountStore, customerStore, o.vendorId, clock);
+  const onStockChanged = o.onStockChanged ?? (() => undefined);
+  const checkout = new CheckoutService(o.catalog, accountStore, customerStore, o.vendorId, clock, onStockChanged);
+  const orderLifecycle = new OrderLifecycleService(o.db, onStockChanged, clock);
+  const orderAdmin = new OrderAdminService(o.db);
   const maintenance = new MaintenanceService(
     maintenanceStore,
     { ...o.probes, overdueDeletions: async () => (await accountStore.listDueDeletions(new Date(clock().getTime() - 24 * 3600_000), 1000)).length },
@@ -68,8 +74,8 @@ export function createPlatformServices(o: PlatformOptions) {
     clock,
   );
 
-  const adminRoutes: AdminRouter[] = [createSupportAdminRoutes(support), createMaintenanceAdminRoutes(maintenance), createOrderAdminRoutes(new OrderAdminService(o.db))];
-  return { customerStore, accountStore, supportStore, maintenanceStore, customerAuth, customerAuthenticator, support, accounts, checkout, maintenance, adminRoutes };
+  const adminRoutes: AdminRouter[] = [createSupportAdminRoutes(support), createMaintenanceAdminRoutes(maintenance), createOrderAdminRoutes(orderAdmin, orderLifecycle)];
+  return { customerStore, accountStore, supportStore, maintenanceStore, customerAuth, customerAuthenticator, support, accounts, checkout, orderLifecycle, orderAdmin, maintenance, adminRoutes };
 }
 
 export type PlatformServices = ReturnType<typeof createPlatformServices>;

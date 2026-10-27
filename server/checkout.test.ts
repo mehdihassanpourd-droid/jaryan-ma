@@ -100,11 +100,16 @@ describe("placing an order (pending, no payment)", () => {
     expect(await testDb.db.order.count()).toBe(0);
   });
 
-  it("does not take payment, reserve or change stock (the owner confirms; stock moves only then)", async () => {
+  it("reserves exactly the ordered stock with the order (nothing is charged), and none for made-to-order", async () => {
     const p = await product({ name: "اثر", fulfillment: "stocked", inventory: 4 });
+    const made = await product({ name: "سفارشی", fulfillment: "made_to_order", leadTimeDays: 10, inventory: null });
     const me = await signIn();
-    expect((await place(me, [{ slug: p.slug, quantity: 3 }])).status).toBe(201);
-    expect((await testDb.db.product.findUniqueOrThrow({ where: { id: p.id } })).inventory).toBe(4);
+    const r = await place(me, [{ slug: p.slug, quantity: 3 }, { slug: made.slug, quantity: 2 }]);
+    expect(r.status).toBe(201);
+    expect((await testDb.db.product.findUniqueOrThrow({ where: { id: p.id } })).inventory).toBe(1); // 4 − 3 reserved
+    expect((await testDb.db.product.findUniqueOrThrow({ where: { id: made.id } })).inventory).toBeNull();
+    const held = await testDb.db.orderItem.findMany({ orderBy: { titleSnapshot: "asc" } });
+    expect(held.map((i) => [i.titleSnapshot, i.quantity, i.reservedQuantity]).sort()).toEqual([["اثر", 3, 3], ["سفارشی", 2, 0]].sort());
   });
 
   it("freezes the snapshot: a later price change or archiving does not alter an existing order", async () => {

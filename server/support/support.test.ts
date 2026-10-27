@@ -71,7 +71,7 @@ describe("customer tickets", () => {
     const o = await accounts.createOrder(
       {
         customerId: alice.id,
-        items: [{ productId: p.id, vendorId, titleSnapshot: "p", skuSnapshot: null, variantSnapshot: null, imageKeySnapshot: null, unitPriceToman: 1000, quantity: 1 }],
+        items: [{ productId: p.id, vendorId, titleSnapshot: "p", skuSnapshot: null, variantSnapshot: null, imageKeySnapshot: null, unitPriceToman: 1000, quantity: 1, reserveStock: false }],
         shipping: { recipientName: "علی", recipientPhone: "+989121234567", province: "تهران", city: "تهران", street: "خیابان ولیعصر", plaque: null, unit: null, postalCode: "1459813176" },
         customerNote: null,
         requestId: null,

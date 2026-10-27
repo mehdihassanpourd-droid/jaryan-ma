@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { tomanFromDb } from "../../src/domain/money";
-import { ORDER_STATUSES, type AdminOrderJson } from "../../src/domain/customer/order-admin";
+import type { AdminOrderJson } from "../../src/domain/customer/order-admin";
+import { ORDER_STATUSES } from "../../src/domain/customer/order-status";
 import type { ShippingSnapshot } from "../../src/domain/customer/schema";
 import type { Prisma } from "../../src/generated/prisma/client";
 import type { Db } from "../db/client";
@@ -12,7 +13,7 @@ export const adminOrderListQuery = z.object({
 });
 export type AdminOrderListQuery = z.output<typeof adminOrderListQuery>;
 
-const INCLUDE = { items: { orderBy: [{ titleSnapshot: "asc" }, { skuSnapshot: "asc" }] }, customer: { select: { phone: true, firstName: true, lastName: true, status: true } } } satisfies Prisma.OrderInclude;
+const INCLUDE = { items: { orderBy: [{ titleSnapshot: "asc" }, { skuSnapshot: "asc" }] }, statusHistory: { orderBy: { seq: "asc" } }, customer: { select: { phone: true, firstName: true, lastName: true, status: true } } } satisfies Prisma.OrderInclude;
 type Row = Prisma.OrderGetPayload<{ include: typeof INCLUDE }>;
 
 /** The order as it goes over JSON (a Date serialises to the same ISO string). */
@@ -34,18 +35,20 @@ function toView(o: Row): AdminOrderJson {
       imageKey: i.imageKeySnapshot,
       unitPriceToman: tomanFromDb(i.unitPriceToman),
       quantity: i.quantity,
+      reservedQuantity: i.reservedQuantity,
     })),
+    history: o.statusHistory.map((e) => ({ from: e.fromStatus, to: e.toStatus, actor: e.actorType, actorLabel: e.actorLabel, reason: e.reason, at: e.createdAt.toISOString() })),
   };
 }
 
-/** Read-only view of every order for staff. Orders are never changed here: confirming or cancelling is a later step. */
+/** Staff view of every order. The list shows open orders first (pending on top: PostgreSQL sorts enums in declaration order), newest first within a status. Changing an order is `OrderLifecycleService`. */
 export class OrderAdminService {
   constructor(private readonly db: Db) {}
 
   async list(query: AdminOrderListQuery): Promise<{ items: AdminOrderJson[]; total: number }> {
     const where: Prisma.OrderWhereInput = query.status ? { status: query.status } : {};
     const [rows, total] = await this.db.$transaction([
-      this.db.order.findMany({ where, orderBy: { placedAt: "desc" }, skip: (query.page - 1) * query.pageSize, take: query.pageSize, include: INCLUDE }),
+      this.db.order.findMany({ where, orderBy: [{ status: "asc" }, { placedAt: "desc" }], skip: (query.page - 1) * query.pageSize, take: query.pageSize, include: INCLUDE }),
       this.db.order.count({ where }),
     ]);
     return { items: rows.map(toView), total };

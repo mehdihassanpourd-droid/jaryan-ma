@@ -8,6 +8,7 @@ import { formatOrderNumber } from "@/domain/customer/schema";
 import { formatNumber, formatToman } from "@/lib/format";
 import { LIVE_CATALOG_BASE } from "@/lib/live-config";
 import { ORDER_STATUS_LABEL, OrderApiError, type ApiOrder } from "@/lib/order-api";
+import { nextStatuses } from "@/domain/customer/order-status";
 import { NO_PAYMENT_NOTE } from "./CartView";
 import { orderApi } from "./orderClient";
 import { SignInPanel } from "./SignInPanel";
@@ -43,8 +44,18 @@ function useGate(title: string) {
   return { gate: null, customer, ready: true as const };
 }
 
-function OrderBody({ order }: { order: ApiOrder }) {
+const STATUS_NOTE: Partial<Record<ApiOrder["status"], string>> = {
+  confirmed: "گالری این سفارش را تأیید کرد.",
+  preparing: "سفارش شما در حال آماده‌سازی است.",
+  shipped: "سفارش شما ارسال شد.",
+  delivered: "این سفارش تحویل داده شد.",
+};
+
+function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrder; onCancel: () => void; cancelling: boolean; cancelError: string | null }) {
   const s = order.shipping;
+  const [asking, setAsking] = useState(false);
+  const refusal = order.history.findLast((h) => h.status === "rejected" || h.status === "cancelled");
+  const canCancel = nextStatuses(order.status, "customer").includes("cancelled");
   return (
     <div className="space-y-6" data-testid="order-detail">
       <div className="flex flex-wrap items-center gap-3">
@@ -53,6 +64,13 @@ function OrderBody({ order }: { order: ApiOrder }) {
       </div>
       {order.status === "pending" && (
         <p role="note" className="rounded-2xl border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">این سفارش ثبت شده و در انتظار تأیید گالری است. {NO_PAYMENT_NOTE}</p>
+      )}
+      {STATUS_NOTE[order.status] && <p role="note" className="rounded-2xl border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">{STATUS_NOTE[order.status]}</p>}
+      {(order.status === "rejected" || order.status === "cancelled") && (
+        <p role="note" className="rounded-2xl border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-800" data-testid="refusal-note">
+          {order.status === "rejected" ? "گالری این سفارش را نپذیرفت." : refusal?.by === "customer" ? "شما این سفارش را لغو کردید." : "این سفارش لغو شد."}
+          {refusal?.reason && <> دلیل: {refusal.reason}</>} کالاهای این سفارش دیگر برای شما نگه داشته نمی‌شود و هیچ مبلغی دریافت نشده بود.
+        </p>
       )}
       <ul className="divide-y divide-sand-200 rounded-2xl border border-sand-200 bg-ivory-50" aria-label="اقلام سفارش">
         {order.items.map((item, i) => {
@@ -84,6 +102,34 @@ function OrderBody({ order }: { order: ApiOrder }) {
         {s.postalCode && <p>کد پستی: <span dir="ltr">{s.postalCode}</span></p>}
         {order.customerNote && <p className="mt-2 text-bark-700">توضیحات: {order.customerNote}</p>}
       </section>
+      <section aria-labelledby="history-title" className="rounded-2xl border border-sand-200 bg-ivory-50 p-5 text-sm leading-8 text-bark-800">
+        <h2 id="history-title" className="mb-2 text-base font-bold text-bark-900">روند سفارش</h2>
+        <ol className="space-y-2" data-testid="order-history">
+          {order.history.map((h, i) => (
+            <li key={i}>
+              <strong>{i === 0 ? "سفارش ثبت شد" : ORDER_STATUS_LABEL[h.status]}</strong>
+              <span className="text-bark-600"> · {dateFormat.format(new Date(h.at))}</span>
+              {h.reason && <p className="text-bark-700">دلیل: {h.reason}</p>}
+            </li>
+          ))}
+        </ol>
+      </section>
+      {canCancel && (
+        <section aria-label="لغو سفارش" className="rounded-2xl border border-sand-200 bg-ivory-50 p-5">
+          {!asking ? (
+            <button type="button" onClick={() => setAsking(true)} className="inline-flex min-h-12 items-center rounded-full border border-red-800/40 px-6 text-sm font-medium text-red-900 hover:bg-red-50" data-testid="cancel-order">لغو سفارش</button>
+          ) : (
+            <div className="space-y-3" role="group" aria-label="تأیید لغو سفارش">
+              <p className="text-sm leading-7 text-bark-800">سفارش لغو شود؟ کالاها دوباره برای دیگران آزاد می‌شود و این کار قابل بازگشت نیست.</p>
+              <div className="flex flex-wrap gap-3">
+                <button type="button" onClick={onCancel} disabled={cancelling} className="inline-flex min-h-12 items-center rounded-full bg-red-800 px-6 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-60" data-testid="confirm-cancel">{cancelling ? "در حال لغو…" : "بله، لغو شود"}</button>
+                <button type="button" onClick={() => setAsking(false)} disabled={cancelling} className="inline-flex min-h-12 items-center rounded-full border border-bark-500/40 px-6 text-sm font-medium text-bark-700 hover:bg-sand-100">انصراف</button>
+              </div>
+            </div>
+          )}
+          {cancelError && <p role="alert" className="mt-3 text-sm text-red-800">{cancelError}</p>}
+        </section>
+      )}
     </div>
   );
 }
@@ -94,6 +140,9 @@ export function OrderPageView() {
   const number = /^\d{1,10}$/.test(raw) ? Number(raw) : null;
   const { gate, ready } = useGate("سفارش");
   const [state, setState] = useState<{ key: string; value: { order: ApiOrder } | { error: "not_found" | "failed" } } | null>(null);
+  const [tick, setTick] = useState(0);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const key = `order:${number}`;
 
   useEffect(() => {
@@ -106,7 +155,33 @@ export function OrderPageView() {
     return () => {
       live = false;
     };
-  }, [ready, number, key]);
+  }, [ready, number, key, tick]);
+
+  // A status change made by the gallery shows up without reloading: re-read when the person returns to the tab and every minute while it is visible.
+  useEffect(() => {
+    if (!ready) return;
+    const refresh = () => document.visibilityState === "visible" && setTick((t) => t + 1);
+    const timer = window.setInterval(refresh, 60_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [ready]);
+
+  async function cancelOrder() {
+    if (!orderApi || number === null) return;
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      setState({ key, value: { order: await orderApi.cancelOrder(number) } });
+    } catch (error) {
+      setCancelError(error instanceof OrderApiError && (error.code === "invalid_transition" || error.code === "order_changed") ? "این سفارش دیگر قابل لغو نیست؛ وضعیت تازه‌سازی شد." : "لغو انجام نشد. دوباره تلاش کنید.");
+      setTick((t) => t + 1);
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   if (gate) return gate;
   if (number === null) return <Shell title="سفارش"><Notice>شمارهٔ سفارش معتبر نیست.</Notice></Shell>;
@@ -115,7 +190,7 @@ export function OrderPageView() {
   if ("error" in current) return <Shell title="سفارش"><Notice alert>{current.error === "not_found" ? "این سفارش پیدا نشد." : "دریافت سفارش ممکن نشد. دوباره تلاش کنید."}</Notice></Shell>;
   return (
     <Shell title={`سفارش ${formatOrderNumber(current.order.number)}`}>
-      <OrderBody order={current.order} />
+      <OrderBody order={current.order} onCancel={() => void cancelOrder()} cancelling={cancelling} cancelError={cancelError} />
       <p><Link href="/orders" className={secondary}>سابقهٔ سفارش‌ها</Link></p>
     </Shell>
   );
@@ -126,6 +201,7 @@ export function OrdersPageView() {
   const { gate, customer, ready } = useGate("سفارش‌های من");
   const [state, setState] = useState<{ items: ApiOrder[]; total: number; page: number } | "failed" | null>(null);
   const [more, setMore] = useState(false);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     if (!ready || !orderApi) return;
@@ -136,6 +212,18 @@ export function OrdersPageView() {
     );
     return () => {
       live = false;
+    };
+  }, [ready, tick]);
+
+  // Statuses change on the gallery's side: re-read when the person returns to the tab and every minute while it is visible.
+  useEffect(() => {
+    if (!ready) return;
+    const refresh = () => document.visibilityState === "visible" && setTick((t) => t + 1);
+    const timer = window.setInterval(refresh, 60_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
     };
   }, [ready]);
 
