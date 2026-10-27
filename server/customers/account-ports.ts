@@ -80,8 +80,15 @@ export interface AccountStore {
 
   listOrders(customerId: string, page: number, pageSize: number): Promise<{ items: OrderView[]; total: number }>;
   getOrder(customerId: string, number: number): Promise<OrderView | null>;
-  /** Internal: used by checkout once it exists. Customers cannot create orders through the API. */
+  /** Inserts an order exactly as given (totals already validated by `newOrderSchema`). */
   createOrder(input: NewOrderInput, now: Date): Promise<OrderView>;
+  /** The order a checkout attempt already created, if any. */
+  findOrderByRequestId(customerId: string, requestId: string): Promise<OrderView | null>;
+  /**
+   * Checkout: creates the order unless this customer already placed one with the same `requestId`, in which case that
+   * order is returned (`created: false`). Safe against a retry racing the original request.
+   */
+  placeOrderOnce(input: NewOrderInput & { requestId: string }, now: Date): Promise<{ order: OrderView; created: boolean }>;
 
   recordDataRequest(customerId: string, type: DataRequestType, now: Date): Promise<string>;
   completeDataRequest(id: string, now: Date): Promise<void>;

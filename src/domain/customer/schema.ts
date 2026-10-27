@@ -67,22 +67,31 @@ const postalCodeSchema = z
     return code ?? "";
   });
 
+/** The delivery fields an address and a checkout share, so the two can never validate differently. */
+const deliveryFields = {
+  recipientName: text(2, 80),
+  recipientPhone: phoneSchema,
+  province: z.string().trim().refine(isIranProvince, "invalid_province"),
+  city: text(2, 60),
+  street: text(5, 200),
+  plaque: optionalText(10),
+  unit: optionalText(10),
+  postalCode: postalCodeSchema,
+};
+
 export const addressInputSchema = z
   .object({
     label: optionalText(30),
-    recipientName: text(2, 80),
-    recipientPhone: phoneSchema,
-    province: z.string().trim().refine(isIranProvince, "invalid_province"),
-    city: text(2, 60),
-    street: text(5, 200),
-    plaque: optionalText(10),
-    unit: optionalText(10),
-    postalCode: postalCodeSchema,
+    ...deliveryFields,
     notes: optionalText(200),
     isDefault: z.boolean().default(false),
   })
   .strict();
 export type AddressInput = z.output<typeof addressInputSchema>;
+
+/** Delivery details typed at checkout (same rules as an address book entry). */
+export const shippingInputSchema = z.object(deliveryFields).strict();
+export type ShippingInput = z.output<typeof shippingInputSchema>;
 
 /** Delivery details frozen into an order. */
 export interface ShippingSnapshot {
@@ -104,7 +113,7 @@ export function scrubShipping(shipping: unknown): ShippingSnapshot {
   return { recipientName: REDACTED, recipientPhone: null, province: s.province ?? "", city: s.city ?? "", street: REDACTED, plaque: null, unit: null, postalCode: null };
 }
 
-// --- orders (read model for history; checkout is not built yet) -----------------------------------------
+// --- orders -----------------------------------------------------------------------------------------------
 
 export const orderItemInputSchema = z.object({
   productId: z.string().min(1).max(64),
@@ -132,6 +141,8 @@ export const newOrderSchema = z
       postalCode: postalCodeSchema,
     }),
     customerNote: optionalText(300),
+    /** Idempotency key of the checkout attempt (see `Order.requestId`). */
+    requestId: z.string().uuid().nullable().default(null),
     /** What the caller believes the total is; must equal the exact sum of the lines. */
     totalToman: z.number().int().min(0).max(MAX_TOMAN),
   })

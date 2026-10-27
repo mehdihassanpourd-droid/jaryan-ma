@@ -175,6 +175,8 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     sms: createSmsProvider(config),
     limiter,
     customerCookie,
+    catalog: repo,
+    vendorId,
     log: (event, detail) => log("warn", event, detail),
     otpPolicy: { ...DEFAULT_OTP_POLICY, dailyBudget: config.sms.dailyLimit },
     probes: {
@@ -229,6 +231,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     auth: platform.customerAuth,
     authenticator: platform.customerAuthenticator,
     accounts: platform.accounts,
+    checkout: platform.checkout,
     support: platform.support,
     maintenance: platform.maintenance,
     cookie: customerCookie,

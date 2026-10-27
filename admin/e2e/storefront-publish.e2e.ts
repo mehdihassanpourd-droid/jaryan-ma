@@ -1,12 +1,10 @@
 import { expect as pw } from "playwright/test";
-import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
-import { createServer, type Server } from "node:http";
-import { tmpdir } from "node:os";
-import { extname, join, normalize } from "node:path";
+import { rmSync } from "node:fs";
+import type { Server } from "node:http";
 import type { BrowserContext, Page } from "playwright";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { startHarness, type Harness } from "./harness";
+import { buildStorefront, serveStatic } from "./storefront";
 import { solidPng } from "./png";
 
 /**
@@ -19,35 +17,13 @@ import { solidPng } from "./png";
 const ADMIN_PORT = 47831; // baked into the storefront build below (NEXT_PUBLIC_CATALOG_URL)
 const SLUG = "kuhestan-wall-hanging";
 const NAME = "تابلو دیواری گلیم طرح کوهستان";
-const root = join(import.meta.dirname, "../..");
 
 let h: Harness;
 let site: { dir: string; server: Server; url: string };
 
-const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".txt": "text/plain", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".ico": "image/x-icon", ".xml": "application/xml" };
-
-/** Serves the built site like Cloudflare Pages: `/product?slug=x` -> product.html, `/` -> index.html, unknown -> 404.html. */
-async function serveStatic(dir: string): Promise<{ server: Server; url: string }> {
-  const server = createServer((req, res) => {
-    const path = decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname);
-    const candidates = [path, `${path}.html`, join(path, "index.html")].map((p) => normalize(join(dir, p)));
-    const file = candidates.find((f) => f.startsWith(dir) && existsSync(f) && statSync(f).isFile());
-    const target = file ?? join(dir, "404.html");
-    res.writeHead(file ? 200 : 404, { "content-type": TYPES[extname(target)] ?? "application/octet-stream" });
-    res.end(readFileSync(target));
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as { port: number };
-  return { server, url: `http://127.0.0.1:${port}` };
-}
-
 beforeAll(async () => {
   // The storefront is built ONCE, before anything is published: later changes must not need another build.
-  const buildEnv: NodeJS.ProcessEnv = { ...process.env, NEXT_PUBLIC_CATALOG_URL: `http://127.0.0.1:${ADMIN_PORT}/media` };
-  for (const name of ["NEXT_PUBLIC_SITE_URL", "CATALOG_SNAPSHOT_URL", "CATALOG_SNAPSHOT_DIR"]) delete buildEnv[name]; // the live catalogue alone, nothing baked in at build time
-  execFileSync("npm", ["run", "build", "--silent"], { cwd: root, stdio: "pipe", env: buildEnv });
-  const dir = mkdtempSync(join(tmpdir(), "jm-storefront-"));
-  cpSync(join(root, "out"), dir, { recursive: true });
+  const dir = buildStorefront({ NEXT_PUBLIC_CATALOG_URL: `http://127.0.0.1:${ADMIN_PORT}/media` }); // the live catalogue alone, nothing baked in at build time
   site = { dir, ...(await serveStatic(dir)) };
   h = await startHarness({ port: ADMIN_PORT, ...(process.env.E2E_DATABASE_URL ? { databaseUrl: process.env.E2E_DATABASE_URL } : {}) });
 }, 400_000);

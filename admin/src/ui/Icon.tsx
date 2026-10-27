@@ -1,6 +1,7 @@
 const PATHS: Record<string, string> = {
   products: "M4 7l8-4 8 4v10l-8 4-8-4V7zm8 4v10M4 7l8 4 8-4",
   data: "M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3",
+  orders: "M7 4h10l1 3H6l1-3zM6 7h12v13H6zM9 11h6M9 15h4",
   categories: "M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v6H4zM13 14h7v6h-7z",
   account: "M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0",
   plus: "M12 5v14M5 12h14",

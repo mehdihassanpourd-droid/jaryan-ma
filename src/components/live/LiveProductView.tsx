@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ButtonLink } from "@/components/ui/Button";
 import { Container } from "@/components/ui/Container";
 import { InstagramIcon } from "@/components/ui/InstagramIcon";
 import { Price } from "@/components/ui/Price";
+import { AddToCart } from "@/components/shop/AddToCart";
 import { formatNumber } from "@/lib/format";
 import { isLiveSlug, livePrice, safeImageUrl } from "@/lib/live-catalog";
+import type { PublicProduct } from "@/domain/product/snapshot";
 import { site } from "@/lib/site";
 import { useLiveCatalog, useLoad } from "./useLiveCatalog";
 
@@ -36,7 +39,12 @@ export function LiveProductView() {
   if (result.state === "error") return <Notice alert>در حال حاضر دریافت محصول ممکن نیست. چند دقیقهٔ دیگر دوباره سر بزنید.</Notice>;
   const product = result.value;
   if (!product) return <Notice>این محصول در حال حاضر در فروشگاه نیست.</Notice>;
+  return <ProductDetails key={product.slug} product={product} />;
+}
 
+function ProductDetails({ product }: { product: PublicProduct }) {
+  // The option the shopper picked (a SKU); starts on the first one that can be bought.
+  const [sku, setSku] = useState<string | null>(() => product.variants.find((v) => v.available)?.sku ?? null);
   const price = livePrice(product);
   const images = product.images.flatMap((i) => {
     const url = safeImageUrl(i.url);
@@ -82,17 +90,23 @@ export function LiveProductView() {
               <h2 id="variants-title" className="mb-3 text-base font-semibold text-bark-900">گزینه‌ها</h2>
               <ul className="divide-y divide-sand-200 rounded-2xl border border-sand-200">
                 {product.variants.map((v) => (
-                  <li key={v.sku} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-                    <span className="text-bark-700">{Object.values(v.options).join("، ") || v.sku}</span>
-                    <span className="flex items-center gap-3">
-                      <Price amount={v.priceToman} />
-                      <span className="text-xs text-bark-500">{v.available ? "موجود" : "ناموجود"}</span>
-                    </span>
+                  <li key={v.sku} className="text-sm">
+                    <label className={`flex min-h-12 cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-3 ${v.available ? "" : "cursor-not-allowed opacity-60"}`}>
+                      <span className="flex items-center gap-3 text-bark-700">
+                        <input type="radio" name="variant" value={v.sku} checked={sku === v.sku} disabled={!v.available} onChange={() => setSku(v.sku)} className="h-5 w-5 accent-bark-700" />
+                        {Object.values(v.options).join("، ") || v.sku}
+                      </span>
+                      <span className="flex items-center gap-3">
+                        <Price amount={v.priceToman} />
+                        <span className="text-xs text-bark-500">{v.available ? "موجود" : "ناموجود"}</span>
+                      </span>
+                    </label>
                   </li>
                 ))}
               </ul>
             </section>
           )}
+          <AddToCart product={product} sku={sku} />
           <div className="mt-8">
             <ButtonLink href={site.instagramUrl} target="_blank" rel="noopener noreferrer" variant="secondary">
               <InstagramIcon className="h-4 w-4" />

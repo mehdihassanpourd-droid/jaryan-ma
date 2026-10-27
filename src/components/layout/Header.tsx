@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/Button";
 import { Container } from "@/components/ui/Container";
 import { InstagramIcon } from "@/components/ui/InstagramIcon";
+import { CartLink } from "@/components/shop/CartLink";
 import { navLinks, site } from "@/lib/site";
 import { MobileNav } from "./MobileNav";
 
@@ -35,6 +36,7 @@ export function Header() {
             <InstagramIcon className="h-4 w-4" />
             <span dir="ltr">@{site.instagramHandle}</span>
           </ButtonLink>
+          <CartLink />
           <MobileNav />
         </div>
       </Container>

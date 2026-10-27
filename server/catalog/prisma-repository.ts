@@ -195,6 +195,13 @@ export class PrismaCatalogRepository implements CatalogRepository {
     return rows.map(toStored);
   }
 
+  async getPublishedBySlugs(slugs: string[]): Promise<StoredProduct[]> {
+    if (slugs.length === 0) return [];
+    if (slugs.length > 100) throw new Error("too_many_slugs");
+    const rows = await this.db.product.findMany({ where: { slug: { in: slugs }, status: "published", vendorId: this.vendorId }, include: FULL });
+    return rows.map(toStored);
+  }
+
   async getSummary(id: string): Promise<ProductSummary | null> {
     return this.db.product.findFirst({ where: { id, vendorId: this.vendorId }, select: { id: true, slug: true, status: true, categoryId: true } });
   }

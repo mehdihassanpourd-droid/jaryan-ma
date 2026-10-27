@@ -1,4 +1,5 @@
 import { LIVE_CATALOG_BASE } from "@/lib/live-config";
+import { ORDER_API_BASE } from "@/lib/order-config";
 
 /**
  * REAL business information. Only the brand name, slogan and Instagram account
@@ -30,4 +31,6 @@ const allNavLinks = [
 ] as const;
 
 /** The sample "collections" section is not rendered once a live catalogue is connected, so its link goes too. */
-export const navLinks = LIVE_CATALOG_BASE ? allNavLinks.filter((l) => l.href !== "/#collections") : allNavLinks;
+const liveNavLinks = LIVE_CATALOG_BASE ? allNavLinks.filter((l) => l.href !== "/#collections") : allNavLinks;
+/** "My orders" exists only where the store has an order system to read them from. */
+export const navLinks: ReadonlyArray<{ readonly href: string; readonly label: string }> = ORDER_API_BASE ? [...liveNavLinks, { href: "/orders", label: "سفارش‌های من" }] : liveNavLinks;

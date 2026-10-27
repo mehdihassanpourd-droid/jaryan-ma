@@ -58,6 +58,9 @@ async function main() {
     sms: createSmsProvider(config),
     limiter: new RateLimiter(),
     customerCookie: { name: "jm_c", secure: config.cookieSecure },
+    // The CLI never places orders; checkout is only wired in the server.
+    catalog: { getPublishedBySlugs: async () => { throw new Error("checkout_not_available_in_cli"); } },
+    vendorId: "",
     probes: {
       database: async () => void (await db.$queryRaw`SELECT 1`),
       migrations: () => checkMigrations(db, config.production),

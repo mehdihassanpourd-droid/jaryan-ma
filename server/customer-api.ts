@@ -8,6 +8,9 @@ import { CLIENT_IP_HEADER, CSRF_HEADER } from "./api";
 import type { RateLimiter } from "./auth/rate-limit";
 import { clearedSessionCookie, safeEqual, sessionCookie, type CookieSettings } from "./auth/session";
 import type { AccountService } from "./customers/account-service";
+import type { CheckoutService } from "./customers/checkout-service";
+import { CheckoutError } from "./customers/checkout-service";
+import { checkoutRequestSchema } from "../src/domain/customer/checkout";
 import type { CustomerAuthService, CustomerSessionAuthenticator } from "./customers/customer-auth";
 import type { CustomerRecord, CustomerPrincipal, CustomerStore } from "./customers/ports";
 import type { MaintenanceService } from "./maintenance/service";
@@ -21,6 +24,7 @@ export interface CustomerApiDeps {
   auth: CustomerAuthService;
   authenticator: CustomerSessionAuthenticator;
   accounts: AccountService;
+  checkout: CheckoutService;
   support: SupportService;
   maintenance: MaintenanceService;
   cookie: CookieSettings;
@@ -199,7 +203,22 @@ export function createCustomerApi(deps: CustomerApiDeps) {
       }
     }
 
-    // ---- orders (read only; there is no checkout yet)
+    // ---- orders: place (pending, no payment) and read
+    if (path === "/orders" && method === "POST") {
+      const body = await parseBody(request, checkoutRequestSchema);
+      if (!body.ok) return body.response;
+      try {
+        const placed = await deps.checkout.placeOrder(id, body.data);
+        log("order_placed", { number: placed.order.number, created: placed.created, lines: placed.order.items.length });
+        return json({ order: placed.order, created: placed.created }, placed.created ? 201 : 200);
+      } catch (error) {
+        if (error instanceof CheckoutError) {
+          const status = error.code === "account_not_active" ? 403 : error.code === "order_total_out_of_range" ? 422 : 409;
+          return errorResponse(error.code, status, error.problems.length > 0 ? { items: error.problems } : undefined);
+        }
+        throw error;
+      }
+    }
     if (path === "/orders" && method === "GET") {
       const q = parseQuery(url.searchParams, pageSchema);
       if (!q.ok) return q.response;

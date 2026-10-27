@@ -1,6 +1,6 @@
 # Customer accounts
 
-Status: **foundation implemented and tested; no UI, no paid service active, nothing deployed.** Customer sign-in is **off by default in production** (`CUSTOMER_ACCOUNTS_ENABLED`) and stays off until the owner chooses and configures an SMS gateway.
+Status: **foundation, order placement (no payment) and the storefront cart/checkout screens are implemented and tested; no paid service is active, nothing is deployed.** Customer sign-in is **off by default in production** (`CUSTOMER_ACCOUNTS_ENABLED`) and stays off until the owner chooses and configures an SMS gateway.
 
 ## 1. What exists
 
@@ -11,12 +11,14 @@ Status: **foundation implemented and tested; no UI, no paid service active, noth
 | Secure server-side sessions (HttpOnly cookie, CSRF token) | yes | `CustomerSessionAuthenticator`, `server/customer-api.ts` |
 | Several shipping addresses (max 10, exactly one default) | yes | `Address`, `PrismaAccountStore` |
 | Favourites (published products only, max 500) | yes | `Favorite` |
-| Order history (read-only) | yes (model + API); **no checkout, so nothing creates orders yet** | `Order`, `OrderItem` |
+| Order history | yes (model + API + storefront page `/orders`) | `Order`, `OrderItem` |
+| **Order placement** (`POST /orders`): a pending order built from the cart, priced and checked by the server, idempotent | yes; **no payment, no stock change, no notification** (see §8) | `CheckoutService` |
 | Data export (JSON) | yes | `AccountService.exportData` |
 | Account deletion (14-day grace period, then anonymisation) | yes | `AccountService`, `PrismaAccountStore.anonymize` |
 | Pluggable SMS provider | yes: interface + `disabled` (default), `console` (dev only), `memory` (tests), generic `http` | `server/sms/provider.ts` |
-| Customer UI (sign-in screens, account pages) | **planned** | — |
-| Checkout, payment, order creation | **planned (PRD Phase 3); not started** | — |
+| Storefront UI: sign-in with the code, cart, checkout, order confirmation, order history | yes, for builds that have an order system (§8); other builds get a labelled DEMO checkout | `src/components/shop/` |
+| Account pages (profile, addresses book editing, favourites, support, data export/deletion screens) | **planned** | — |
+| Payment | **not started (PRD phase 3)** | — |
 
 ## 2. Sign-in flow
 
@@ -79,6 +81,7 @@ Enabling customers in production (`CUSTOMER_ACCOUNTS_ENABLED=true`) additionally
 | `GET /me`, `PATCH /me` | profile (`firstName`, `lastName`, `email`, `marketingOptIn` only; the phone/status cannot be changed — unknown keys are rejected) |
 | `GET/POST /addresses`, `PUT/DELETE /addresses/:id`, `POST /addresses/:id/default` | addresses |
 | `GET /favorites`, `PUT/DELETE /favorites/:slug` | favourites |
+| `POST /orders` | place a pending order (§8) |
 | `GET /orders`, `GET /orders/:number` | order history |
 | `GET/POST /support/tickets`, `GET /support/tickets/:number`, `POST …/reply` | support (see [SUPPORT.md](../support/SUPPORT.md)) |
 | `POST /account/export` | JSON download of the customer's data (once per hour) |
@@ -110,5 +113,19 @@ Every route checks ownership by `customerId` taken from the session, never from 
 
 * In-memory burst limiter (per process) on top of the durable database limits; a multi-instance deployment needs a shared limiter (documented trade-off).
 * No phone-number change flow, no e-mail verification, no staff action to suspend/restore a customer through the API yet (status exists in the model; `suspended` customers cannot sign in).
-* Orders can only be read: there is no checkout. The `createOrder` store method exists for the future checkout and validates totals exactly.
+* Orders are only ever created (pending) and read: confirming, cancelling and changing status are not implemented (§8).
 * Consent text (terms/privacy policy) is only a version string; the documents themselves are the owner's.
+
+## 8. Shopping: cart, checkout, orders (no payment)
+
+**What a shopper can do** (storefront builds with `NEXT_PUBLIC_CATALOG_URL`; see docs/admin/ARCHITECTURE.md §7): choose a variant and quantity on the product page, keep a cart across reloads, see exact prices and totals, check out, and read the order afterwards.
+
+* **The cart** (`src/lib/cart.ts`) stores only `{slug, sku, quantity}` in the browser (`localStorage`, shared between tabs, in memory when storage is blocked). Prices, titles, images and availability are re-read from the live catalogue every time it is shown, so it can never show or submit a stale price. Unique pieces are in the cart once; at most 20 of anything per line, 50 lines. Unpublished, sold-out, variant-less or unpriced lines are flagged and left out of the total. Totals use `BigInt` (`lineTotal`), exact even above 2⁵³.
+* **Checkout** (`/checkout`) collects the recipient, mobile number, province (31 listed), city, address, plaque, unit, postal code and an optional note, validated with the SAME schema as the server (`shippingInputSchema`). A signed-in customer's default saved address pre-fills the form; "save this address" stores it in the address book.
+* **`POST /api/v1/customer/orders`** (`CheckoutService`) needs a customer session, the CSRF token and an allowed origin. The request names products, variants and quantities: **never prices, titles, totals or customer ids** (unknown keys are rejected). The server reads published products from the database, checks each line (`not_found`, `variant_required`, `variant_not_found`, `sold_out`, `insufficient_stock` with how many are left, `quantity_not_allowed`, `no_price`; all lines reported at once as `409 items_unavailable`), computes the exact total, snapshots title/SKU/variant/image/unit price/vendor into the order and stores a **pending** order. `order_total_out_of_range` (422) refuses a total beyond the exact range. At most 10 open orders per customer; accounts being deleted cannot order.
+* **Idempotency:** the browser sends a `requestId` per checkout attempt (unique per customer in the database). A retry, even a concurrent one, returns the first order (`created: false`) instead of a second one.
+* **No payment, no stock change, no notification.** A pending order is a *request*: nothing is charged, stock is neither reserved nor reduced (there is no staff action yet to release it if an order is never confirmed), and nobody is notified. Staff can see orders in the admin app (`order:read`: owner and support; read-only) but cannot yet confirm, cancel or change them. Two customers can therefore order the same unique piece; the owner decides when confirming.
+* **Demo checkout:** a build WITHOUT `NEXT_PUBLIC_ORDER_API_URL` has no order system. Its checkout page says so in a dashed banner, creates nothing, shows no order number, keeps the cart and only builds a text the shopper can copy and send to the gallery on Instagram ("پیش‌نمایش سفارش (ثبت نشده)"). The same fallback is offered when the SMS service is unavailable or the API is unreachable. This is also the only way to order in production until SMS and the API are deployed.
+* **Order pages:** `/order?number=N` (confirmation and detail) and `/orders` (history) read the signed-in customer's own orders; another customer's number is "not found".
+
+**Not available until production infrastructure exists:** the customer API itself (needs the backend deployed on a domain that shares a registrable domain with the storefront, `CUSTOMER_ORIGINS`, `CUSTOMER_ACCOUNTS_ENABLED=true`), an SMS gateway (`SMS_PROVIDER=http`; without it nobody can sign in), the owner's terms and privacy texts (the sign-up checkbox refers to them, but no such pages exist yet), the shipping-cost and delivery rules (the total says shipping is not included), and a way to notify the owner of a new order.

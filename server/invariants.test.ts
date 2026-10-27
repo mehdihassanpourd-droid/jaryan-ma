@@ -35,9 +35,13 @@ describe("the public storefront stays separate from the server", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("does not reference admin or customer API paths (they are not part of the static site)", () => {
-    const offenders = storefrontFiles.filter((file) => /\/api\/v1\//.test(read(file)));
-    expect(offenders).toEqual([]);
+  it("never references an admin API path; the only API it may call is the CUSTOMER API, from one file", () => {
+    // Admin routes (`/api/v1/products`, `/api/v1/auth`, ...) are private. The customer API (`/api/v1/customer`, sign-in by SMS code,
+    // CORS + CSRF + SameSite cookie) is public by design and is reached only through src/lib/order-api.ts.
+    const adminPaths = storefrontFiles.filter((file) => /\/api\/v1\/(?!customer\b|public\b)/.test(read(file)));
+    expect(adminPaths).toEqual([]);
+    const apiUsers = storefrontFiles.filter((file) => /\/api\/v1\//.test(read(file)) && !/\.test\./.test(file));
+    expect(apiUsers).toEqual([join("src", "lib", "order-api.ts")]);
   });
 
   it("keeps the static export that Cloudflare Pages relies on", () => {

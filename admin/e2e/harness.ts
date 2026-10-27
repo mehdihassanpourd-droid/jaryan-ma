@@ -50,7 +50,7 @@ async function waitFor(url: string, child: ChildProcess, logs: () => string): Pr
 }
 
 /** Boots the REAL server (embedded PostgreSQL, or the real one in `databaseUrl`; local-disk media, mandatory TOTP) and the built admin UI. Nothing is mocked. */
-export async function startHarness(options: { seedAccounts?: boolean; firstRunSetup?: boolean; databaseUrl?: string; port?: number } = {}): Promise<Harness> {
+export async function startHarness(options: { seedAccounts?: boolean; firstRunSetup?: boolean; databaseUrl?: string; port?: number; customerOrigins?: string } = {}): Promise<Harness> {
   const { seedAccounts = true, firstRunSetup = false, databaseUrl } = options;
   const dir = mkdtempSync(join(tmpdir(), "jm-e2e-"));
   // A fixed port is for tests that must bake the server's address into something built beforehand (the storefront).
@@ -65,7 +65,9 @@ export async function startHarness(options: { seedAccounts?: boolean; firstRunSe
     COOKIE_SECURE: "false",
     SCRYPT_LOG_N: "10",
     SCHEDULER_ENABLED: "false",
-    CUSTOMER_ACCOUNTS_ENABLED: "false",
+    // Customer sign-in (SMS code printed to the server log by the development-only console provider) only when a storefront origin is given.
+    CUSTOMER_ACCOUNTS_ENABLED: options.customerOrigins ? "true" : "false",
+    ...(options.customerOrigins ? { CUSTOMER_ORIGINS: options.customerOrigins } : {}),
     ADMIN_UI_DIR: join(root, "dist/admin"),
     ADMIN_ORIGINS: `http://127.0.0.1:${port}`,
     IMPORT_CHUNK_MAX: "50",

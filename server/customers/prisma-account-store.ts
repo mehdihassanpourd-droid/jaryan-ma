@@ -5,7 +5,8 @@ import type { Db } from "../db/client";
 import { LIST_SELECT, toListRow } from "../catalog/prisma-repository";
 import type { AccountStore, AddressRecord, CustomerExportCore, DataRequestType, OrderView } from "./account-ports";
 
-const ORDER_INCLUDE = { items: { orderBy: { id: "asc" } } } satisfies Prisma.OrderInclude;
+// Lines have no position column: a stable, readable order (title, then SKU) instead of random uuid order.
+const ORDER_INCLUDE = { items: { orderBy: [{ titleSnapshot: "asc" }, { skuSnapshot: "asc" }] } } satisfies Prisma.OrderInclude;
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof ORDER_INCLUDE }>;
 
 const toAddress = (a: Prisma.AddressGetPayload<object>): AddressRecord => ({
@@ -146,6 +147,7 @@ export class PrismaAccountStore implements AccountStore {
         totalToman: tomanToDb(input.totalToman),
         shipping: input.shipping as unknown as Prisma.InputJsonValue,
         customerNote: input.customerNote,
+        requestId: input.requestId,
         placedAt: now,
         updatedAt: now,
         items: {
@@ -159,6 +161,26 @@ export class PrismaAccountStore implements AccountStore {
       include: ORDER_INCLUDE,
     });
     return toOrder(row);
+  }
+
+  async findOrderByRequestId(customerId: string, requestId: string) {
+    const row = await this.db.order.findFirst({ where: { customerId, requestId }, include: ORDER_INCLUDE });
+    return row ? toOrder(row) : null;
+  }
+
+  async placeOrderOnce(input: NewOrderInput & { requestId: string }, now: Date) {
+    const known = await this.findOrderByRequestId(input.customerId, input.requestId);
+    if (known) return { order: known, created: false };
+    try {
+      return { order: await this.createOrder(input, now), created: true };
+    } catch (error) {
+      // A retry that raced the original: the unique (customerId, requestId) index lets only one through; return that one.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const winner = await this.findOrderByRequestId(input.customerId, input.requestId);
+        if (winner) return { order: winner, created: false };
+      }
+      throw error;
+    }
   }
 
   // ---- data requests, export, deletion ---------------------------------------------------------
