@@ -6,6 +6,7 @@ import { Hero } from "@/components/home/Hero";
 import { Spotlight } from "@/components/home/Spotlight";
 import { TrustSection } from "@/components/home/TrustSection";
 import type { Metadata } from "next";
+import { LIVE_CATALOG_BASE } from "@/lib/live-config";
 import { site } from "@/lib/site";
 import { loadSeo } from "@/seo";
 import { JsonLd } from "@/seo/JsonLd";
@@ -22,9 +23,10 @@ export default async function HomePage() {
     <>
       <JsonLd data={siteJsonLd(origin, site.name, site.instagramUrl)} />
       <Hero />
-      <CategoryGrid />
+      {/* The sample collections and spotlight give way to the real catalogue once one is connected. */}
+      {!LIVE_CATALOG_BASE && <CategoryGrid />}
       <FeaturedProducts />
-      <Spotlight />
+      {!LIVE_CATALOG_BASE && <Spotlight />}
       <BrandStory />
       <TrustSection />
       <ContactSection />

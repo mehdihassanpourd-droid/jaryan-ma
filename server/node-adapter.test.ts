@@ -87,6 +87,10 @@ describe("Node adapter", () => {
     expect(ok.headers.get("x-content-type-options")).toBe("nosniff");
     expect(new Uint8Array(await ok.arrayBuffer())).toEqual(Uint8Array.from([1, 2, 3]));
     expect((await fetch(`${base}/media/secret.html`)).status).toBe(404);
+    // a missing file (e.g. a product that is not published) is readable cross-origin as a plain 404, not hidden behind a CORS error
+    const missing = await fetch(`${base}/media/catalog/products/none.json`);
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("access-control-allow-origin")).toBe("*");
     expect((await fetch(`${base}/media/..%2F..%2Fetc%2Fpasswd`)).status).toBe(404);
     expect(await (await fetch(`${base}/other`)).text()).toBe("api");
   });

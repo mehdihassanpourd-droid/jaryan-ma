@@ -1,11 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
-import { z } from "zod";
 import { SNAPSHOT_PATHS } from "@/domain/product/snapshot";
+import { manifestSchema, publicProductSchema, shardSchema } from "@/domain/product/snapshot-schema";
 import { demoCategories, demoProducts } from "@/data/demo-catalog";
 import { cleanText } from "./text";
 import type { SeoCatalog, SeoCategory, SeoProduct } from "./types";
-import { isValidSlug } from "./urls";
 
 /**
  * Where the verified catalogue comes from at BUILD time (the site is a static export, nothing runs per request):
@@ -59,29 +58,7 @@ export function httpReader(baseUrl: string, fetchImpl: typeof fetch = fetch, tim
   };
 }
 
-// ---- validation: the shapes written by server/catalog/snapshot-publisher.ts (src/domain/product/snapshot.ts) -----
-
-const slug = z.string().refine(isValidSlug, "invalid_slug");
-const toman = z.number().int().min(0).max(1_000_000_000_000_000).nullable();
-const publicProductSchema = z.object({
-  slug,
-  name: z.string().trim().min(1).max(200),
-  description: z.string().max(10_000),
-  // Older snapshot files predate these fields: absent = generated automatically.
-  seoTitle: z.string().max(200).nullish().transform((v) => v ?? null),
-  seoDescription: z.string().max(400).nullish().transform((v) => v ?? null),
-  category: z.object({ slug, name: z.string().trim().min(1).max(200) }).nullable(),
-  fulfillment: z.enum(["unique", "stocked", "made_to_order"]),
-  priceToman: toman,
-  availability: z.enum(["in_stock", "sold_out", "made_to_order"]),
-  leadTimeDays: z.number().int().min(1).max(365).nullable(),
-  images: z.array(z.object({ url: z.string().min(1).max(2000), alt: z.string().max(500) })).max(50),
-  variants: z
-    .array(z.object({ sku: z.string().max(100), options: z.record(z.string(), z.string()), priceToman: toman, available: z.boolean() }))
-    .max(100),
-});
-const manifestSchema = z.object({ version: z.number(), categories: z.array(z.object({ slug, name: z.string(), count: z.number() })) });
-const shardSchema = z.object({ products: z.array(z.object({ slug })) });
+// ---- validation: the shapes written by server/catalog/snapshot-publisher.ts live in src/domain/product/snapshot-schema.ts ----
 
 export interface LoadReport {
   skipped: Array<{ slug: string; reason: string }>;

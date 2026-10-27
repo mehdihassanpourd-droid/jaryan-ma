@@ -50,10 +50,11 @@ async function waitFor(url: string, child: ChildProcess, logs: () => string): Pr
 }
 
 /** Boots the REAL server (embedded PostgreSQL, or the real one in `databaseUrl`; local-disk media, mandatory TOTP) and the built admin UI. Nothing is mocked. */
-export async function startHarness(options: { seedAccounts?: boolean; firstRunSetup?: boolean; databaseUrl?: string } = {}): Promise<Harness> {
+export async function startHarness(options: { seedAccounts?: boolean; firstRunSetup?: boolean; databaseUrl?: string; port?: number } = {}): Promise<Harness> {
   const { seedAccounts = true, firstRunSetup = false, databaseUrl } = options;
   const dir = mkdtempSync(join(tmpdir(), "jm-e2e-"));
-  const port = await freePort();
+  // A fixed port is for tests that must bake the server's address into something built beforehand (the storefront).
+  const port = options.port ?? (await freePort());
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     NODE_ENV: "development" as const,

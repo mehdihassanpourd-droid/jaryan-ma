@@ -154,12 +154,27 @@ images/<productId>/<uuid>.webp        product images                     (immuta
 ```
 
 * **No server on the read path:** shoppers read static files from the bucket/CDN; the database and the admin API are never exposed to them and cannot be overloaded by shopper traffic.
-* **No credentials in the browser:** the storefront only needs one public URL (a future `NEXT_PUBLIC_CATALOG_URL`).
+* **No credentials in the browser:** the storefront only needs one public URL (`NEXT_PUBLIC_CATALOG_URL`).
 * **Sanitised by construction:** the snapshot type has no ids, status, stock counts, versions or edit times, only `published` products are written, and tests fail if an internal field leaks. Unpublishing deletes the file and refreshes the shard and manifest.
 * **No site rebuild per edit:** snapshots refresh within about a minute; Pages' deploy quota is never touched.
 * **Failure isolation:** a storage outage never fails an admin request (it is logged and can be repaired with `POST /api/v1/catalog/resync`); verified against a dead S3 endpoint.
 
-How pages will consume it (a later PR): fetch snapshots **in the browser** with CORS enabled on the bucket for the storefront origin (default), and optionally at build time for crawlable HTML if the object store is reachable from GitHub's build machines; some Iranian hosts block foreign IPs, so do not rely on build-time fetches until tested. If the bucket is unreachable, the site falls back to the data it shipped with.
+### How the storefront consumes it (implemented)
+
+Cloudflare Pages serves a **static** export, so "publish → customers see it" cannot depend on a rebuild. The storefront therefore reads the snapshots **in the visitor's browser** (`src/lib/live-catalog.ts`, `src/components/live/`):
+
+* `NEXT_PUBLIC_CATALOG_URL` (a **public** value, https or loopback http; set as a GitHub repository *variable*, picked up by `cloudflare-pages.yml`) is the base URL under which `catalog/…` and `images/…` are served. Unset = the site keeps its labelled sample content (unchanged behaviour).
+* Home page: the "آثار" section loads `manifest.json` + the category shards and shows published cards (real image, name, price, "از" for variant ranges, availability badge). Empty catalogue, loading and unreachable store each have their own plain message; sample products are never shown in this mode.
+* `/product?slug=<slug>`: one static page that loads `catalog/products/<slug>.json` (images, price, description, variants with price and availability, lead time). A slug with no file (draft, archived, unknown, or an invalid/path-like slug) is "not in the store". It is `noindex`: its content exists only at view time. Crawlable HTML stays the job of the build-time path below.
+* Everything read is validated with the same zod schemas as the build-time reader (`src/domain/product/snapshot-schema.ts`); image URLs must be http(s)/relative; a malformed file is an error, never a half-rendered page.
+* **Draft and archived products never appear** because they have no file: the publisher deletes the product file and rebuilds the category shard and manifest when a product leaves `published` (or is renamed or moved). The storefront has nothing to filter.
+* **Freshness:** the admin writes the snapshot right after the change; the manifest is cached ~30 s and product files ~60 s (`Cache-Control` set by the publisher), so customers see a change within about a minute without any deployment.
+
+**What still needs real infrastructure (not part of this repository's tests):** a public bucket/CDN holding `catalog/` and `images/` with **CORS allowing the storefront origin on GET, including for 404 responses** (browsers hide a CORS-less 404 behind a network error, which the storefront would show as "unreachable"); the admin API running somewhere with `STORAGE_DRIVER=s3` and `PUBLIC_MEDIA_URL` pointing at that bucket; and the repository variable `NEXT_PUBLIC_CATALOG_URL` set to its base URL, followed by one normal Pages deployment to bake it in. The browser-side reader works from wherever the visitor is (including Iran) as long as the bucket is reachable from them.
+
+Optionally, `CATALOG_SNAPSHOT_URL` / `CATALOG_SNAPSHOT_DIR` make the *build* also read the snapshot to generate crawlable `/products/<slug>` and `/category/<slug>` pages and the sitemap (SEO; see docs/seo). Those pages reflect the catalogue as of the last build; the live layer above keeps the shopper-facing pages current in between. Build-time reads depend on GitHub's runners being able to reach the bucket (some Iranian hosts block foreign IPs), so verify that before relying on them.
+
+Tested end to end (`admin/e2e/storefront-publish.e2e.ts`, CI "Admin PWA"): real PostgreSQL 16, the real admin UI, the real static storefront build made once before anything is published and served like Pages serves it, a customer's phone browser. Draft invisible → publish visible with its real image and price → edit with variants and a sold-out size → back to draft gone → publish → archive gone, all without rebuilding the storefront.
 
 Open question for the owner (§11): the storefront is served from Cloudflare, the data from Iran. This works for visitors who can reach both; if you later want the whole site in Iran, the same static export (`out/`) can simply be served by the reverse proxy: no code change.
 

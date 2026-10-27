@@ -56,6 +56,17 @@ jobs:
             echo "NEXT_PUBLIC_SITE_URL=$SITE_URL" >> "$GITHUB_ENV"
           fi
 
+      # Optional, public value: the base URL of the public catalogue snapshots (https). With it the storefront shows the
+      # REAL published products, read live in the visitor's browser, so publishing in the admin needs no new deployment.
+      # Without it the site keeps its labelled sample content. Set it as a repository *variable*, never a secret.
+      - name: Configure live catalogue URL
+        env:
+          CATALOG_URL: ${{ vars.NEXT_PUBLIC_CATALOG_URL }}
+        run: |
+          if [ -n "$CATALOG_URL" ]; then
+            echo "NEXT_PUBLIC_CATALOG_URL=$CATALOG_URL" >> "$GITHUB_ENV"
+          fi
+
       - name: Build static export
         run: npm run build
 
