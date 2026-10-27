@@ -24,9 +24,6 @@ jobs:
     name: Setup scripts on Ubuntu 24.04
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    env:
-      # The setup step and the smoke test must share one throw-away state directory.
-      JARYAN_STATE_DIR: ${{ runner.temp }}/codespace-state
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,6 +35,11 @@ jobs:
         with:
           node-version-file: .node-version
           cache: npm
+
+      # The setup step and the smoke test must share one throw-away state directory (`runner` is not available in
+      # job-level `env`, so it is exported from a step).
+      - name: Choose the throw-away state directory
+        run: echo "JARYAN_STATE_DIR=$RUNNER_TEMP/codespace-state" >> "$GITHUB_ENV"
 
       # A fresh Codespace has no PostgreSQL; remove the runner's preinstalled copy so the install path is exercised.
       - name: Remove preinstalled PostgreSQL
