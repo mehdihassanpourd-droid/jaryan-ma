@@ -1,10 +1,9 @@
 // Verifies the Codespaces test environment end to end WITHOUT a Codespace (used by CI and for local checks):
 // the real scripts create a real administrator (password + TOTP) in a real PostgreSQL 16, start the real server on a
 // simulated private https origin, and the checks below talk to it over HTTP with that Origin.
-//   JARYAN_STATE_DIR=<empty dir> npx tsx scripts/codespace/smoke.ts
+//   export JARYAN_STATE_DIR=<throw-away dir>; npm run codespace:setup; npx tsx scripts/codespace/smoke.ts
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { totpAt, totpStep } from "../../server/auth/totp";
 import { solidPng } from "../../admin/e2e/png";
@@ -13,7 +12,13 @@ const ROOT = join(import.meta.dirname, "../..");
 const ORIGIN = "https://smoke-3001.app.github.dev";
 const PORT = Number(process.env.PORT ?? 3001);
 const BASE = `http://127.0.0.1:${PORT}`;
-const state = process.env.JARYAN_STATE_DIR ?? mkdtempSync(join(tmpdir(), "jm-codespace-"));
+// Required (never a default): this script deletes its state directory afterwards, so it must never point at a real Codespace's data.
+const stateDir = process.env.JARYAN_STATE_DIR;
+if (!stateDir) {
+  console.error("Set JARYAN_STATE_DIR to a throw-away directory, and run `npm run codespace:setup` with the same value first.");
+  process.exit(2);
+}
+const state: string = stateDir;
 const env = { ...process.env, JARYAN_STATE_DIR: state, JARYAN_PUBLIC_ORIGIN: ORIGIN, PORT: String(PORT) };
 const EMAIL = "smoke@example.test";
 const PASSWORD = "rain-over-the-woven-hills-92";
