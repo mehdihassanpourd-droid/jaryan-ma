@@ -66,7 +66,7 @@ export interface LoginResult {
 }
 
 export const normalizeEmail = (email: string) => email.normalize("NFKC").trim().toLowerCase();
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export class AuthService {
   private dummyHash: Promise<string> | null = null;

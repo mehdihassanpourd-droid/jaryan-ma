@@ -1,8 +1,9 @@
 // Verifies the Codespaces test environment end to end WITHOUT a Codespace (used by CI and for local checks):
-// the real scripts create a real administrator (password + TOTP) in a real PostgreSQL 16, start the real server on a
-// simulated private https origin, and the checks below talk to it over HTTP with that Origin.
+// the real scripts start the real server in the background on a simulated private https origin, the first
+// administrator is created through the real first-run flow (password + mandatory TOTP), and the checks talk to the
+// server over HTTP with that Origin. Everything runs against a real PostgreSQL 16.
 //   export JARYAN_STATE_DIR=<throw-away dir>; npm run codespace:setup; npx tsx scripts/codespace/smoke.ts
-import { spawn, execFileSync, type ChildProcess } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { totpAt, totpStep } from "../../server/auth/totp";
@@ -22,6 +23,7 @@ const state: string = stateDir;
 const env = { ...process.env, JARYAN_STATE_DIR: state, JARYAN_PUBLIC_ORIGIN: ORIGIN, PORT: String(PORT) };
 const EMAIL = "smoke@example.test";
 const PASSWORD = "rain-over-the-woven-hills-92";
+const PG_BIN = process.env.PG_BIN ?? "/usr/lib/postgresql/16/bin";
 
 const results: string[] = [];
 let failed = false;
@@ -41,76 +43,63 @@ function run(script: string, args: string[]): Promise<{ code: number; out: strin
 }
 
 /** Drives the interactive admin CLI like a person would: password twice, then the TOTP code for the printed secret. */
-function createAdmin(): Promise<{ code: number; out: string; secret: string }> {
+function createAdminWithCli(email: string, role: string): Promise<{ code: number; out: string }> {
   return new Promise((resolve) => {
-    const child = spawn("bash", [join(ROOT, "scripts/codespace/create-admin.sh"), EMAIL, "owner"], { env, cwd: ROOT });
+    const child = spawn("bash", [join(ROOT, "scripts/codespace/create-admin.sh"), email, role], { env, cwd: ROOT });
     let out = "";
-    let secret = "";
     let stage = 0;
     const step = () => {
       if (stage === 0 && out.includes("New password")) { child.stdin.write(`${PASSWORD}\n`); stage = 1; }
       if (stage === 1 && out.includes("Repeat password")) { child.stdin.write(`${PASSWORD}\n`); stage = 2; }
       const m = /Secret\s*:\s*([A-Z2-7]+)/.exec(out);
       if (stage === 2 && m && out.includes("6-digit code")) {
-        secret = m[1] as string;
-        child.stdin.write(`${totpAt(secret, totpStep(Date.now()))}\n`);
+        child.stdin.write(`${totpAt(m[1] as string, totpStep(Date.now()))}\n`);
         stage = 3;
       }
     };
     const onData = (d: Buffer) => { out += d.toString(); step(); };
     child.stdout.on("data", onData);
     child.stderr.on("data", onData);
-    child.on("close", (code) => resolve({ code: code ?? 1, out, secret }));
+    child.on("close", (code) => resolve({ code: code ?? 1, out }));
   });
-}
-
-async function waitUp(child: ChildProcess): Promise<void> {
-  for (let i = 0; i < 120; i++) {
-    if (child.exitCode !== null) throw new Error("server exited early");
-    try { if ((await fetch(`${BASE}/admin/`)).ok) return; } catch { /* not yet */ }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error("server did not start");
 }
 
 const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
   fetch(`${BASE}/api/v1${path}`, { method: "POST", headers: { origin: ORIGIN, "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
 async function main() {
-  // 1. nothing works without an administrator who has TOTP
-  const early = await run("start.sh", []);
-  check("start refuses while no administrator with TOTP exists", early.code !== 0 && early.out.includes("codespace:admin"), `exit ${early.code}`);
-
-  // 2. create the administrator through the real script
-  const created = await createAdmin();
-  check("create-admin creates an owner with TOTP", created.code === 0 && created.out.includes("with two-factor authentication") && created.secret.length > 10, `exit ${created.code}`);
-  check("state directory is private (700) and DB password file is 600", (statSync(state).mode & 0o777) === 0o700 && (statSync(join(state, "db.pass")).mode & 0o777) === 0o600);
-
-  // 3. start the server on the simulated private origin
-  const server = spawn("bash", [join(ROOT, "scripts/codespace/start.sh")], { env, cwd: ROOT, detached: true });
-  let log = "";
-  server.stdout?.on("data", (d: Buffer) => (log += d.toString()));
-  server.stderr?.on("data", (d: Buffer) => (log += d.toString()));
+  // 1. the app starts by itself (no terminal, no administrator yet) and the bare address is not a 404
+  const up = await run("up.sh", []);
   try {
-    await waitUp(server);
-    check("start prints the private admin URL", log.includes(`${ORIGIN}/admin/`));
-
+    check("up.sh starts the app in the background and prints the private URL", up.code === 0 && up.out.includes(`${ORIGIN}/admin/`), `exit ${up.code}`);
+    const root = await fetch(`${BASE}/`, { redirect: "manual" });
+    check("the bare address redirects to /admin/ (no 404)", root.status === 302 && root.headers.get("location") === "/admin/");
     const shell = await fetch(`${BASE}/admin/`);
     const csp = shell.headers.get("content-security-policy") ?? "";
-    check("/admin/ served with strict CSP (no unsafe-inline/eval) and the private media origin", shell.ok && !/unsafe-(inline|eval)/.test(csp) && csp.includes(ORIGIN));
+    check("/admin/ is served with strict CSP (no unsafe-inline/eval) and the private media origin", shell.ok && !/unsafe-(inline|eval)/.test(csp) && csp.includes(ORIGIN));
     check("anonymous API access is refused", (await fetch(`${BASE}/api/v1/products`)).status === 401);
+    check("state directory is private (700) and DB password file is 600", (statSync(state).mode & 0o777) === 0o700 && (statSync(join(state, "db.pass")).mode & 0o777) === 0o600);
 
+    // 2. first-run setup in the browser flow: same rules as the CLI, TOTP proven before anything is stored
+    const open = (await (await fetch(`${BASE}/api/v1/setup/status`)).json()) as { open: boolean };
+    check("first-run setup is open while there is no administrator", open.open === true);
+    check("a weak password is refused", (await post("/setup/begin", { email: EMAIL, password: "short" })).status === 422);
+    check("setup from a foreign Origin is refused", (await fetch(`${BASE}/api/v1/setup/begin`, { method: "POST", headers: { origin: "https://evil.example", "content-type": "application/json" }, body: JSON.stringify({ email: EMAIL, password: PASSWORD }) })).status === 403);
+    const begun = (await (await post("/setup/begin", { email: EMAIL, password: PASSWORD })).json()) as { token: string; secret: string; otpauthUri: string };
+    check("setup hands out a TOTP secret and otpauth link", /^[A-Z2-7]{20,}$/.test(begun.secret) && begun.otpauthUri.startsWith("otpauth://totp/"));
+    check("a wrong TOTP code does not create the account", (await post("/setup/finish", { token: begun.token, code: "000000" })).status === 401);
+    const finished = await post("/setup/finish", { token: begun.token, code: totpAt(begun.secret, totpStep(Date.now())) });
+    check("the correct TOTP code creates the owner", finished.status === 201);
+    const closed = (await (await fetch(`${BASE}/api/v1/setup/status`)).json()) as { open: boolean };
+    check("setup closes for good after the first account", closed.open === false && (await post("/setup/begin", { email: "again@example.test", password: PASSWORD })).status === 403);
+
+    // 3. real sign-in with password + TOTP
     const noTotp = await post("/auth/login", { email: EMAIL, password: PASSWORD });
     check("correct password without TOTP is refused (no cookie)", noTotp.status === 401 && !noTotp.headers.get("set-cookie"));
-    const badTotp = await post("/auth/login", { email: EMAIL, password: PASSWORD, totp: "000000" });
-    check("wrong TOTP is refused", badTotp.status === 401 && !badTotp.headers.get("set-cookie"));
-    const foreign = await fetch(`${BASE}/api/v1/auth/login`, { method: "POST", headers: { origin: "https://evil.example", "content-type": "application/json" }, body: JSON.stringify({ email: EMAIL, password: PASSWORD, totp: totpAt(created.secret, totpStep(Date.now()) + 1) }) });
-    check("login from a foreign Origin is refused", foreign.status === 403);
-
-    // the previous step did not consume a code (refused before verification); log in for real
+    check("wrong TOTP is refused", (await post("/auth/login", { email: EMAIL, password: PASSWORD, totp: "000000" })).status === 401);
     let login: Response | null = null;
-    for (const offset of [1, 0, -1]) {
-      login = await post("/auth/login", { email: EMAIL, password: PASSWORD, totp: totpAt(created.secret, totpStep(Date.now()) + offset) });
+    for (const offset of [1, 0, -1]) { // the setup step used the current code once; a neighbouring step is accepted
+      login = await post("/auth/login", { email: EMAIL, password: PASSWORD, totp: totpAt(begun.secret, totpStep(Date.now()) + offset) });
       if (login.status === 200) break;
     }
     const session = (await login!.json()) as { csrfToken: string; role: string; permissions: string[] };
@@ -121,22 +110,24 @@ async function main() {
 
     const authed = { cookie, "x-csrf-token": session.csrfToken };
     check("mutation without CSRF token is refused", (await post("/products", { name: "x" }, { cookie })).status === 403);
-    const created2 = await post("/products", { name: "محصول آزمایشی", status: "draft", fulfillment: "unique", inventory: 1, priceToman: 999999999999999 }, authed);
-    const product = (await created2.json()) as { product: { id: string; priceToman: number } };
-    check("product creation works; a 15-digit price is exact", created2.status === 201 && product.product.priceToman === 999999999999999);
-
-    const png = solidPng(30, 40, [120, 140, 90]);
-    const upload = await fetch(`${BASE}/api/v1/products/${product.product.id}/images`, { method: "POST", headers: { origin: ORIGIN, "content-type": "image/png", ...authed }, body: new Uint8Array(png) });
+    const created = await post("/products", { name: "محصول آزمایشی", status: "draft", fulfillment: "unique", inventory: 1, priceToman: 999999999999999 }, authed);
+    const product = (await created.json()) as { product: { id: string; priceToman: number } };
+    check("product creation works; a 15-digit price is exact", created.status === 201 && product.product.priceToman === 999999999999999);
+    const upload = await fetch(`${BASE}/api/v1/products/${product.product.id}/images`, { method: "POST", headers: { origin: ORIGIN, "content-type": "image/png", ...authed }, body: new Uint8Array(solidPng(30, 40, [120, 140, 90])) });
     const image = (await upload.json()) as { key: string };
     check("image upload stores and serves media on the same origin", upload.status === 201 && (await fetch(`${BASE}/media/${image.key}`)).status === 200);
 
-    // 4. the data really is in the private PostgreSQL 16
-    const count = execFileSync(join(process.env.PG_BIN ?? "/usr/lib/postgresql/16/bin", "psql"), ["-h", "127.0.0.1", "-p", process.env.JARYAN_PG_PORT ?? "5433", "-U", "jaryan", "-d", "jaryan", "-tAc", "SELECT count(*) || ' ' || current_setting('server_version_num')::int/10000 FROM products"], { env: { ...process.env, PGPASSWORD: execFileSync("cat", [join(state, "db.pass")]).toString().trim() } }).toString().trim();
-    check("product is stored in PostgreSQL 16", count === "1 16", count);
+    // 4. the command-line path still works next to the browser flow (second account, read-only role)
+    const cli = await createAdminWithCli("viewer@example.test", "viewer");
+    check("the CLI can still add an account with TOTP", cli.code === 0 && cli.out.includes("with two-factor authentication"), `exit ${cli.code}`);
+
+    // 5. the data really is in the private PostgreSQL 16
+    const count = execFileSync(join(PG_BIN, "psql"), ["-h", "127.0.0.1", "-p", process.env.JARYAN_PG_PORT ?? "5433", "-U", "jaryan", "-d", "jaryan", "-tAc", "SELECT (SELECT count(*) FROM products) || ' ' || (SELECT count(*) FROM admin_users) || ' ' || current_setting('server_version_num')::int/10000"], { env: { ...process.env, PGPASSWORD: execFileSync("cat", [join(state, "db.pass")]).toString().trim() } }).toString().trim();
+    check("data is in PostgreSQL 16 (1 product, 2 admins)", count === "1 2 16", count);
   } finally {
-    try { process.kill(-(server.pid as number), "SIGTERM"); } catch { /* already gone */ }
-    await new Promise((r) => setTimeout(r, 1500));
-    try { execFileSync(join(process.env.PG_BIN ?? "/usr/lib/postgresql/16/bin", "pg_ctl"), ["-D", join(state, "pg"), "stop", "-m", "fast"], { stdio: "ignore" }); } catch { /* not running */ }
+    const down = await run("down.sh", []);
+    check("down.sh stops the background app", down.code === 0 && (await fetch(`${BASE}/healthz`).then(() => false, () => true)), `exit ${down.code}`);
+    try { execFileSync(join(PG_BIN, "pg_ctl"), ["-D", join(state, "pg"), "stop", "-m", "fast"], { stdio: "ignore" }); } catch { /* not running */ }
   }
 }
 

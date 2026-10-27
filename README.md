@@ -110,7 +110,7 @@ A self-hostable admin API for managing hundreds or thousands of products from an
 - Design, decisions, security, costs, remaining questions: [docs/admin/ARCHITECTURE.md](docs/admin/ARCHITECTURE.md)
 - Running it on your own server: [docs/admin/SELF-HOSTING.md](docs/admin/SELF-HOSTING.md)
 - CSV import/export format: [docs/admin/CSV-FORMAT.md](docs/admin/CSV-FORMAT.md)
-- **Test the Admin PWA from an Android phone for free (GitHub Codespaces, no PC):** [docs/admin/CODESPACES-FA.md](docs/admin/CODESPACES-FA.md) — `.devcontainer` + `npm run codespace:setup|admin|start`; throw-away, private port, real password + TOTP
+- **Test the Admin PWA from an Android phone for free (GitHub Codespaces, no PC, no terminal):** [راهنمای فارسی](docs/admin/CODESPACES-FA.md) — [Open in Codespaces](https://codespaces.new/mehdihassanpourd-droid/jaryan-ma). The app starts by itself on a private port; the first administrator is created in the browser (password + mandatory TOTP); throw-away data
 - **Admin PWA** (mobile-first Persian RTL app for product management, installable, TOTP login, RBAC, camera/gallery uploads, SEO fields, CSV): [docs/admin/ADMIN-APP.md](docs/admin/ADMIN-APP.md) — served by the API server at `/admin/`, never deployed with the static site
 - Customer accounts (phone + SMS code, addresses, favourites, orders, export/deletion): [docs/customers/CUSTOMERS.md](docs/customers/CUSTOMERS.md) — **off in production until an SMS gateway is chosen; no paid service is active**
 - Customer support (tickets, notes, roles, abuse protection, Persian FAQ): [docs/support/SUPPORT.md](docs/support/SUPPORT.md)

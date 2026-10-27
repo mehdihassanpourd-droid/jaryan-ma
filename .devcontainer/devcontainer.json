@@ -11,5 +11,5 @@
     "5433": { "label": "PostgreSQL (internal, do not share)", "onAutoForward": "ignore" }
   },
   "postCreateCommand": "bash scripts/codespace/setup.sh",
-  "postStartCommand": "bash -c 'source scripts/codespace/lib.sh && start_db' || true"
+  "postStartCommand": "bash scripts/codespace/up.sh || true"
 }

@@ -10,9 +10,6 @@ cd "$ROOT"
 
 [ -f dist/admin/index.html ] || { say "ساخت برنامهٔ مدیریت…"; npm run --silent admin:build; }
 
-enrolled="$(PGPASSWORD="$(db_password)" "$PG_BIN/psql" -h 127.0.0.1 -p "$PG_PORT" -U jaryan -d jaryan -tAc 'SELECT count(*) FROM admin_users WHERE "totpSecretEnc" IS NOT NULL' 2>/dev/null || echo 0)"
-[ "${enrolled:-0}" -ge 1 ] || die "هنوز مدیری با ورود دومرحله‌ای ساخته نشده است. اجرا کنید: npm run codespace:admin -- you@example.com"
-
 # The forwarded port must stay private (GitHub login in front of the admin login). Best effort: GitHub's own CLI.
 guard_port() {
   [ "${CODESPACES:-}" = "true" ] && command -v gh >/dev/null 2>&1 || return 0
@@ -33,6 +30,7 @@ guard_port &
 echo
 echo "نشانی خصوصی برنامهٔ مدیریت (فقط با ورود به GitHub باز می‌شود):"
 echo "  $origin/admin/"
+echo "اگر هنوز مدیری ندارید، همان صفحه برای ساخت مدیر اول (گذرواژه + کد دومرحله‌ای) باز می‌شود."
 echo "برای توقف: Ctrl+C"
 echo
 exec npx tsx server/main.ts

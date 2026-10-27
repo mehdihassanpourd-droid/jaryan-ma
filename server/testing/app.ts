@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { createApi, CLIENT_IP_HEADER, CSRF_HEADER, type ApiDeps } from "../api";
+import { FirstRunSetup } from "../auth/first-run-setup";
 import { AuthService, DEFAULT_AUTH_SETTINGS, type AuthSettings } from "../auth/auth-service";
 import { ScryptHasher } from "../auth/password";
 import { PrismaAdminStore } from "../auth/prisma-store";
@@ -57,7 +58,7 @@ export interface TestApp {
 }
 
 /** Builds the whole server (without HTTP sockets) on a test database. */
-export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string; customerAccountsEnabled?: boolean } = {}): Promise<TestApp> {
+export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string; customerAccountsEnabled?: boolean; firstRunSetup?: boolean } = {}): Promise<TestApp> {
   await testDb.reset();
   const vendorId = await ensureDefaultVendor(testDb.db);
   let clock = new Date("2026-03-01T10:00:00.000Z");
@@ -93,6 +94,7 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
     },
   });
   deps.adminRoutes = platform.adminRoutes;
+  if (overrides.firstRunSetup) deps.setup = new FirstRunSetup(true, auth, adminStore, new RateLimiter(() => clock.getTime()), () => clock);
   const customerApi = createCustomerApi({
     enabled: overrides.customerAccountsEnabled ?? true, customers: platform.customerStore, auth: platform.customerAuth, authenticator: platform.customerAuthenticator,
     accounts: platform.accounts, support: platform.support, maintenance: platform.maintenance, cookie: { name: CUSTOMER_COOKIE, secure: true },

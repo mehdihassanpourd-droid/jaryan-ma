@@ -1,5 +1,5 @@
 import { expect as pw } from "playwright/test";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { BrowserContext, Page } from "playwright";
 import { startHarness, type Harness } from "./harness";
 import { solidPng } from "./png";
@@ -12,6 +12,10 @@ beforeAll(async () => {
   h = await startHarness();
   ownerCtx = await h.browser.newContext({ viewport: { width: 390, height: 844 }, locale: "fa-IR" });
   owner = await h.login(ownerCtx, h.accounts.owner);
+});
+// A failed test prints what the server was doing: intermittent stalls are otherwise undiagnosable.
+afterEach((context) => {
+  if (context.task.result?.state === "fail") console.error(`--- server log (tail) after "${context.task.name}":\n${h?.serverLog(60)}`);
 });
 afterAll(async () => {
   await h?.stop();
@@ -71,6 +75,28 @@ describe("admin PWA end to end (real server, real database, real TOTP)", () => {
     await pw(owner.getByLabel("قیمت (تومان)")).toHaveValue("۹۹۹٬۹۹۹٬۹۹۹٬۹۹۹٬۹۹۹");
     await owner.getByRole("tab", { name: "سئو" }).click();
     await pw(owner.getByLabel("عنوان سئو")).toHaveValue("پرده بافته دستی");
+  });
+
+  it("keeps the tab the person chose while a new product is still saving (no forced jump, no remount)", async () => {
+    // Slow the create call down so the "still saving" window is wide and the check is deterministic.
+    await owner.route("**/api/v1/products", async (route) => {
+      if (route.request().method() === "POST") await new Promise((r) => setTimeout(r, 1200));
+      await route.continue();
+    });
+    try {
+      await owner.goto(`${h.baseUrl}/admin/#/products/new`);
+      await owner.getByRole("heading", { name: "محصول جدید" }).waitFor();
+      await owner.getByLabel(/^نام محصول/).fill("آزمون ماندن در تب");
+      await owner.getByRole("button", { name: "ذخیره پیش‌نویس" }).click();
+      await owner.getByRole("tab", { name: "سئو" }).click(); // chosen while the save is in flight
+      await owner.locator(".toast", { hasText: "محصول ذخیره شد" }).first().waitFor();
+      await pw(owner.getByRole("tab", { name: "سئو" })).toHaveAttribute("aria-selected", "true");
+      await pw(owner.getByLabel("عنوان سئو")).toBeVisible();
+      // the address now names the saved product, and the page was not reloaded or re-rendered from scratch
+      expect(owner.url()).toMatch(/#\/products\/[A-Za-z0-9-]{8,}$/);
+    } finally {
+      await owner.unroute("**/api/v1/products");
+    }
   });
 
   it("lists, searches, duplicates and archives", async () => {

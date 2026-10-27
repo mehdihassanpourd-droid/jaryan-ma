@@ -76,6 +76,9 @@ export function createAdminUiHandler(options: AdminUiOptions) {
   const notFound = () => reply(404, "text/plain; charset=utf-8", { "cache-control": "no-store" }, Buffer.from("Not found"));
 
   return async function handle(method: string, pathname: string): Promise<AdminUiResponse | null> {
+    // The bare address of this server (what "open in browser" shows for a forwarded port) has no page of its own:
+    // send people to the admin app instead of a 404.
+    if (pathname === "/" && (method === "GET" || method === "HEAD")) return reply(302, "text/plain; charset=utf-8", { location: "/admin/", "cache-control": "no-store" }, null);
     if (pathname === "/admin") return reply(308, "text/plain; charset=utf-8", { location: "/admin/", "cache-control": "no-store" }, null);
     if (!pathname.startsWith("/admin/")) return null;
     if (method !== "GET" && method !== "HEAD") return reply(405, "text/plain; charset=utf-8", { allow: "GET, HEAD", "cache-control": "no-store" }, Buffer.from("Method not allowed"));
@@ -118,3 +121,20 @@ export function createAdminUiHandler(options: AdminUiOptions) {
 }
 
 export type AdminUiHandler = ReturnType<typeof createAdminUiHandler>;
+
+/**
+ * Used when the admin UI is switched on but has not been built (`dist/` is git-ignored, so a fresh checkout has none).
+ * Instead of an unexplained 404 it says exactly what is missing. Serves no files and touches no data.
+ */
+export function createUnbuiltAdminUiHandler(): AdminUiHandler {
+  const text =
+    "پنل مدیریت هنوز ساخته نشده است.\nAdmin UI is not built yet: run `npm run admin:build` (or start with `npm run api:dev`, which builds it), then reload.\n";
+  return async (method, pathname) => {
+    if (pathname !== "/" && pathname !== "/admin" && !pathname.startsWith("/admin/")) return null;
+    return {
+      status: 503,
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "retry-after": "30", ...BASE_HEADERS },
+      body: method === "HEAD" ? null : Buffer.from(text),
+    };
+  };
+}

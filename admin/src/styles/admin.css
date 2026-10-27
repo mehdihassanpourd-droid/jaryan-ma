@@ -840,3 +840,8 @@ th {
   border-radius: 18px;
   margin-inline: auto;
 }
+
+.login-title {
+  text-align: center;
+  font-size: 1.3rem;
+}

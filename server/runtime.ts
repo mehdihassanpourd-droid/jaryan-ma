@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { createAdminUiHandler, type AdminUiHandler } from "./admin-ui";
+import { FirstRunSetup } from "./auth/first-run-setup";
+import { createAdminUiHandler, createUnbuiltAdminUiHandler, type AdminUiHandler } from "./admin-ui";
 import { createApi } from "./api";
 import { DEFAULT_OTP_POLICY } from "../src/domain/customer/otp-policy";
 import { createCustomerApi, isCustomerApiPath } from "./customer-api";
@@ -188,8 +189,12 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     },
   });
 
+  const setup = config.firstRunSetup ? new FirstRunSetup(true, auth.service, auth.store, new RateLimiter()) : undefined;
+  if (setup) log("warn", "first_run_setup_enabled", { note: "development only: the first administrator can be created from the browser until one exists" });
+
   const pending = new Set<Promise<unknown>>();
   const adminApi = createApi({
+    setup,
     adminRoutes: platform.adminRoutes,
     catalog: new CatalogService(repo),
     storage,
@@ -259,6 +264,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
       adminUi = createAdminUiHandler({ dir: config.adminUiDir, mediaOrigin });
     } else {
       log("warn", "admin_ui_not_built", { note: "run `npm run admin:build` to serve the admin app at /admin/" });
+      adminUi = createUnbuiltAdminUiHandler();
     }
   }
 

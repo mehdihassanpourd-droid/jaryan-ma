@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from "react";
-import { ApiError } from "../api/client";
+import { useEffect, useState, type FormEvent } from "react";
+import { ApiError, api } from "../api/client";
 import { apiErrorMessage } from "../lib/errors";
 import { useSession } from "../session";
 import { Button, TextField } from "../ui/controls";
 import { Alert } from "../ui/feedback";
+import { SetupPage } from "./SetupPage";
 
 export function LoginPage({ expired }: { expired: boolean }) {
   const { login } = useSession();
@@ -13,6 +14,15 @@ export function LoginPage({ expired }: { expired: boolean }) {
   const [needTotp, setNeedTotp] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Only a development server with ZERO administrators answers `open: true`; anything else (or an error) means "sign in".
+  const [setupOpen, setSetupOpen] = useState(false);
+
+  useEffect(() => {
+    api<{ open: boolean }>("GET", "/setup/status", { anonymous: true }).then(
+      (r) => setSetupOpen(r.open === true),
+      () => setSetupOpen(false),
+    );
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -28,6 +38,8 @@ export function LoginPage({ expired }: { expired: boolean }) {
       setBusy(false);
     }
   }
+
+  if (setupOpen) return <SetupPage onDone={() => setSetupOpen(false)} />;
 
   return (
     <div className="login-wrap">

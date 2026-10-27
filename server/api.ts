@@ -13,6 +13,7 @@ import {
   type ImportProductInput,
 } from "../src/domain/product/schema";
 import { PRODUCT_STATUSES, type ProductStatus } from "../src/domain/product/types";
+import { SetupFailure, type FirstRunSetup } from "./auth/first-run-setup";
 import { AuthFailure, type AuthService } from "./auth/auth-service";
 import type { Authenticator, Principal } from "./auth/ports";
 import { ACTIONS, can, type Action } from "./auth/rbac";
@@ -42,6 +43,8 @@ export type AdminRouter = (ctx: AdminRouteContext) => Promise<Response | null>;
 export interface ApiDeps {
   /** Additional authenticated route modules (support, FAQ, maintenance). */
   adminRoutes?: AdminRouter[];
+  /** Browser-based creation of the FIRST administrator (development only; absent in production). */
+  setup?: FirstRunSetup;
   catalog: CatalogService;
   storage: ObjectStorage;
   publisher: SnapshotPublisher;
@@ -71,6 +74,8 @@ const loginSchema = z.object({
   password: z.string().min(1).max(256),
   totp: z.string().max(12).optional(),
 });
+const setupBeginSchema = z.object({ email: z.string().max(254), password: z.string().min(1).max(256) });
+const setupFinishSchema = z.object({ token: z.string().min(1).max(200), code: z.string().min(1).max(12) });
 const passwordSchema = z.object({ current: z.string().min(1).max(256), next: z.string().min(1).max(256) });
 
 const needsPublishRight = (status: ProductStatus) => status !== "draft";
@@ -112,6 +117,33 @@ export function createApi(deps: ApiDeps) {
     }
   }
 
+  const ipOf = (request: Request) => request.headers.get(CLIENT_IP_HEADER) ?? "unknown";
+
+  /** Anonymous, dev-only first-administrator flow (see FirstRunSetup). Answers 404 when the feature is not configured. */
+  async function firstRunSetup(path: string, method: string, request: Request): Promise<Response | null> {
+    if (!path.startsWith("/setup/")) return null;
+    const setup = deps.setup;
+    if (path === "/setup/status" && method === "GET") return json({ open: setup ? await setup.isOpen() : false });
+    if (!setup || method !== "POST" || (path !== "/setup/begin" && path !== "/setup/finish")) return errorResponse("not_found", 404);
+    try {
+      if (path === "/setup/begin") {
+        const body = setupBeginSchema.safeParse(await readJson(request, MAX_JSON_BYTES));
+        if (!body.success) return errorResponse("validation_failed", 422);
+        return json(await setup.begin({ ...body.data, ip: ipOf(request) }));
+      }
+      const body = setupFinishSchema.safeParse(await readJson(request, MAX_JSON_BYTES));
+      if (!body.success) return errorResponse("validation_failed", 422);
+      return json(await setup.finish({ ...body.data, ip: ipOf(request) }), 201);
+    } catch (error) {
+      if (!(error instanceof SetupFailure)) throw error;
+      if (error.code === "too_many_attempts") return json({ error: error.code }, 429, { "retry-after": String(error.retryAfterSeconds ?? 60) });
+      if (error.code === "setup_closed") return errorResponse(error.code, 403);
+      if (error.code === "invalid_totp") return errorResponse(error.code, 401);
+      if (error.code === "setup_expired") return errorResponse(error.code, 410);
+      return errorResponse(error.code, 422, error.issues ? { issues: error.issues } : {});
+    }
+  }
+
   return async function handle(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const method = request.method;
@@ -122,6 +154,8 @@ export function createApi(deps: ApiDeps) {
     try {
       if (isMutating(method) && !originAllowed(request, deps.adminOrigins)) return errorResponse("bad_origin", 403);
       if (path === "/auth/login" && method === "POST") return await login(request);
+      const setupResponse = await firstRunSetup(path, method, request);
+      if (setupResponse) return setupResponse;
 
       const principal: Principal | null = await deps.authenticator.authenticate(request);
       if (!principal) return errorResponse("unauthorized", 401);
