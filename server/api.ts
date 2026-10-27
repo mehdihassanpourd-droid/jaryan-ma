@@ -47,6 +47,8 @@ export interface ApiDeps {
   setup?: FirstRunSetup;
   /** Development hosting behind a TLS-terminating forwarder (GitHub Codespaces): see `originAllowed`. Empty in production. */
   originHostSuffixes?: readonly string[];
+  /** Development only: the port whose loopback Origin a rewriting forwarder presents (see `OriginPolicy`). Undefined in production. */
+  rewrittenOriginPort?: number;
   /** Development only: the commit this server runs, shown on the sign-in page so an update can be confirmed at a glance. */
   build?: string;
   /** Development only: say WHY an Origin was refused (received origin, requested host, allow-list). Never in production. */
@@ -126,11 +128,25 @@ export function createApi(deps: ApiDeps) {
   /** 403 for a refused Origin. In development the body says what was compared, so a mismatch can be fixed instead of guessed. */
   function badOrigin(request: Request): Response {
     if (!deps.originDebug) return errorResponse("bad_origin", 403);
+    const header = (name: string) => request.headers.get(name) ?? undefined;
+    const refererOrigin = (() => {
+      try {
+        const r = header("referer");
+        return r ? new URL(r).origin : undefined;
+      } catch {
+        return "(unparsable)";
+      }
+    })();
     const detail = {
       receivedOrigin: request.headers.get("origin") ?? "(none)",
       requestedHost: requestedHosts(request),
       allowedOrigins: deps.adminOrigins,
       hostSuffixes: deps.originHostSuffixes ?? [],
+      ...(deps.rewrittenOriginPort !== undefined ? { rewrittenOriginPort: deps.rewrittenOriginPort } : {}),
+      // What else the forwarder says about itself (origins and flags only, never cookies or tokens).
+      referer: refererOrigin,
+      forwarded: { host: header("x-forwarded-host"), proto: header("x-forwarded-proto"), standard: header("forwarded") },
+      ...(deps.build ? { build: deps.build } : {}),
     };
     log("bad_origin", detail);
     return errorResponse("bad_origin", 403, { detail });
@@ -171,7 +187,7 @@ export function createApi(deps: ApiDeps) {
     const path = url.pathname.slice(PREFIX.length);
 
     try {
-      if (isMutating(method) && !originAllowed(request, deps.adminOrigins, deps.originHostSuffixes)) return badOrigin(request);
+      if (isMutating(method) && !originAllowed(request, deps.adminOrigins, { sameHostSuffixes: deps.originHostSuffixes, rewrittenOriginPort: deps.rewrittenOriginPort })) return badOrigin(request);
       if (path === "/auth/login" && method === "POST") return await login(request);
       const setupResponse = await firstRunSetup(path, method, request);
       if (setupResponse) return setupResponse;

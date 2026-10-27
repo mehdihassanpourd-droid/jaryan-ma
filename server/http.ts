@@ -20,23 +20,75 @@ export function errorResponse(code: string, status: number, extra: Record<string
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 export const isMutating = (method: string) => MUTATING.has(method);
 
+/** Development-only extensions of the Origin check (never set in production; the configuration refuses them there). */
+export interface OriginPolicy {
+  /**
+   * Behind a TLS-terminating forwarder (GitHub Codespaces) that keeps the external host: an https Origin that is exactly the
+   * host this request was addressed to, and whose host ends with one of these suffixes (e.g. `.app.github.dev`). That is the
+   * definition of "same origin": a page on any other site, or on another Codespace, carries a different Origin than the host
+   * it is calling, so it is still refused. It is not a wildcard.
+   */
+  sameHostSuffixes?: readonly string[];
+  /**
+   * Behind a forwarder that REWRITES Origin and Host to the upstream address before the request reaches this server (GitHub
+   * Codespaces port forwarding does: the browser is on https://<codespace>-3001.app.github.dev, the server sees
+   * `Origin: http://localhost:3001` and `Host: localhost:3001`). Accepts exactly the loopback origin of THIS server own
+   * port, only when the request Host is that same address, and only when no Referer contradicts it. See `isRewrittenOrigin`.
+   */
+  rewrittenOriginPort?: number;
+}
+
 /**
  * CSRF defence for cookie-authenticated browsers (one layer; the API also requires the CSRF token): state-changing
- * requests must carry an `Origin` header that is on the allow-list. Fails closed when
- * the allow-list is empty.
- *
- * `sameHostSuffixes` (development behind a TLS-terminating forwarder such as GitHub Codespaces, never production) adds
- * ONE more case: an https Origin that is exactly the host this request was addressed to, and whose host ends with one of
- * the listed suffixes (e.g. `.app.github.dev`). That is the definition of "same origin": a page on any other site, or on
- * another Codespace, carries a different Origin than the host it is calling, so it is still refused. It is not a
- * wildcard and never matches an origin the server is not itself being reached at.
+ * requests must carry an `Origin` header that is on the allow-list. Fails closed when the allow-list is empty and no
+ * development extension applies.
  */
-export function originAllowed(request: Request, allowed: string | undefined, sameHostSuffixes: readonly string[] = []): boolean {
+export function originAllowed(request: Request, allowed: string | undefined, policy: OriginPolicy = {}): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return false;
   const bare = origin.replace(/\/+$/, "");
-  if (allowed && allowed.split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean).includes(bare)) return true;
-  return sameHostSuffixes.length > 0 && isSameHostOrigin(request, bare, sameHostSuffixes);
+  const list = (allowed ?? "").split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean);
+  if (list.includes(bare)) return true;
+  if (policy.sameHostSuffixes && policy.sameHostSuffixes.length > 0 && isSameHostOrigin(request, bare, policy.sameHostSuffixes)) return true;
+  return policy.rewrittenOriginPort !== undefined && isRewrittenOrigin(request, bare, policy.rewrittenOriginPort, list);
+}
+
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * The forwarder destroyed the information that would tell this server who the browser really is, so an exact comparison
+ * against the external origin cannot work. What can still be checked, and is:
+ *  - the Origin is the loopback origin of THIS server (scheme http, localhost / 127.0.0.1 / [::1], this server port, nothing
+ *    else): a page on another local port, a look-alike host or an https origin is refused;
+ *  - the Host header says the same (a rebinding site has its own name in Host);
+ *  - the Referer, when the browser sent one (cross-site requests send at least the origin by default), must be this
+ *    Codespace own page: an allow-listed origin or the same loopback origin. A foreign Referer vetoes the request.
+ * What it cannot do is stop a hostile page that also strips its Referer; the remaining layers cover that: the session cookie
+ * is SameSite=Strict, signed-in changes need the CSRF token, the forwarded port itself sits behind GitHub login, and sign-in
+ * needs password + TOTP. Anonymous endpoints cannot be abused cross-site (their responses are unreadable there, and finishing
+ * needs the secret they return).
+ */
+function isRewrittenOrigin(request: Request, origin: string, port: number, allowList: readonly string[]): boolean {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" || url.username || url.password || url.origin !== origin.toLowerCase()) return false;
+  if (!LOOPBACK_HOSTS.has(url.hostname) || url.port !== String(port)) return false;
+  if (!requestedHosts(request).includes(url.host)) return false;
+  const referer = request.headers.get("referer");
+  if (referer) {
+    let refererOrigin: string;
+    try {
+      refererOrigin = new URL(referer).origin;
+    } catch {
+      return false;
+    }
+    if (refererOrigin !== url.origin && !allowList.includes(refererOrigin)) return false;
+  }
+  return true;
 }
 
 /** The host names this request was addressed to: the Host header and the first X-Forwarded-Host value (lower-case). */

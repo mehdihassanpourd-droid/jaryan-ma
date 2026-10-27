@@ -108,6 +108,14 @@ async function main() {
     const external = "renamed-3001.app.github.dev";
     const viaForwarder = await forwardedPost("/setup/begin", { email: EMAIL, password: PASSWORD }, { host: external, origin: `https://${external}` });
     check("same-origin forwarded HTTPS host is accepted even when it differs from ADMIN_ORIGINS", viaForwarder.status === 200, `status ${viaForwarder.status}`);
+    // GitHub's forwarder REWRITES Origin and Host to the upstream address: the browser is on the https URL but the server sees localhost.
+    const rewritten = { host: `localhost:${PORT}`, origin: `http://localhost:${PORT}`, referer: `${ORIGIN}/admin/` };
+    const viaRewrite = await forwardedPost("/setup/begin", { email: EMAIL, password: PASSWORD }, rewritten);
+    check("the rewritten loopback Origin/Host from GitHub's forwarder is accepted (the real Codespaces request)", viaRewrite.status === 200, `status ${viaRewrite.status}`);
+    check("a hostile page is still refused with the rewritten origin (foreign Referer, other port, other Host)",
+      (await forwardedPost("/setup/begin", { email: EMAIL, password: PASSWORD }, { ...rewritten, referer: "https://evil.example/" })).status === 403 &&
+      (await forwardedPost("/setup/begin", { email: EMAIL, password: PASSWORD }, { host: rewritten.host, origin: "http://localhost:9" })).status === 403 &&
+      (await forwardedPost("/setup/begin", { email: EMAIL, password: PASSWORD }, { host: "evil.example", origin: rewritten.origin })).status === 403);
     const evil = await forwardedPost("/setup/begin", { email: EMAIL, password: PASSWORD }, { host: external, origin: "https://evil.example" });
     check("a foreign site's Origin is refused and explained (development)", evil.status === 403 && evil.json?.error === "bad_origin" && evil.json?.detail?.receivedOrigin === "https://evil.example");
     const otherCodespace = await forwardedPost("/setup/begin", { email: EMAIL, password: PASSWORD }, { host: external, origin: "https://attacker-3001.app.github.dev" });

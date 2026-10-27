@@ -33,9 +33,10 @@ const API_MESSAGES: Record<string, string> = {
 /** One readable line from the development-only explanation of a refused origin (empty when the server sent none). */
 export function originDetailText(detail: unknown): string {
   if (typeof detail !== "object" || detail === null) return "";
-  const d = detail as { receivedOrigin?: unknown; requestedHost?: unknown; allowedOrigins?: unknown };
-  const hosts = Array.isArray(d.requestedHost) ? d.requestedHost.join(" , ") : "";
-  return `Origin دریافتی: ${String(d.receivedOrigin ?? "؟")} | Host درخواست: ${hosts || "؟"} | مجاز: ${String(d.allowedOrigins ?? "؟")}`;
+  const d = detail as { receivedOrigin?: unknown; requestedHost?: unknown; allowedOrigins?: unknown; referer?: unknown; build?: unknown };
+  const hosts = Array.isArray(d.requestedHost) ? [...new Set(d.requestedHost.map(String))].join(" , ") : "";
+  const extra = [d.referer ? `Referer: ${String(d.referer)}` : "", d.build ? `نسخه: ${String(d.build)}` : ""].filter(Boolean).join(" | ");
+  return `Origin دریافتی: ${String(d.receivedOrigin ?? "؟")} | Host درخواست: ${hosts || "؟"} | مجاز: ${String(d.allowedOrigins ?? "؟")}${extra ? ` | ${extra}` : ""}`;
 }
 
 export function apiErrorMessage(error: unknown): string {

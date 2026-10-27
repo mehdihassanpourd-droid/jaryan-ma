@@ -16,6 +16,14 @@ describe("refused-origin message", () => {
     expect(text).toContain("https://b-3001.app.github.dev");
   });
 
+  it("also shows the Referer and the running version, so one screenshot says everything", () => {
+    const text = originDetailText({ receivedOrigin: "http://localhost:3001", requestedHost: ["localhost:3001", "localhost:3001"], allowedOrigins: "https://x-3001.app.github.dev", referer: "https://x-3001.app.github.dev", build: "abc1234" });
+    expect(text).toContain("Origin دریافتی: http://localhost:3001");
+    expect(text).toContain("Host درخواست: localhost:3001 |"); // de-duplicated
+    expect(text).toContain("Referer: https://x-3001.app.github.dev");
+    expect(text).toContain("نسخه: abc1234");
+  });
+
   it("ignores malformed details", () => {
     expect(originDetailText(null)).toBe("");
     expect(originDetailText("x")).toBe("");

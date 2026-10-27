@@ -10,6 +10,10 @@ export ADMIN_ORIGINS="$origin" PUBLIC_MEDIA_URL="$origin/media"
 # only) accepts an https Origin that equals the host of the request itself and ends with this suffix (".app.github.dev").
 host="${origin#https://}"
 export ADMIN_ORIGIN_HOST_SUFFIXES=".${host#*.}"
+# GitHub's forwarder REWRITES Origin and Host to the upstream address: the server sees "Origin: http://localhost:3001" even though
+# the browser is on the https://...app.github.dev URL. Accept exactly that loopback origin of this server own port (development only;
+# production refuses the setting). A foreign Referer still vetoes it. See docs/admin/ADMIN-APP.md.
+export ADMIN_ACCEPT_REWRITTEN_ORIGIN=true
 cd "$ROOT"
 export APP_COMMIT="$(git rev-parse --short=7 HEAD 2>/dev/null || true)"
 [ -n "$APP_COMMIT" ] || unset APP_COMMIT
