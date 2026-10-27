@@ -6,6 +6,14 @@ import { readMigrations } from "./migrations";
  * semantics with nothing to install and no external service. NEVER used in production, where
  * `DATABASE_URL` must point to a real PostgreSQL server.
  */
+/**
+ * PGlite is ONE PostgreSQL session behind the socket. Several pool connections share that session, so two overlapping
+ * transactions (e.g. a background snapshot sync racing the next request) collide: Prisma P2039 "failed to start a
+ * transaction", seen as intermittent HTTP 500s. Clients of the embedded database must therefore use a single connection,
+ * which serialises everything exactly as the session does anyway.
+ */
+export const EMBEDDED_POOL = { maxConnections: 1, connectionTimeoutMs: 30_000 } as const;
+
 export interface EmbeddedPostgres {
   /** Standard connection string; works with `pg` and Prisma. */
   url: string;

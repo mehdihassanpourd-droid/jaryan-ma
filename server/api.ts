@@ -339,7 +339,9 @@ export function createApi(deps: ApiDeps) {
       if (error instanceof NotFoundError) return errorResponse("not_found", 404);
       const known = domainErrorResponse(error);
       if (known) return known;
-      log("unhandled_error", { error: error instanceof Error ? error.name : "unknown" });
+      // Only the class name and (for database errors) the Prisma/PostgreSQL error CODE: never messages, which can carry data.
+      const code = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : undefined;
+      log("unhandled_error", { error: error instanceof Error ? error.name : "unknown", ...(code ? { code } : {}) });
       return errorResponse("internal_error", 500);
     }
   };

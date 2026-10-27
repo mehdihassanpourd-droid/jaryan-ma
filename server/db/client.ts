@@ -8,12 +8,14 @@ export interface DbOptions {
   maxConnections?: number;
   /** PostgreSQL schema (search_path). Tests use one schema per test file against a shared server. */
   schema?: string;
+  /** Fail instead of waiting forever for a free connection (used with a single-connection pool, where a nested query would deadlock). */
+  connectionTimeoutMs?: number;
 }
 
 /** Prisma client over the standard `pg` driver: works with any PostgreSQL (self-hosted, managed, embedded). */
 export function createDb(connectionString: string, options: DbOptions = {}): Db {
   const adapter = new PrismaPg(
-    { connectionString, max: options.maxConnections ?? 10, ssl: sslFor(connectionString) },
+    { connectionString, max: options.maxConnections ?? 10, ssl: sslFor(connectionString), ...(options.connectionTimeoutMs ? { connectionTimeoutMillis: options.connectionTimeoutMs } : {}) },
     options.schema ? { schema: options.schema } : undefined,
   );
   return new PrismaClient({ adapter });
