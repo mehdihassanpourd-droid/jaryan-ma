@@ -1,0 +1,15 @@
+{
+  "name": "Jaryan Ma admin test (Node 22 + PostgreSQL 16)",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+  },
+  "hostRequirements": { "cpus": 2 },
+  "forwardPorts": [3001],
+  "portsAttributes": {
+    "3001": { "label": "Jaryan admin (private)", "protocol": "http", "onAutoForward": "notify" },
+    "5433": { "label": "PostgreSQL (internal, do not share)", "onAutoForward": "ignore" }
+  },
+  "postCreateCommand": "bash scripts/codespace/setup.sh",
+  "postStartCommand": "bash -c 'source scripts/codespace/lib.sh && start_db' || true"
+}

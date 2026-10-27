@@ -105,6 +105,46 @@ describe("the admin PWA stays private, portable and safe", () => {
   });
 });
 
+describe("the Codespaces test environment stays private and uses real authentication", () => {
+  const scripts = ["lib", "setup", "create-admin", "start"].map((n) => `scripts/codespace/${n}.sh`);
+  const everything = [...scripts, ".devcontainer/devcontainer.json", "scripts/codespace/smoke.ts"].map(read).join("\n");
+
+  it("defines Node 22 + the forwarded admin port only, as pure JSON", () => {
+    const config = JSON.parse(read(".devcontainer/devcontainer.json")) as { image: string; features: Record<string, { version?: string }>; forwardPorts: number[] };
+    expect(config.image).toContain("ubuntu-24.04");
+    expect(config.features["ghcr.io/devcontainers/features/node:1"]?.version).toBe("22");
+    expect(config.forwardPorts).toEqual([3001]);
+  });
+
+  it("never makes a port public and never listens beyond localhost", () => {
+    expect(everything).not.toMatch(/:public\b|visibility[ =]+public|"visibility"\s*:\s*"public"/i);
+    expect(read("scripts/codespace/lib.sh")).toContain("listen_addresses=127.0.0.1");
+    expect(read("scripts/codespace/lib.sh")).toContain("HOST=127.0.0.1");
+  });
+
+  it("enforces password + TOTP and Secure cookies, with no default account or bypass", () => {
+    const lib = read("scripts/codespace/lib.sh");
+    expect(lib).toContain("REQUIRE_TOTP=true");
+    expect(lib).toContain("COOKIE_SECURE=true");
+    expect(lib).toContain("unset DEV_ADMIN_EMAIL DEV_ADMIN_PASSWORD");
+    expect(lib).toContain("CUSTOMER_ACCOUNTS_ENABLED=false");
+    expect(everything).not.toMatch(/REQUIRE_TOTP=false|COOKIE_SECURE=false|DEV_ADMIN_(EMAIL|PASSWORD)=|NODE_ENV=production/);
+  });
+
+  it("keeps the database password out of the repository (random, in the git-ignored state dir)", () => {
+    expect(read("scripts/codespace/setup.sh")).toMatch(/openssl rand -hex/);
+    expect(read(".gitignore")).toMatch(/^\/\.data\/$/m);
+  });
+
+  it("all scripts are syntactically valid bash", () => {
+    for (const file of scripts) expect(() => execFileSync("bash", ["-n", join(ROOT, file)]), file).not.toThrow();
+  });
+
+  it("is not part of the static site or its deployment", () => {
+    expect(read(".github/workflows/cloudflare-pages.yml")).not.toMatch(/codespace|devcontainer/i);
+  });
+});
+
 describe("secrets stay out of git", () => {
   const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
 
