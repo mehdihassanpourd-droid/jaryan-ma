@@ -281,8 +281,9 @@ describe("no mandatory foreign runtime dependency", () => {
   // The production store must keep working inside Iran when the international internet is cut: nothing the storefront or the admin
   // loads or calls at run time may live on a foreign host (fonts, CDNs, analytics, scripts, APIs are bundled or self-hosted). The only
   // foreign addresses in the source are links the shopper may click, identifiers that are never fetched, and placeholders.
-  const ALLOWED = [/^http:\/\/localhost/, /^http:\/\/127\.0\.0\.1/, /^https:\/\/(www\.)?instagram\.com\//, /^https:\/\/schema\.org(\/|$)/, /^https?:\/\/([a-z0-9-]+\.)*example\.(ir|com|test)/];
-  const sources = [...walk("src", (f) => /\.(ts|tsx|css|html)$/.test(f) && !/\.test\./.test(f)), ...walk("admin/src", (f) => /\.(ts|tsx|css|html)$/.test(f) && !/\.test\./.test(f)), "admin/index.html", ...walk("public", () => true)];
+  const ALLOWED = [/^http:\/\/localhost/, /^http:\/\/127\.0\.0\.1/, /^https:\/\/(www\.)?instagram\.com\//, /^https:\/\/schema\.org(\/|$)/, /^http:\/\/www\.w3\.org\/2000\/svg$/, /^https?:\/\/([a-z0-9-]+\.)*example\.(ir|com|test)/];
+  // (the font licence texts under public/ name their upstream project pages; they are documentation, never loaded)
+  const sources = [...walk("src", (f) => /\.(ts|tsx|css|html)$/.test(f) && !/\.test\./.test(f)), ...walk("admin/src", (f) => /\.(ts|tsx|css|html)$/.test(f) && !/\.test\./.test(f)), "admin/index.html", ...walk("public", (f) => !/\/licenses\//.test(f.replaceAll("\\", "/")))];
 
   it("every absolute URL in the storefront and admin source is a link, an identifier or a placeholder (see the allow-list)", () => {
     const offenders: string[] = [];
