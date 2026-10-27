@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildCatalogSeo, imageAlt } from "./catalog-seo";
 import { effectiveSettings, seoSettings, resolveOrigin, type SeoSettings } from "./config";
 import { breadcrumbJsonLd, categoryBreadcrumbJsonLd, productJsonLd, serializeJsonLd, siteJsonLd, tomanToRialString } from "./jsonld";
-import { buildRobots, buildSitemap } from "./sitemap";
+import { buildRobots, buildSitemap, PRIVATE_PATHS } from "./sitemap";
 import { cleanText, truncate } from "./text";
 import { absoluteImageUrl, categoryPath, decodeParam, isValidSlug, productPath } from "./urls";
 import { catalog, product } from "./fixtures";
@@ -337,6 +337,6 @@ describe("sitemap and robots", () => {
   it("robots.txt stays closed until launch, then allows crawling and names the sitemap", () => {
     expect(buildRobots(ORIGIN, false)).toEqual({ rules: { userAgent: "*", disallow: "/" } });
     expect(buildRobots(null, true)).toEqual({ rules: { userAgent: "*", disallow: "/" } });
-    expect(buildRobots(ORIGIN, true)).toEqual({ rules: { userAgent: "*", allow: "/" }, sitemap: `${ORIGIN}/sitemap.xml` });
+    expect(buildRobots(ORIGIN, true)).toEqual({ rules: { userAgent: "*", allow: "/", disallow: PRIVATE_PATHS }, sitemap: `${ORIGIN}/sitemap.xml` });
   });
 });

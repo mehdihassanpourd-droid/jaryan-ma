@@ -8,7 +8,7 @@ import { formatNumber } from "@/lib/format";
 import { site } from "@/lib/site";
 import { loadSeo } from "@/seo";
 import { JsonLd } from "@/seo/JsonLd";
-import { categoryBreadcrumbJsonLd } from "@/seo/jsonld";
+import { categoryBreadcrumbJsonLd, categoryCollectionJsonLd } from "@/seo/jsonld";
 import { decodeParam } from "@/seo/urls";
 
 export const dynamicParams = false;
@@ -53,7 +53,7 @@ export default async function CategoryPage({ params }: Props) {
   const { meta, products, isDemo, seo } = found;
   return (
     <>
-      <JsonLd data={categoryBreadcrumbJsonLd(meta.slug, seo)} />
+      <JsonLd data={[categoryBreadcrumbJsonLd(meta.slug, seo), categoryCollectionJsonLd(meta.slug, seo)]} />
       <Container className="py-10 sm:py-14">
         <Breadcrumb items={[{ name: "خانه", href: "/" }, { name: meta.name }]} />
         <div className="mt-8 flex flex-wrap items-center gap-3">

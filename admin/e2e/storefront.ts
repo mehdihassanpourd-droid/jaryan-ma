@@ -14,7 +14,8 @@ const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".j
  */
 export function buildStorefront(publicEnv: Record<string, string>): string {
   const env: NodeJS.ProcessEnv = { ...process.env, ...publicEnv };
-  for (const name of ["NEXT_PUBLIC_SITE_URL", "CATALOG_SNAPSHOT_URL", "CATALOG_SNAPSHOT_DIR", ...["NEXT_PUBLIC_CATALOG_URL", "NEXT_PUBLIC_ORDER_API_URL"].filter((n) => !(n in publicEnv))]) delete env[name];
+  // Whatever the developer's shell has set must not leak into the build, unless the caller asked for it explicitly.
+  for (const name of ["NEXT_PUBLIC_SITE_URL", "CATALOG_SNAPSHOT_URL", "CATALOG_SNAPSHOT_DIR", "SEO_ALLOW_INDEXING", "NEXT_PUBLIC_CATALOG_URL", "NEXT_PUBLIC_ORDER_API_URL"]) if (!(name in publicEnv)) delete env[name];
   execFileSync("npm", ["run", "build", "--silent"], { cwd: root, stdio: "pipe", env });
   const dir = mkdtempSync(join(tmpdir(), "jm-storefront-"));
   cpSync(join(root, "out"), dir, { recursive: true });

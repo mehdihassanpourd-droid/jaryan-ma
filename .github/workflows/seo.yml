@@ -7,10 +7,10 @@ name: SEO
 on:
   push:
     branches: [main]
-    paths: ["src/**", "scripts/seo/**", "server/catalog/**", "server/storage/**", "next.config.ts", "package-lock.json", ".github/workflows/seo.yml"]
+    paths: ["src/**", "scripts/seo/**", "tools/seo-growth/**", "seo/**", "server/catalog/**", "server/storage/**", "next.config.ts", "package-lock.json", ".github/workflows/seo.yml"]
   pull_request:
     branches: [main]
-    paths: ["src/**", "scripts/seo/**", "server/catalog/**", "server/storage/**", "next.config.ts", "package-lock.json", ".github/workflows/seo.yml"]
+    paths: ["src/**", "scripts/seo/**", "tools/seo-growth/**", "seo/**", "server/catalog/**", "server/storage/**", "next.config.ts", "package-lock.json", ".github/workflows/seo.yml"]
 
 permissions:
   contents: read

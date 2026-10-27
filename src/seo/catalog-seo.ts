@@ -1,5 +1,6 @@
 import { formatNumber, formatToman } from "@/lib/format";
 import { effectiveSettings, type SeoSettings } from "./config";
+import { NO_OVERRIDES, type SeoOverrides } from "./overrides";
 import { cleanText, truncate } from "./text";
 import type { SeoCatalog, SeoImage, SeoProduct } from "./types";
 import { absoluteImageUrl, absoluteUrl, categoryPath, productPath } from "./urls";
@@ -84,9 +85,9 @@ function factsSentence(p: SeoProduct, siteName: string): string {
   return `${parts.join("؛ ")}.`;
 }
 
-function baseTitle(p: SeoProduct): string {
-  // An editor-chosen title wins over the generated one (still cleaned and limited; uniqueness is enforced later).
-  const chosen = p.seoTitle ? cleanText(p.seoTitle) : "";
+function baseTitle(p: SeoProduct, overrides: SeoOverrides): string {
+  // An editor-chosen title wins over an approved repository override, which wins over the generated one (always cleaned and limited; uniqueness is enforced later).
+  const chosen = p.seoTitle ? cleanText(p.seoTitle) : (overrides.products[p.slug]?.title ?? "");
   if (chosen) return truncate(chosen, TITLE_MAX);
   const name = cleanText(p.name);
   const category = p.category ? cleanText(p.category.name) : "";
@@ -95,8 +96,8 @@ function baseTitle(p: SeoProduct): string {
   return withCategory.length <= TITLE_MAX ? withCategory : truncate(name, TITLE_MAX);
 }
 
-function baseDescription(p: SeoProduct, siteName: string): string {
-  const chosen = p.seoDescription ? cleanText(p.seoDescription) : "";
+function baseDescription(p: SeoProduct, siteName: string, overrides: SeoOverrides): string {
+  const chosen = p.seoDescription ? cleanText(p.seoDescription) : (overrides.products[p.slug]?.description ?? "");
   if (chosen) return truncate(chosen, DESCRIPTION_MAX);
   const own = cleanText(p.description);
   const facts = factsSentence(p, siteName);
@@ -122,15 +123,15 @@ function dedupe<T extends { slug: string }>(items: T[], get: (i: T) => string, s
   }
 }
 
-export function buildCatalogSeo(catalog: SeoCatalog, requested: SeoSettings, siteName: string): CatalogSeo {
+export function buildCatalogSeo(catalog: SeoCatalog, requested: SeoSettings, siteName: string, overrides: SeoOverrides = NO_OVERRIDES): CatalogSeo {
   const settings = effectiveSettings(requested, catalog.source);
   const products = new Map<string, ProductSeo>();
   const mutable = catalog.products.map((p) => {
     const total = p.images.length;
     const seo: ProductSeo = {
       slug: p.slug,
-      title: baseTitle(p),
-      description: baseDescription(p, siteName),
+      title: baseTitle(p, overrides),
+      description: baseDescription(p, siteName, overrides),
       path: productPath(p.slug),
       canonical: settings.origin ? absoluteUrl(settings.origin, productPath(p.slug)) : null,
       indexable: settings.indexing && !p.isDemo,
@@ -175,4 +176,17 @@ export function buildCatalogSeo(catalog: SeoCatalog, requested: SeoSettings, sit
   dedupe(catSeo, (s) => s.title, (s, v) => void (s.title = v), (value, n) => `${value} (${formatNumber(n)})`);
 
   return { settings, siteName, products, categories };
+}
+
+/**
+ * Other products of the same category to link from a product page (internal links that keep sold-out pages useful): purchasable ones
+ * first, then sold-out, each group in slug order, at most `limit`. Sample content never links to real products or the other way round.
+ */
+export function relatedProducts(catalog: SeoCatalog, product: SeoProduct, limit = 4): SeoProduct[] {
+  if (!product.category) return [];
+  const rank = (p: SeoProduct) => (p.availability === "sold_out" ? 1 : 0);
+  return catalog.products
+    .filter((p) => p.slug !== product.slug && p.isDemo === product.isDemo && p.category?.slug === product.category?.slug)
+    .sort((a, b) => rank(a) - rank(b) || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0))
+    .slice(0, limit);
 }
