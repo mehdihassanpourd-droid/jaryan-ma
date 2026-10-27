@@ -27,6 +27,11 @@ const API_MESSAGES: Record<string, string> = {
   too_many_attempts: "تعداد تلاش‌ها زیاد بود. کمی صبر کنید و دوباره تلاش کنید.",
   weak_password: "گذرواژه جدید به‌اندازه کافی قوی نیست.",
   unsupported_media_type: "نوع فایل پشتیبانی نمی‌شود.",
+  notifications_disabled: "ارسال پیامک رهگیری فعال نیست.",
+  not_retryable: "این پیامک دیگر قابل ارسال دوباره نیست (احتمالاً همین حالا ارسال شده است).",
+  notification_attempt_limit: "این پیامک به سقف تلاش رسیده است.",
+  shipment_not_allowed: "حامل و کد رهگیری فقط بعد از تأیید سفارش ثبت می‌شود.",
+  shipping_config_changed: "تنظیمات ارسال در همین فاصله تغییر کرده است.",
   rate_limited: "درخواست‌ها زیاد است. کمی صبر کنید.",
 };
 

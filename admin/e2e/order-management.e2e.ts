@@ -85,6 +85,7 @@ describe("order management and inventory safety (phones, real PostgreSQL)", () =
     admin = await h.login(adminCtx, h.accounts.owner);
     catalog = await adminCatalog(admin, h.baseUrl);
     const cat = await catalog.category("wall", "تابلو و بافته");
+    await catalog.freeShipping();
     rug = await catalog.product({ name: "تابلو گلیم کوهستان", categoryId: cat, fulfillment: "unique", priceToman: 4_500_000, inventory: 1, slug: "kuhestan-rug", description: "بافته با دست" });
     cushion = await catalog.product({ name: "کوسن بافته", categoryId: cat, fulfillment: "stocked", priceToman: 500_000, slug: "woven-cushion", variants: [{ sku: "CU-S", options: { اندازه: "کوچک" }, priceToman: 500_000, inventory: 3 }] }, { tone: [90, 110, 70] });
 

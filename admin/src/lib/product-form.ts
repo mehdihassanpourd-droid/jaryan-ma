@@ -36,6 +36,8 @@ export interface ProductForm {
   price: string;
   inventory: string;
   leadTimeDays: string;
+  /** Packed weight of one unit in grams (shipping); empty = the shop's default item weight. */
+  weightGrams: string;
   seoTitle: string;
   seoDescription: string;
   optionNames: string[];
@@ -57,6 +59,7 @@ export function emptyForm(): ProductForm {
     price: "",
     inventory: "1",
     leadTimeDays: "",
+    weightGrams: "",
     seoTitle: "",
     seoDescription: "",
     optionNames: [],
@@ -78,6 +81,7 @@ export function fromStored(p: StoredProduct): ProductForm {
     price: priceToInput(p.priceToman),
     inventory: countToInput(p.inventory),
     leadTimeDays: countToInput(p.leadTimeDays),
+    weightGrams: countToInput(p.weightGrams),
     seoTitle: p.seoTitle ?? "",
     seoDescription: p.seoDescription ?? "",
     optionNames,
@@ -149,6 +153,7 @@ export function toBody(form: ProductForm, status: ProductStatus = form.status): 
     priceToman: num("priceToman", form.price, "price"),
     inventory,
     leadTimeDays: form.fulfillment === "made_to_order" ? num("leadTimeDays", form.leadTimeDays, "count", 365) : null,
+    weightGrams: num("weightGrams", form.weightGrams, "count", 100_000),
     images: form.images.map((i) => ({ key: i.key, alt: i.alt })),
     variants,
     seoTitle: form.seoTitle,
@@ -193,6 +198,7 @@ export function duplicateBody(p: StoredProduct, attempt = 1): Record<string, unk
     priceToman: p.priceToman,
     inventory: p.inventory,
     leadTimeDays: p.leadTimeDays,
+    weightGrams: p.weightGrams,
     seoTitle: null,
     seoDescription: null,
     images: [...p.images].sort((a, b) => a.position - b.position).map((i) => ({ key: i.key, alt: i.alt })),

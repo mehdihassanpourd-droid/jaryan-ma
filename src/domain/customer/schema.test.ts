@@ -82,7 +82,8 @@ describe("addresses", () => {
 describe("orders (large totals computed exactly)", () => {
   const shipping = { recipientName: "علی رضایی", recipientPhone: "09121234567", province: "تهران", city: "تهران", street: "خیابان ولیعصر", postalCode: "1136813111" };
   const item = (unit: number, quantity = 1) => ({ productId: "p", vendorId: "v", titleSnapshot: "اثر", unitPriceToman: unit, quantity });
-  const order = (items: ReturnType<typeof item>[], totalToman: number) => newOrderSchema.safeParse({ customerId: "c", items, shipping, totalToman });
+  const delivery = (feeToman = 0, method = "post") => ({ method, feeToman, details: { rateId: null, weightGrams: 500, free: false, etaMinDays: null, etaMaxDays: null, note: null } });
+  const order = (items: ReturnType<typeof item>[], totalToman: number, extra: Record<string, unknown> = {}) => newOrderSchema.safeParse({ customerId: "c", items, shipping, delivery: delivery(), totalToman, ...extra });
 
   it("accepts a total equal to the exact sum, including values above 2^31 and 2^40", () => {
     expect(order([item(1_500_000, 3), item(2_000_000_000_000)], 2_000_004_500_000).success).toBe(true);
@@ -93,6 +94,20 @@ describe("orders (large totals computed exactly)", () => {
     expect(!wrong.success && wrong.error.issues[0]?.message).toBe("order_total_mismatch");
     const huge = order([item(MAX_TOMAN, 2)], MAX_TOMAN);
     expect(!huge.success && huge.error.issues.map((i) => i.message)).toContain("order_total_out_of_range");
+  });
+  it("adds the delivery fee to the total: the sum must be goods + fee, exactly", () => {
+    expect(order([item(1000, 2)], 2000 + 85_000, { delivery: delivery(85_000) }).success).toBe(true);
+    expect(order([item(1000, 2)], 2000, { delivery: delivery(85_000) }).success).toBe(false); // fee forgotten
+    const huge = order([item(MAX_TOMAN)], MAX_TOMAN, { delivery: delivery(1) });
+    expect(!huge.success && huge.error.issues.map((i) => i.message)).toContain("order_total_out_of_range");
+  });
+  it("carried deliveries need a whole address; pickup needs none but must be free", () => {
+    const pickupShipping = { recipientName: "علی رضایی", recipientPhone: "09121234567", province: "", city: "" };
+    expect(order([item(1000)], 1000, { shipping: pickupShipping, delivery: delivery(0, "pickup") }).success).toBe(true);
+    const free = order([item(1000)], 1500, { shipping: pickupShipping, delivery: delivery(500, "pickup") });
+    expect(!free.success && free.error.issues.map((i) => i.message)).toContain("pickup_is_free");
+    const noAddress = order([item(1000)], 1000, { shipping: pickupShipping });
+    expect(!noAddress.success && noAddress.error.issues.map((i) => i.message)).toContain("address_required");
   });
   it("limits lines and quantities", () => {
     expect(order([], 0).success).toBe(false);

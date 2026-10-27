@@ -26,7 +26,7 @@ async function order(customerId: string, over: { qty?: number; unit?: number; st
   const qty = over.qty ?? 2;
   const created = await app.platform.accountStore.createOrder(
     newOrderSchema.parse({
-      customerId, requestId: null, totalToman: unit * qty, customerNote: "هدیه",
+      customerId, requestId: null, totalToman: unit * qty, customerNote: "هدیه", delivery: { method: "post", feeToman: 0, details: { rateId: null, weightGrams: 500, free: false, etaMinDays: null, etaMaxDays: null, note: null } },
       items: [{ productId, vendorId, titleSnapshot: "کوسن", skuSnapshot: "CU-M", variantSnapshot: { اندازه: "متوسط" }, unitPriceToman: unit, quantity: qty }],
       shipping: { recipientName: "علی رضایی", recipientPhone: "09121234567", province: "تهران", city: "تهران", street: "خیابان ولیعصر ۱۲", postalCode: "1459813176" },
     }),

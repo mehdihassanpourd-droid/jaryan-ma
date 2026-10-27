@@ -63,7 +63,7 @@ async function signIn(phone = "09121234567", e164 = "+989121234567"): Promise<Cu
 }
 
 const place = (as: Customer | null, items: unknown[], extra: Record<string, unknown> = {}, o: Parameters<typeof call>[1] = {}) =>
-  call("/api/v1/customer/orders", { method: "POST", as, body: { items, shipping: SHIPPING, requestId: requestId(), ...extra }, ...o });
+  call("/api/v1/customer/orders", { method: "POST", as, body: { items, shipping: SHIPPING, deliveryMethod: "post", expectedFeeToman: 0, requestId: requestId(), ...extra }, ...o });
 
 describe("placing an order (pending, no payment)", () => {
   it("builds the order from the DATABASE: exact prices, titles, variant, total; nothing about money comes from the browser", async () => {
@@ -193,7 +193,7 @@ describe("request rules", () => {
   it("validates delivery details and the cart shape with field paths (no values echoed)", async () => {
     const p = await product({ name: "اثر" });
     const me = await signIn();
-    const bad = await call("/api/v1/customer/orders", { method: "POST", as: me, body: { items: [{ slug: p.slug, quantity: 0 }], shipping: { ...SHIPPING, postalCode: "123", province: "جایی" }, requestId: "nope" } });
+    const bad = await call("/api/v1/customer/orders", { method: "POST", as: me, body: { items: [{ slug: p.slug, quantity: 0 }], deliveryMethod: "post", expectedFeeToman: 0, shipping: { ...SHIPPING, postalCode: "123", province: "جایی" }, requestId: "nope" } });
     expect(bad.status).toBe(422);
     const paths = bad.body.issues.map((i: any) => i.path);
     expect(paths).toEqual(expect.arrayContaining(["items.0.quantity", "shipping.postalCode", "shipping.province", "requestId"]));
@@ -202,7 +202,7 @@ describe("request rules", () => {
     const dup = await place(me, [{ slug: p.slug, quantity: 1 }, { slug: p.slug, quantity: 1 }]);
     expect(dup.status).toBe(422);
     expect(dup.body.issues.map((i: any) => [i.path, i.code])).toEqual([["items.1", "duplicate_line"]]);
-    expect((await call("/api/v1/customer/orders", { method: "POST", as: me, body: { items: [], shipping: SHIPPING, requestId: requestId() } })).status).toBe(422);
+    expect((await call("/api/v1/customer/orders", { method: "POST", as: me, body: { items: [], shipping: SHIPPING, deliveryMethod: "post", expectedFeeToman: 0, requestId: requestId() } })).status).toBe(422);
   });
 
   it("is idempotent: a retry of the same attempt, even concurrent, returns the one order", async () => {

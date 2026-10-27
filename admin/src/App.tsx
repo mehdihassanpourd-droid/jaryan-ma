@@ -12,10 +12,12 @@ import { LoginPage } from "./pages/LoginPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { ProductEditorPage } from "./pages/ProductEditorPage";
 import { ProductsPage } from "./pages/ProductsPage";
+import { ShippingPage } from "./pages/ShippingPage";
 
 const NAV = [
   { path: "/products", label: "محصولات", icon: "products" },
   { path: "/orders", label: "سفارش‌ها", icon: "orders", permission: "order:read" },
+  { path: "/shipping", label: "ارسال", icon: "shipping", permission: "shipping:read" },
   { path: "/data", label: "ورود و خروج", icon: "data" },
   { path: "/categories", label: "دسته‌ها", icon: "categories" },
   { path: "/account", label: "حساب", icon: "account" },
@@ -72,7 +74,8 @@ function Shell() {
     ) : (
       <Alert tone="error">شمارهٔ سفارش معتبر نیست. <a href={hrefFor("/orders")}>بازگشت به فهرست</a></Alert>
     );
-  } else if (segments[0] === "data") page = <DataPage />;
+  } else if (segments[0] === "shipping") page = can("shipping:read") ? <ShippingPage /> : <Alert tone="error">این بخش برای نقش شما فعال نیست.</Alert>;
+  else if (segments[0] === "data") page = <DataPage />;
   else if (segments[0] === "categories") page = <CategoriesPage />;
   else if (segments[0] === "account") page = <AccountPage />;
 

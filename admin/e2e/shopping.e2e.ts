@@ -6,6 +6,7 @@ import type { Server } from "node:http";
 import type { BrowserContext, Page } from "playwright";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { adminCatalog } from "./admin-api";
+import { chooseDelivery } from "./shop-helpers";
 import { startHarness, type Harness } from "./harness";
 import { buildStorefront, serveStatic } from "./storefront";
 
@@ -99,6 +100,7 @@ describe("customer shopping journey, start to finish, on a phone", () => {
         { sku: "CU-M", options: { اندازه: "متوسط" }, priceToman: 650_000, inventory: 4 },
       ],
     }, { tone: [90, 110, 70] });
+    await catalog.freeShipping();
     runner = await catalog.product({ name: "رانر سفارشی", categoryId: cat, fulfillment: "made_to_order", priceToman: 2_000_000, leadTimeDays: 21, slug: "custom-runner" }, { tone: [140, 100, 120] });
     await catalog.product({ name: "محصول پیش‌نویس", categoryId: cat, fulfillment: "unique", priceToman: 1_000_000, inventory: 1, slug: "hidden-draft" }, { status: "draft" });
   });
@@ -238,7 +240,7 @@ describe("customer shopping journey, start to finish, on a phone", () => {
 
     await page.getByLabel(/نام و نام خانوادگی گیرنده/).fill("علی رضایی");
     await page.getByLabel(/شمارهٔ موبایل گیرنده/).fill("۰۹۱۲۱۲۳۴۵۶۷");
-    await page.getByLabel(/استان/).selectOption("تهران");
+    await page.getByRole("combobox", { name: /^استان/ }).selectOption("تهران");
     await page.getByLabel(/^شهر/).fill("تهران");
     await page.getByLabel(/نشانی کامل/).fill("خیابان ولیعصر، کوچه گل");
     await page.getByLabel(/^پلاک/).fill("۱۲");
@@ -246,6 +248,7 @@ describe("customer shopping journey, start to finish, on a phone", () => {
     await page.getByLabel(/کد پستی/).fill("۱۴۵۹۸۱۳۱۷۶");
     await page.getByLabel(/توضیحات سفارش/).fill("لطفاً بسته‌بندی هدیه");
     await page.getByRole("checkbox", { name: /نشانی در حساب من ذخیره شود/ }).check();
+    await chooseDelivery(page); // the server priced it (free in this test); choosing a method also retires "choose a method"
     // every field was filled in: none of the earlier "required" messages may still be on screen
     await pw(page.getByTestId("shipping-form").getByRole("alert")).toHaveCount(0);
     await noSideScroll(page, "checkout");
@@ -301,6 +304,7 @@ describe("customer shopping journey, start to finish, on a phone", () => {
     await pw(page.getByLabel(/نام و نام خانوادگی گیرنده/)).toHaveValue("علی رضایی", { timeout: 15_000 });
     await pw(page.getByLabel(/کد پستی/)).toHaveValue("1459813176");
     await pw(page.getByTestId("checkout-total")).toHaveText("۲٬۶۵۰٬۰۰۰ تومان");
+    await chooseDelivery(page);
     await catalog.setStock(cushion.id, 0, "CU-M"); // the cushion is sold out while the checkout page is open (it still shows it)
     await page.getByTestId("place-order").tap();
     await pw(page.getByTestId("checkout-failure")).toContainText("سفارش ثبت نشد");
@@ -378,7 +382,7 @@ describe("customer shopping journey, start to finish, on a phone", () => {
     await pw(page.getByTestId("order-text")).toHaveCount(0);
     await page.getByLabel(/نام و نام خانوادگی گیرنده/).fill("علی رضایی");
     await page.getByLabel(/شمارهٔ موبایل گیرنده/).fill("09121234567");
-    await page.getByLabel(/استان/).selectOption("تهران");
+    await page.getByRole("combobox", { name: /^استان/ }).selectOption("تهران");
     await page.getByLabel(/^شهر/).fill("تهران");
     await page.getByLabel(/نشانی کامل/).fill("خیابان ولیعصر، کوچه گل");
     await page.getByLabel(/کد پستی/).fill("1459813176");

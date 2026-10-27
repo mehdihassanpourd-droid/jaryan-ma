@@ -1,5 +1,6 @@
 import type { ProductListRow } from "../../src/domain/product/types";
 import type { OrderActorType, OrderStatusValue } from "../../src/domain/customer/order-status";
+import type { CarrierKey, ShippingMethodKey } from "../../src/domain/shipping/methods";
 import type { AddressInput, NewOrderInput, ShippingSnapshot } from "../../src/domain/customer/schema";
 
 /** Customer-facing data other than sign-in: addresses, favourites, orders, data requests. */
@@ -40,10 +41,34 @@ export interface OrderHistoryEntry {
   by: OrderActorType;
 }
 
+/** Carrier and tracking staff entered for an order. */
+export interface ShipmentView {
+  carrier: CarrierKey;
+  carrierName: string | null;
+  trackingCode: string | null;
+  updatedAt: Date;
+  /** A public tracking page when a provider knows one for this carrier (none today); filled in by the API layer. */
+  trackingUrl?: string | null;
+}
+
+/** How an order is delivered, as agreed at checkout. `method` is null for orders made before shipping existed. */
+export interface OrderDeliveryView {
+  method: ShippingMethodKey | null;
+  free: boolean;
+  etaMinDays: number | null;
+  etaMaxDays: number | null;
+  note: string | null;
+}
+
 export interface OrderView {
   number: number;
   status: OrderStatusValue;
+  /** What the customer pays: subtotal + shipping fee. */
   totalToman: number;
+  subtotalToman: number;
+  shippingFeeToman: number;
+  delivery: OrderDeliveryView;
+  shipment: ShipmentView | null;
   placedAt: Date;
   shipping: ShippingSnapshot;
   customerNote: string | null;

@@ -128,3 +128,17 @@ describe("customer accounts and SMS", () => {
     expect(problems({ ...prod, CUSTOMER_ORIGINS: "http://shop.example.ir" }).join()).toContain("explicit origins");
   });
 });
+
+describe("shipment tracking SMS", () => {
+  it("is off by default everywhere", () => {
+    expect(loadConfig(prod).shipmentSmsEnabled).toBe(false);
+    expect(loadConfig({}).shipmentSmsEnabled).toBe(false);
+    expect(loadConfig({ SHIPMENT_SMS_ENABLED: "true" }).shipmentSmsEnabled).toBe(true); // development, on request
+  });
+
+  it("cannot be switched on in production without a real SMS gateway", () => {
+    expect(problems({ ...prod, SHIPMENT_SMS_ENABLED: "true" }).join("\n")).toContain("SHIPMENT_SMS_ENABLED=true needs a real SMS gateway");
+    expect(problems({ ...prod, SHIPMENT_SMS_ENABLED: "true", SMS_PROVIDER: "console" }).join("\n")).toContain("SHIPMENT_SMS_ENABLED=true needs a real SMS gateway");
+    expect(problems({ ...prod, SHIPMENT_SMS_ENABLED: "true", SMS_PROVIDER: "http", SMS_HTTP_URL: "https://sms.example.ir/send", SMS_HTTP_BODY_TEMPLATE: '{"to":"{{to}}","text":"{{text}}"}' })).toEqual([]);
+  });
+});

@@ -2,12 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Container } from "@/components/ui/Container";
 import type { LineProblem } from "@/domain/customer/checkout";
 import { lineKey } from "@/lib/cart";
 import { cartTotal, priceLine, UNAVAILABLE_TEXT, type PricedLine } from "@/lib/cart-pricing";
-import { emptyShippingForm, formFromAddress, PROVINCES, validateShipping, type ShippingErrors, type ShippingForm } from "@/lib/checkout-form";
+import { emptyShippingForm, formFromAddress, PROVINCES, validatePickup, validateShipping, type ShippingErrors, type ShippingForm } from "@/lib/checkout-form";
+import { isIranProvince } from "@/domain/customer/geo";
+import type { ShippingMethodKey } from "@/domain/shipping/methods";
+import { feeText } from "@/lib/delivery-text";
+import { DeliveryOptions } from "./DeliveryOptions";
+import { useShippingQuote } from "./useShippingQuote";
 import { formatNumber, formatToman } from "@/lib/format";
 import { LIVE_CATALOG_BASE } from "@/lib/live-config";
 import { OrderApiError } from "@/lib/order-api";
@@ -42,6 +47,8 @@ function failureText(error: unknown): string {
     case "unauthorized": return "ورود شما منقضی شده است؛ دوباره وارد شوید.";
     case "bad_csrf_token": case "bad_origin": return "نشست شما تازه‌سازی شد؛ دوباره دکمهٔ ثبت سفارش را بزنید.";
     case "too_many_open_orders": return "شما سفارش‌های باز زیادی دارید. بعد از رسیدگی گالری به آن‌ها دوباره سفارش دهید.";
+    case "delivery_fee_changed": return "هزینهٔ ارسال تغییر کرده است. مبلغ جدید را بالا ببینید و اگر موافقید دوباره ثبت سفارش را بزنید؛ سفارشی ثبت نشد.";
+    case "delivery_unavailable": return "این روش ارسال برای این سفارش در دسترس نیست؛ روش دیگری انتخاب کنید. سفارشی ثبت نشد.";
     case "order_total_out_of_range": return "مبلغ سفارش از حد مجاز بیشتر است؛ تعداد را کم کنید.";
     case "account_not_active": return "این حساب در حال حاضر امکان ثبت سفارش ندارد.";
     case "rate_limited": return `درخواست‌های پشت‌سرهم زیاد بود؛ ${error.detail.retryAfterSeconds ?? 60} ثانیه دیگر دوباره تلاش کنید.`;
@@ -64,6 +71,7 @@ export function CheckoutView() {
   const [orderText, setOrderText] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [requestId] = useState(newRequestId);
+  const [method, setMethod] = useState<ShippingMethodKey | null>(null);
   const prefilled = useRef(false);
 
   // A signed-in customer's default address fills the form once (never over what the person has already typed).
@@ -79,6 +87,26 @@ export function CheckoutView() {
       () => undefined,
     );
   }, [signedIn]);
+
+  // The server prices the delivery for the orderable lines and the typed province/city; the browser only shows the answer.
+  const quoteLines = useMemo(
+    () =>
+      products.state === "ready"
+        ? cart.lines.flatMap((line) => {
+            const p = priceLine(line, products.value.get(line.slug) ?? null);
+            return p.ok ? [{ slug: line.slug, sku: line.sku, quantity: p.quantity }] : [];
+          })
+        : [],
+    [cart.lines, products],
+  );
+  const destination = isIranProvince(form.province) && form.city.trim().length >= 2 ? { province: form.province, city: form.city.trim() } : null;
+  const shipping = useShippingQuote(orderApi, signedIn && quoteLines.length > 0, quoteLines, destination, (items) => {
+    setLineProblems(items);
+    refreshProducts();
+  });
+  const quotes = shipping.state.status === "idle" ? null : shipping.state.quotes;
+  const chosen = method === null ? null : (quotes?.find((q) => q.method === method) ?? null);
+  const chosenFee = chosen?.available ? chosen.feeToman : null;
 
   const shell = (children: React.ReactNode) => (
     <Container className="py-10 sm:py-14">
@@ -150,18 +178,30 @@ export function CheckoutView() {
     if (!orderApi) return;
     setFailure(null);
     setLineProblems([]);
-    const checked = validateShipping(form);
-    if (!checked.ok) return setErrors(checked.errors);
+    const items = orderable.map((p) => ({ slug: p.line.slug, sku: p.line.sku, quantity: p.quantity }));
+    // In-person pickup sends only who collects it; every carried delivery sends the full, validated address.
+    const contact = method === "pickup" ? validatePickup(form) : null;
+    const address = method === "pickup" ? null : validateShipping(form);
+    const checked = contact ?? address;
+    if (!checked) return;
+    const needMethod = method === null || chosenFee === null;
+    if (!checked.ok) {
+      setErrors(checked.errors);
+      if (needMethod) setFailure("روش ارسال را انتخاب کنید.");
+      return;
+    }
+    if (needMethod) return setFailure("روش ارسال را انتخاب کنید.");
     setErrors({});
     setBusy(true);
     try {
-      const placed = await orderApi.placeOrder({
-        items: orderable.map((p) => ({ slug: p.line.slug, sku: p.line.sku, quantity: p.quantity })),
-        shipping: checked.shipping,
-        customerNote: checked.customerNote,
-        requestId,
-      });
-      if (saveAddress) await orderApi.createAddress({ ...checked.shipping, isDefault: false }).catch(() => undefined);
+      const common = { items, customerNote: checked.customerNote, requestId, expectedFeeToman: chosenFee as number };
+      const placed = contact?.ok
+        ? await orderApi.placeOrder({ ...common, deliveryMethod: "pickup", shipping: contact.shipping })
+        : address?.ok
+          ? await orderApi.placeOrder({ ...common, deliveryMethod: method as Exclude<ShippingMethodKey, "pickup">, shipping: address.shipping })
+          : null;
+      if (!placed) return;
+      if (saveAddress && address?.ok) await orderApi.createAddress({ ...address.shipping, isDefault: false }).catch(() => undefined);
       cart.clear();
       router.push(`/order?number=${placed.order.number}`);
     } catch (error) {
@@ -170,6 +210,11 @@ export function CheckoutView() {
         if (error.code === "items_unavailable") {
           setLineProblems(error.detail.items ?? []);
           refreshProducts();
+        }
+        if (error.code === "delivery_fee_changed" && error.detail.quotes) shipping.replace(error.detail.quotes);
+        if (error.code === "delivery_unavailable") {
+          if (error.detail.quotes) shipping.replace(error.detail.quotes);
+          setMethod(null);
         }
         if (error.status === 401 || error.code === "bad_csrf_token") customer.retry();
         if (error.status === 422) {
@@ -239,9 +284,25 @@ export function CheckoutView() {
         </ul>
         <p className="mt-4 flex items-baseline justify-between gap-3 border-t border-sand-200 pt-4">
           <span className="text-bark-700">جمع کالاها</span>
-          <strong className="text-xl text-bark-900" data-testid="checkout-total">{formatToman(total)}</strong>
+          <strong className="text-bark-900" data-testid="checkout-total">{formatToman(total)}</strong>
         </p>
-        <p className="mt-2 text-xs text-bark-600">هزینهٔ ارسال در این مبلغ لحاظ نشده است.</p>
+        {canPlace ? (
+          <>
+            <p className="mt-2 flex items-baseline justify-between gap-3 text-sm">
+              <span className="text-bark-700">هزینهٔ ارسال</span>
+              <span className="text-bark-900" data-testid="checkout-shipping-fee">
+                {chosenFee === null ? "پس از انتخاب روش ارسال" : method === "pickup" ? "بدون هزینه" : feeText(chosenFee)}
+              </span>
+            </p>
+            <p className="mt-3 flex items-baseline justify-between gap-3 border-t border-sand-200 pt-3">
+              <span className="font-medium text-bark-900">جمع کل سفارش</span>
+              <strong className="text-xl text-bark-900" data-testid="checkout-grand-total">{chosenFee === null ? "—" : formatToman(total + BigInt(chosenFee))}</strong>
+            </p>
+            <p className="mt-2 text-xs text-bark-600">هزینهٔ ارسال را سرور محاسبه می‌کند و پیش از ثبت اینجا می‌بینید. پرداخت آنلاین هنوز فعال نیست.</p>
+          </>
+        ) : (
+          <p className="mt-2 text-xs text-bark-600">هزینهٔ ارسال در این مبلغ لحاظ نشده است.</p>
+        )}
       </section>
 
       {real && customer.state.status === "loading" && <p role="status" className="text-bark-600">در حال بررسی ورود…</p>}
@@ -271,6 +332,12 @@ export function CheckoutView() {
           <Field label="شمارهٔ موبایل گیرنده" required error={errors.recipientPhone}>
             {(p) => <input {...p} type="tel" inputMode="tel" autoComplete="tel" dir="ltr" placeholder="09123456789" {...fieldProps("recipientPhone")} className={`${p.className} text-start`} />}
           </Field>
+          {method === "pickup" ? (
+            <p role="note" className="rounded-xl border border-sand-300 bg-white p-4 text-sm leading-7 text-bark-700" data-testid="pickup-note">
+              برای تحویل حضوری نشانی لازم نیست؛ فقط نام و شمارهٔ کسی که سفارش را تحویل می‌گیرد.
+            </p>
+          ) : (
+            <>
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="استان" required error={errors.province}>
               {(p) => (
@@ -294,6 +361,18 @@ export function CheckoutView() {
               {(p) => <input {...p} type="text" inputMode="numeric" autoComplete="postal-code" dir="ltr" {...fieldProps("postalCode")} className={`${p.className} text-start`} />}
             </Field>
           </div>
+            </>
+          )}
+          {canPlace && (
+            <DeliveryOptions
+              quotes={quotes}
+              loading={shipping.state.status === "loading"}
+              failed={shipping.state.status === "error" && quotes === null}
+              selected={chosen?.available ? method : null}
+              onSelect={(m) => { setMethod(m); setFailure(null); }}
+              onRetry={shipping.reload}
+            />
+          )}
           <Field label="توضیحات سفارش (اختیاری)" error={errors.customerNote} hint="حداکثر ۳۰۰ نویسه">
             {(p) => <textarea {...p} rows={2} {...fieldProps("customerNote")} />}
           </Field>
@@ -308,7 +387,7 @@ export function CheckoutView() {
 
           <div className="flex flex-wrap items-center gap-3">
             {canPlace && <button type="submit" className={primary} disabled={busy} data-testid="place-order">{busy ? "در حال ثبت…" : "ثبت سفارش (بدون پرداخت)"}</button>}
-            <button type="button" className={canPlace ? secondary : primary} onClick={makeText} data-testid="make-text">ساخت متن سفارش برای اینستاگرام</button>
+            {method !== "pickup" && <button type="button" className={canPlace ? secondary : primary} onClick={makeText} data-testid="make-text">ساخت متن سفارش برای اینستاگرام</button>}
           </div>
           {!canPlace && <p className="text-xs leading-6 text-bark-600">با این دکمه فقط متن سفارش ساخته می‌شود؛ چیزی ثبت یا ارسال نمی‌شود.</p>}
         </form>

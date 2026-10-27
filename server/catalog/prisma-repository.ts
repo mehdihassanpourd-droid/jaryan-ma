@@ -62,6 +62,7 @@ function toStored(p: FullRow): StoredProduct {
     priceToman: tomanFromDbOrNull(p.priceToman),
     inventory: p.inventory,
     leadTimeDays: p.leadTimeDays,
+    weightGrams: p.weightGrams,
     images: p.images.map((i) => ({ id: i.id, key: i.key, alt: i.alt, position: i.position })),
     variants: p.variants.map((v) => ({
       id: v.id,
@@ -227,6 +228,7 @@ export class PrismaCatalogRepository implements CatalogRepository {
         priceToman: tomanToDbOrNull(input.priceToman),
         inventory: input.inventory,
         leadTimeDays: input.leadTimeDays,
+        weightGrams: input.weightGrams ?? null,
         searchText: searchText(input),
         createdAt: now,
         updatedAt: now,
@@ -258,6 +260,7 @@ export class PrismaCatalogRepository implements CatalogRepository {
         priceToman: tomanToDbOrNull(input.priceToman),
         inventory: input.inventory,
         leadTimeDays: input.leadTimeDays,
+        ...(input.weightGrams !== undefined ? { weightGrams: input.weightGrams } : {}),
         searchText: searchText(input),
         version: { increment: 1 },
         updatedAt: now,

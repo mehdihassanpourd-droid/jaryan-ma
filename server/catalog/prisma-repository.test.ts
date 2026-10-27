@@ -276,6 +276,7 @@ describe("database safety net", () => {
     expect(columns.sort((a, b) => (a.table_name < b.table_name ? -1 : 1))).toEqual([
       { table_name: "product_variants", data_type: "bigint" },
       { table_name: "products", data_type: "bigint" },
+      { table_name: "shipping_rates", data_type: "bigint" },
     ]);
     const vendor = await db.vendor.findFirstOrThrow();
     const base = { vendorId: vendor.id, name: "x", searchText: "x", fulfillment: "stocked" as const, inventory: 1 };

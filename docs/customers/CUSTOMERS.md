@@ -159,3 +159,7 @@ Staff actions need `order:manage` (owner and support) and carry the status the s
 **Known limits / decisions for the owner:** unconfirmed pending orders hold stock until someone acts (there is no automatic expiry; the per-customer cap is 10 open orders); `inventory` edited by hand or overwritten by a CSV import means "available now" (an import can therefore re-open stock that open orders hold: review open orders before importing); no refunds, returns or partial cancellation; no notification outside the app (SMS is off by design).
 
 **Resilience requirement:** the store must keep working inside Iran during international internet shutdowns, so nothing here (or anywhere) may depend at run time on a foreign service. `server/invariants.test.ts` fails if storefront or admin source references a foreign absolute URL, and `admin/e2e/order-management.e2e.ts` fails if any page requests a non-local host.
+
+## 10. Shipping and delivery
+
+Checkout now asks for a delivery method (post, Tipax, local courier, pickup). The server prices it from the owner's rate table, the customer sees the fee and the final total **before** ordering, and the order stores the method, the fee and the frozen quote. Staff enter carrier and tracking; customers see them on `/order`. Full description, rules and the provider architecture: `docs/shipping/SHIPPING.md`.

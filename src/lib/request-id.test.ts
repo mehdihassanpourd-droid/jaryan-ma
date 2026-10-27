@@ -8,7 +8,7 @@ describe("newRequestId", () => {
     expect(withoutNative).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     const native = newRequestId();
     for (const id of [withoutNative, native]) {
-      expect(checkoutRequestSchema.safeParse({ items: [{ slug: "a", quantity: 1 }], shipping: { recipientName: "علی", recipientPhone: "09121234567", province: "تهران", city: "تهران", street: "خیابان ولیعصر", postalCode: "1459813176" }, requestId: id }).success).toBe(true);
+      expect(checkoutRequestSchema.safeParse({ items: [{ slug: "a", quantity: 1 }], deliveryMethod: "post", expectedFeeToman: 0, shipping: { recipientName: "علی", recipientPhone: "09121234567", province: "تهران", city: "تهران", street: "خیابان ولیعصر", postalCode: "1459813176" }, requestId: id }).success).toBe(true);
     }
     expect(newRequestId()).not.toBe(native);
   });

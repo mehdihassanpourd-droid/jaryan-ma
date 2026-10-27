@@ -186,6 +186,8 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     vendorId,
     // An order that takes (or gives back) stock can sell a piece out (or bring it back): refresh what the storefront sees.
     onStockChanged: (ids) => background(publisher.sync(ids.map((id) => ({ id }))).catch((error) => log("warn", "snapshot_sync_failed", { error: String(error) }))),
+    shipmentSms: config.shipmentSmsEnabled,
+    background,
     log: (event, detail) => log("warn", event, detail),
     otpPolicy: { ...DEFAULT_OTP_POLICY, dailyBudget: config.sms.dailyLimit },
     probes: {
@@ -238,6 +240,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     accounts: platform.accounts,
     checkout: platform.checkout,
     orderLifecycle: platform.orderLifecycle,
+    shipping: platform.shipping,
     support: platform.support,
     maintenance: platform.maintenance,
     cookie: customerCookie,

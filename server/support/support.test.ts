@@ -73,6 +73,7 @@ describe("customer tickets", () => {
         customerId: alice.id,
         items: [{ productId: p.id, vendorId, titleSnapshot: "p", skuSnapshot: null, variantSnapshot: null, imageKeySnapshot: null, unitPriceToman: 1000, quantity: 1, reserveStock: false }],
         shipping: { recipientName: "علی", recipientPhone: "+989121234567", province: "تهران", city: "تهران", street: "خیابان ولیعصر", plaque: null, unit: null, postalCode: "1459813176" },
+        delivery: { method: "post", feeToman: 0, details: { rateId: null, weightGrams: 500, free: false, etaMinDays: null, etaMaxDays: null, note: null } },
         customerNote: null,
         requestId: null,
         totalToman: 1000,
