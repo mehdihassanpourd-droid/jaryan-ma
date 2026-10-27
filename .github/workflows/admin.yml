@@ -45,7 +45,7 @@ jobs:
         run: npm run admin:build
 
       - name: Unit tests (admin libraries, admin UI server, architecture guards)
-        run: npx vitest run admin/src server/admin-ui.test.ts server/first-run-setup.test.ts server/seo-fields.test.ts server/invariants.test.ts
+        run: npx vitest run admin/src server/admin-ui.test.ts server/first-run-setup.test.ts server/origin.test.ts server/seo-fields.test.ts server/invariants.test.ts
 
       - name: Install Chromium for the browser tests
         run: npx playwright install --with-deps chromium

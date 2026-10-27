@@ -58,7 +58,7 @@ export interface TestApp {
 }
 
 /** Builds the whole server (without HTTP sockets) on a test database. */
-export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string; customerAccountsEnabled?: boolean; firstRunSetup?: boolean } = {}): Promise<TestApp> {
+export async function buildTestApp(testDb: TestDatabase, overrides: { importChunkMax?: number; auth?: Partial<AuthSettings>; adminOrigins?: string; customerAccountsEnabled?: boolean; firstRunSetup?: boolean; originHostSuffixes?: string[]; originDebug?: boolean } = {}): Promise<TestApp> {
   await testDb.reset();
   const vendorId = await ensureDefaultVendor(testDb.db);
   let clock = new Date("2026-03-01T10:00:00.000Z");
@@ -94,6 +94,8 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
     },
   });
   deps.adminRoutes = platform.adminRoutes;
+  if (overrides.originHostSuffixes) deps.originHostSuffixes = overrides.originHostSuffixes;
+  if (overrides.originDebug) deps.originDebug = true;
   if (overrides.firstRunSetup) deps.setup = new FirstRunSetup(true, auth, adminStore, new RateLimiter(() => clock.getTime()), () => clock);
   const customerApi = createCustomerApi({
     enabled: overrides.customerAccountsEnabled ?? true, customers: platform.customerStore, auth: platform.customerAuth, authenticator: platform.customerAuthenticator,
@@ -138,6 +140,8 @@ export async function buildTestApp(testDb: TestDatabase, overrides: { importChun
 }
 
 export interface Call {
+  /** Host the request is addressed to (default admin.example.test); a forwarder such as GitHub Codespaces keeps the external host. */
+  host?: string;
   method?: string;
   path: string;
   as?: Session | null;
@@ -167,7 +171,7 @@ export async function call(app: TestApp, c: Call): Promise<{ status: number; bod
     body = JSON.stringify(c.body);
     headers["content-type"] = c.contentType ?? "application/json";
   }
-  const res = await app.handle(new Request(`https://admin.example.test${c.path}`, { method, headers, body }));
+  const res = await app.handle(new Request(`https://${c.host ?? "admin.example.test"}${c.path}`, { method, headers, body }));
   const text = await res.text();
   return { status: res.status, body: text ? JSON.parse(text) : null, res };
 }

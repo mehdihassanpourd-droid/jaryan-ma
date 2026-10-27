@@ -195,6 +195,8 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
   const pending = new Set<Promise<unknown>>();
   const adminApi = createApi({
     setup,
+    originHostSuffixes: config.adminOriginHostSuffixes,
+    originDebug: !config.production,
     adminRoutes: platform.adminRoutes,
     catalog: new CatalogService(repo),
     storage,

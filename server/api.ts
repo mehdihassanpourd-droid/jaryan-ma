@@ -21,7 +21,7 @@ import { clearedSessionCookie, safeEqual, sessionCookie, type CookieSettings } f
 import type { CatalogService } from "./catalog/service";
 import type { SnapshotPublisher, SyncOptions, SyncTarget } from "./catalog/snapshot-publisher";
 import { domainErrorResponse } from "./routes/common";
-import { BodyError, errorResponse, isMutating, json, originAllowed, readBytes, readJson } from "./http";
+import { BodyError, errorResponse, isMutating, json, originAllowed, readBytes, readJson, requestedHosts } from "./http";
 
 export const CSRF_HEADER = "x-csrf-token";
 /** Set by the Node adapter (never trusted from the client) so rate limiting sees the real address. */
@@ -45,6 +45,10 @@ export interface ApiDeps {
   adminRoutes?: AdminRouter[];
   /** Browser-based creation of the FIRST administrator (development only; absent in production). */
   setup?: FirstRunSetup;
+  /** Development hosting behind a TLS-terminating forwarder (GitHub Codespaces): see `originAllowed`. Empty in production. */
+  originHostSuffixes?: readonly string[];
+  /** Development only: say WHY an Origin was refused (received origin, requested host, allow-list). Never in production. */
+  originDebug?: boolean;
   catalog: CatalogService;
   storage: ObjectStorage;
   publisher: SnapshotPublisher;
@@ -117,6 +121,19 @@ export function createApi(deps: ApiDeps) {
     }
   }
 
+  /** 403 for a refused Origin. In development the body says what was compared, so a mismatch can be fixed instead of guessed. */
+  function badOrigin(request: Request): Response {
+    if (!deps.originDebug) return errorResponse("bad_origin", 403);
+    const detail = {
+      receivedOrigin: request.headers.get("origin") ?? "(none)",
+      requestedHost: requestedHosts(request),
+      allowedOrigins: deps.adminOrigins,
+      hostSuffixes: deps.originHostSuffixes ?? [],
+    };
+    log("bad_origin", detail);
+    return errorResponse("bad_origin", 403, { detail });
+  }
+
   const ipOf = (request: Request) => request.headers.get(CLIENT_IP_HEADER) ?? "unknown";
 
   /** Anonymous, dev-only first-administrator flow (see FirstRunSetup). Answers 404 when the feature is not configured. */
@@ -152,7 +169,7 @@ export function createApi(deps: ApiDeps) {
     const path = url.pathname.slice(PREFIX.length);
 
     try {
-      if (isMutating(method) && !originAllowed(request, deps.adminOrigins)) return errorResponse("bad_origin", 403);
+      if (isMutating(method) && !originAllowed(request, deps.adminOrigins, deps.originHostSuffixes)) return badOrigin(request);
       if (path === "/auth/login" && method === "POST") return await login(request);
       const setupResponse = await firstRunSetup(path, method, request);
       if (setupResponse) return setupResponse;

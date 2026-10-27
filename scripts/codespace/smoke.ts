@@ -4,6 +4,7 @@
 // server over HTTP with that Origin. Everything runs against a real PostgreSQL 16.
 //   export JARYAN_STATE_DIR=<throw-away dir>; npm run codespace:setup; npx tsx scripts/codespace/smoke.ts
 import { spawn, execFileSync } from "node:child_process";
+import { request as httpRequest } from "node:http";
 import { rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { totpAt, totpStep } from "../../server/auth/totp";
@@ -67,6 +68,20 @@ function createAdminWithCli(email: string, role: string): Promise<{ code: number
 const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
   fetch(`${BASE}/api/v1${path}`, { method: "POST", headers: { origin: ORIGIN, "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
+/** A request as GitHub's forwarder delivers it: TLS ended upstream, the EXTERNAL host in Host, the browser's Origin untouched. */
+function forwardedPost(path: string, body: unknown, headers: Record<string, string>): Promise<{ status: number; json: any }> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return new Promise((resolve, reject) => {
+    const text = JSON.stringify(body);
+    const r = httpRequest({ host: "127.0.0.1", port: PORT, path: `/api/v1${path}`, method: "POST", headers: { "content-type": "application/json", "content-length": String(Buffer.byteLength(text)), ...headers } }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, json: data ? JSON.parse(data) : null }));
+    });
+    r.on("error", reject);
+    r.end(text);
+  });
+}
+
 async function main() {
   // 1. the app starts by itself (no terminal, no administrator yet) and the bare address is not a 404
   const up = await run("up.sh", []);
@@ -83,6 +98,16 @@ async function main() {
     // 2. first-run setup in the browser flow: same rules as the CLI, TOTP proven before anything is stored
     const open = (await (await fetch(`${BASE}/api/v1/setup/status`)).json()) as { open: boolean };
     check("first-run setup is open while there is no administrator", open.open === true);
+    // The browser's Origin is the external host it addressed; it must be accepted even if it differs from the computed
+    // ADMIN_ORIGINS (the Codespaces failure), and a page on any other site, or another Codespace, must still be refused.
+    const external = "renamed-3001.app.github.dev";
+    const viaForwarder = await forwardedPost("/setup/begin", { email: EMAIL, password: PASSWORD }, { host: external, origin: `https://${external}` });
+    check("same-origin forwarded HTTPS host is accepted even when it differs from ADMIN_ORIGINS", viaForwarder.status === 200, `status ${viaForwarder.status}`);
+    const evil = await forwardedPost("/setup/begin", { email: EMAIL, password: PASSWORD }, { host: external, origin: "https://evil.example" });
+    check("a foreign site's Origin is refused and explained (development)", evil.status === 403 && evil.json?.error === "bad_origin" && evil.json?.detail?.receivedOrigin === "https://evil.example");
+    const otherCodespace = await forwardedPost("/setup/begin", { email: EMAIL, password: PASSWORD }, { host: external, origin: "https://attacker-3001.app.github.dev" });
+    check("another Codespace's Origin is refused", otherCodespace.status === 403);
+    check("a missing Origin is refused", (await forwardedPost("/setup/begin", { email: EMAIL, password: PASSWORD }, { host: external })).status === 403);
     check("a weak password is refused", (await post("/setup/begin", { email: EMAIL, password: "short" })).status === 422);
     check("setup from a foreign Origin is refused", (await fetch(`${BASE}/api/v1/setup/begin`, { method: "POST", headers: { origin: "https://evil.example", "content-type": "application/json" }, body: JSON.stringify({ email: EMAIL, password: PASSWORD }) })).status === 403);
     const begun = (await (await post("/setup/begin", { email: EMAIL, password: PASSWORD })).json()) as { token: string; secret: string; otpauthUri: string };

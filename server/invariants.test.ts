@@ -140,6 +140,18 @@ describe("the Codespaces test environment stays private and uses real authentica
     }
   });
 
+  it("the forwarded-host origin rule is development-only, never a wildcard, and never enabled by deploy docs or workflows", () => {
+    const config = read("server/config.ts");
+    expect(config).toContain("ADMIN_ORIGIN_HOST_SUFFIXES is development-only and not allowed in production");
+    expect(config).toMatch(/adminOriginHostSuffixes: production \? \[\]/);
+    expect(read("scripts/codespace/start.sh")).toContain("ADMIN_ORIGIN_HOST_SUFFIXES");
+    for (const file of [".github/workflows/cloudflare-pages.yml", ".github/workflows/admin.yml", "docs/admin/SELF-HOSTING.md"]) {
+      expect(read(file), file).not.toContain("ADMIN_ORIGIN_HOST_SUFFIXES");
+    }
+    // the check itself must still compare against the host the request was addressed to (not merely a suffix)
+    expect(read("server/http.ts")).toContain("requestedHosts(request).includes(host)");
+  });
+
   it("keeps the database password out of the repository (random, in the git-ignored state dir)", () => {
     expect(read("scripts/codespace/setup.sh")).toMatch(/openssl rand -hex/);
     expect(read(".gitignore")).toMatch(/^\/\.data\/$/m);
