@@ -1,0 +1,189 @@
+# Automated SEO monitoring: free, scheduled, and completely independent of the storefront runtime (it only READS public pages and,
+# when configured, the Search Console API; nothing it does can affect the live site).
+#
+#   daily      fetch Search Console data -> history branch "seo-data" · technical audit of the live site · catalogue fingerprint
+#   Mondays    weekly report · proposals pull request (never merged by automation)
+#   the 1st    monthly report
+#
+# One-time setup (owner): docs/seo/SEARCH-CONSOLE-SETUP-FA.md. Without credentials the workflow still runs the technical audit (when SITE_URL is
+# set) and says plainly that there is no Search Console data; nothing is ever invented. Safe to re-run: a day's data replaces itself
+# byte-for-byte, reports are keyed by week/month, a proposals branch that already exists is not recreated, and a run with nothing new commits nothing.
+#
+# Repository variables (Settings -> Secrets and variables -> Actions -> Variables):  SITE_URL, GSC_SITE_URL, CATALOG_SNAPSHOT_URL,
+#   SEO_ALLOW_INDEXING (copy of the Pages workflow's), SEO_REBUILD_ON_CATALOG_CHANGE ("true" to re-run the Pages workflow when the catalogue changes).
+# Repository secret: GSC_SERVICE_ACCOUNT_JSON (the service-account key file's JSON, read-only access to Search Console).
+name: SEO monitor
+
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+    inputs:
+      report:
+        description: "Also write a report now"
+        type: choice
+        options: ["none", "weekly", "monthly"]
+        default: "none"
+      days:
+        description: "How many recent days of Search Console data to (re)fetch"
+        type: string
+        default: "5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seo-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    name: Collect, audit, report
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Writes only the "seo-data" branch (scripts/seo/data-branch.sh); `actions: write` only to re-run the Pages build when the catalogue changed.
+    permissions:
+      contents: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      SEO_DATA_DIR: .seo-data
+      SITE_URL: ${{ vars.SITE_URL }}
+      GSC_SITE_URL: ${{ vars.GSC_SITE_URL }}
+      GSC_SERVICE_ACCOUNT_JSON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}
+      CATALOG_SNAPSHOT_URL: ${{ vars.CATALOG_SNAPSHOT_URL }}
+      SEO_ALLOW_INDEXING: ${{ vars.SEO_ALLOW_INDEXING }}
+      INPUT_REPORT: ${{ inputs.report }}
+      INPUT_DAYS: ${{ inputs.days }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check out the history branch
+        run: scripts/seo/data-branch.sh prepare
+
+      - name: Fetch Search Console data
+        id: fetch
+        continue-on-error: true
+        run: npm run seo:monitor --silent -- fetch --days "${INPUT_DAYS:-5}"
+
+      - name: Technical audit of the live site
+        id: audit
+        run: npm run seo:monitor --silent -- audit
+
+      - name: Catalogue fingerprint
+        id: fingerprint
+        run: npm run seo:monitor --silent -- fingerprint
+
+      - name: Reports (Monday = weekly, the 1st = monthly, or on request)
+        run: |
+          dow=$(date -u +%u); dom=$(date -u +%d)
+          if [ "${INPUT_REPORT:-none}" = "weekly" ] || [ "$dow" = "1" ]; then npm run seo:monitor --silent -- report --period weekly; fi
+          if [ "${INPUT_REPORT:-none}" = "monthly" ] || [ "$dom" = "01" ]; then npm run seo:monitor --silent -- report --period monthly; fi
+
+      - name: Remember the catalogue fingerprint
+        if: steps.fingerprint.outputs.fingerprint != ''
+        env:
+          FINGERPRINT: ${{ steps.fingerprint.outputs.fingerprint }}
+        run: npm run seo:monitor --silent -- record-fingerprint --value "$FINGERPRINT"
+
+      - name: Publish the history
+        run: scripts/seo/data-branch.sh publish
+
+      # Optional and OFF by default: when the published catalogue changed, rebuild the site so new products get pages and the sitemap stays current.
+      - name: Rebuild the site after a catalogue change
+        if: steps.fingerprint.outputs.changed == 'true' && vars.SEO_REBUILD_ON_CATALOG_CHANGE == 'true'
+        run: gh workflow run cloudflare-pages.yml --repo "$REPO" --ref main
+
+      - name: Fail visibly when Search Console could not be read
+        if: steps.fetch.outcome == 'failure'
+        run: |
+          echo "::error::Search Console fetch failed (see the 'Fetch Search Console data' step). The history was kept; fix the credentials or access."
+          exit 1
+
+  proposals:
+    name: Proposals pull request
+    needs: monitor
+    # Weekly (Mondays) or when run by hand. It only ever OPENS a pull request; a person reviews and merges it.
+    if: always() && needs.monitor.result != 'cancelled' && (github.event_name == 'workflow_dispatch' || github.event.schedule != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      SEO_DATA_DIR: .seo-data
+      SITE_URL: ${{ vars.SITE_URL }}
+      CATALOG_SNAPSHOT_URL: ${{ vars.CATALOG_SNAPSHOT_URL }}
+    steps:
+      - name: Only on Mondays (or when run by hand)
+        id: day
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$(date -u +%u)" = "1" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; else echo "go=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Checkout
+        if: steps.day.outputs.go == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        if: steps.day.outputs.go == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.day.outputs.go == 'true'
+        run: npm ci
+
+      - name: Check out the history branch
+        if: steps.day.outputs.go == 'true'
+        run: scripts/seo/data-branch.sh prepare
+
+      - name: Propose improvements from real data
+        id: propose
+        if: steps.day.outputs.go == 'true'
+        run: npm run seo:monitor --silent -- propose
+
+      - name: Open the pull request
+        if: steps.propose.outputs.changed == 'true'
+        env:
+          PROPOSAL_ID: ${{ steps.propose.outputs.id }}
+        run: |
+          branch="seo/proposals-${PROPOSAL_ID}"
+          auth=(-c "http.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)")
+          remote="https://github.com/${REPO}.git"
+          # Re-running must not create a second branch or pull request for the same proposal.
+          if git "${auth[@]}" ls-remote --exit-code --heads "$remote" "$branch" >/dev/null 2>&1; then
+            echo "Branch $branch already exists: this proposal was already opened."
+            exit 0
+          fi
+          git config user.name "seo-monitor"
+          git config user.email "seo-monitor@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add seo/
+          git commit -q -m "SEO: proposed title/description improvements (${PROPOSAL_ID})"
+          git "${auth[@]}" push "$remote" "$branch"
+          date=$(date -u +%F)
+          gh pr create --repo "$REPO" --base main --head "$branch" \
+            --title "SEO: proposed title/description improvements ($date)" \
+            --body-file "seo/proposals/${date}.md" \
+            || echo "::warning::Could not open the pull request (enable 'Allow GitHub Actions to create and approve pull requests' in Settings -> Actions -> General). The branch $branch was pushed; open the pull request from it by hand."

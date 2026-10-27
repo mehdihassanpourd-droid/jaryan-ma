@@ -29,6 +29,8 @@ const robots = read("robots.txt");
 if (indexing) {
   if (!/Allow: \//.test(robots) || /Disallow: \/\s*$/m.test(robots)) fail("robots.txt must allow crawling after launch");
   if (!robots.includes(`Sitemap: ${origin}/sitemap.xml`)) fail("robots.txt must reference the sitemap");
+  for (const path of ["/cart", "/checkout", "/order", "/orders", "/product?", "/api/"]) if (!robots.split("\n").some((l) => l.trim() === `Disallow: ${path}`)) fail(`robots.txt must disallow ${path}`);
+  if (robots.split("\n").some((l) => /^Disallow:\s*\/products/.test(l.trim()))) fail("robots.txt must not block the real product pages");
 } else if (!/Disallow: \/\s*$/m.test(robots)) fail("robots.txt must stay closed before launch");
 
 const sitemap = read("sitemap.xml");
@@ -38,6 +40,12 @@ if (locs.some((u) => !u.startsWith(`${origin}/`))) fail("sitemap has URLs outsid
 if (/<lastmod>|<priority>|<changefreq>/.test(sitemap)) fail("sitemap must not contain invented dates or priorities");
 if (locs.some((u) => /\/demo-/.test(u))) fail("sitemap lists sample content");
 if (!indexing && locs.length > 0) fail("a closed site must have an empty sitemap (robots.txt disallows everything)");
+
+// ---- private shopping pages: never indexable, in any mode
+for (const file of ["cart.html", "checkout.html", "order.html", "orders.html", "product.html"]) {
+  if (!existsSync(join(outDir, file))) continue;
+  if (!/noindex/.test(meta(read(file), "robots") ?? "")) fail(`${file}: private/app page must be noindex`);
+}
 
 // ---- pages
 const pages = [];
@@ -81,7 +89,26 @@ for (const page of pages) {
   if (!locs.includes(url)) fail(`${where}: missing from the sitemap`);
   if (metaProp(html, "og:url") !== url) fail(`${where}: og:url mismatch`);
   const blocks = jsonLd(html);
+  if (page.kind === "category") {
+    const collection = blocks.find((j) => j["@type"] === "CollectionPage");
+    if (!collection) fail(`${where}: missing CollectionPage/ItemList data`);
+    else {
+      const list = collection.mainEntity;
+      if (list?.["@type"] !== "ItemList" || list.numberOfItems !== list.itemListElement.length) fail(`${where}: ItemList inconsistent`);
+      for (const [i, item] of (list?.itemListElement ?? []).entries()) {
+        if (item.position !== i + 1) fail(`${where}: ItemList positions must be 1..n`);
+        if (!locs.includes(item.url)) fail(`${where}: ItemList URL ${item.url} is not in the sitemap`);
+      }
+    }
+  }
   if (page.kind === "products") {
+    // internal links: every related product link points at a real, indexable page other than this one
+    const related = html.match(/data-testid="related-products"[\s\S]*?<\/section>/)?.[0] ?? "";
+    for (const m of related.matchAll(/href="(\/products\/[^"]+)"/g)) {
+      const target = `${origin}${m[1]}`;
+      if (target === url) fail(`${where}: related products link to the page itself`);
+      if (!locs.includes(target)) fail(`${where}: related link ${m[1]} is not an indexable page`);
+    }
     const product = blocks.find((j) => j["@type"] === "Product");
     const crumbs = blocks.find((j) => j["@type"] === "BreadcrumbList");
     if (!product) fail(`${where}: missing Product JSON-LD`);
@@ -109,6 +136,10 @@ const home = read("index.html");
 if (indexing) {
   // Next serialises the root canonical without the trailing slash; both spell the same URL.
   if (![origin, `${origin}/`].includes(canonical(home))) fail("home: canonical must be the site root");
+  // crawlable links: the home page links to every indexable category and (up to the cap) product page
+  const homeLinks = new Set([...home.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) => decode(m[1])));
+  for (const c of locs.filter((u) => u.startsWith(`${origin}/category/`))) if (!homeLinks.has(c.slice(origin.length))) fail(`home: no link to ${c}`);
+  for (const u of locs.filter((u) => u.startsWith(`${origin}/products/`)).slice(0, 60)) if (!homeLinks.has(u.slice(origin.length))) fail(`home: no link to ${u}`);
   const types = jsonLd(home).map((j) => j["@type"]);
   if (!types.includes("Organization") || !types.includes("WebSite")) fail("home: missing Organization/WebSite data");
   if (/noindex/.test(meta(home, "robots") ?? "")) fail("home: must be indexable after launch");

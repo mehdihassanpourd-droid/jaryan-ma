@@ -30,6 +30,7 @@
     "ops:prod": "node dist/server/cli/ops.mjs",
     "seo:fixture": "tsx scripts/seo/generate-fixture.ts .data/seo-snapshot",
     "seo:verify": "node scripts/seo/run-verify.mjs",
+    "seo:monitor": "tsx tools/seo-growth/cli.ts",
     "admin:build": "node scripts/admin/build.mjs",
     "admin:dev": "node scripts/admin/build.mjs --watch",
     "admin:icons": "node scripts/admin/make-icons.mjs",

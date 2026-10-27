@@ -249,7 +249,7 @@ describe("GitHub workflows", () => {
   const files = readdirSync(join(ROOT, dir)).filter((f) => f.endsWith(".yml"));
 
   it("exist", () => {
-    expect(files).toEqual(expect.arrayContaining(["cloudflare-pages.yml", "site-health.yml", "deployment-watch.yml", "security-audit.yml", "database.yml"]));
+    expect(files).toEqual(expect.arrayContaining(["cloudflare-pages.yml", "site-health.yml", "deployment-watch.yml", "security-audit.yml", "database.yml", "seo-monitor.yml"]));
   });
 
   for (const file of files) {
@@ -298,5 +298,50 @@ describe("no mandatory foreign runtime dependency", () => {
     const html = read("admin/index.html");
     expect(html).not.toMatch(/<(script|link)\b[^>]*(src|href)=["']https?:/i);
     expect(read("admin/src/styles/admin.css")).not.toMatch(/@import\s+url\(["']?https?:/);
+  });
+});
+
+describe("SEO automation (tools/seo-growth and its workflow)", () => {
+  const tools = walk("tools/seo-growth", (f) => /\.ts$/.test(f) && !/\.test\./.test(f));
+  const monitor = read(".github/workflows/seo-monitor.yml");
+
+  it("runs only in GitHub Actions / developer machines: the storefront, the admin and the API server never import it", () => {
+    const users = [...walk("src", (f) => /\.(ts|tsx)$/.test(f)), ...walk("admin/src", (f) => /\.(ts|tsx)$/.test(f)), ...walk("server", (f) => /\.ts$/.test(f) && !/invariants\.test\.ts$/.test(f))].filter((f) => /(from|import)\s*\(?\s*["'][^"']*seo-growth/.test(read(f)));
+    expect(users).toEqual([]);
+  });
+
+  it("never merges anything and never enables auto-merge (pull requests are opened for a person to review)", () => {
+    for (const source of [monitor, ...tools.map(read), read("scripts/seo/data-branch.sh")]) {
+      expect(source).not.toMatch(/gh\s+pr\s+merge|merge_pull_request|--auto\b|enable-pr-auto-merge|gh\s+api[^\n]*merge/i);
+    }
+    expect(monitor).toContain("gh pr create");
+  });
+
+  it("writes only its own history branch and a proposals branch, never the default branch", () => {
+    const script = read("scripts/seo/data-branch.sh");
+    expect(script).toContain('HEAD:refs/heads/$BRANCH');
+    expect(script).not.toMatch(/push[^\n]*\bmain\b/);
+    expect(monitor).not.toMatch(/git[^\n]*push[^\n]*\bmain\b/);
+    expect(monitor).toContain('branch="seo/proposals-');
+  });
+
+  it("only the jobs that need to write have write permissions, and secrets are never echoed", () => {
+    expect(monitor).toMatch(/^permissions:\n  contents: read/m);
+    expect(monitor).not.toMatch(/echo[^\n]*\$\{\{\s*secrets\./);
+    expect(monitor).not.toMatch(/(?<!\$\{\{ )secrets\.GSC_SERVICE_ACCOUNT_JSON(?!\s*\}\})/);
+    expect(monitor).not.toContain("pull_request");
+  });
+
+  it("the Pages workflow can be re-run by automation only from main and still deploys a preview for pull requests only", () => {
+    const pages = read(".github/workflows/cloudflare-pages.yml");
+    expect(pages).toContain("workflow_dispatch:");
+    expect(pages).toContain("github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'");
+    expect(pages).toContain("--branch=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main' }}");
+  });
+
+  it("needs no paid service or AI API (plain code and the free Search Console API only)", () => {
+    const text = tools.map(read).join("\n");
+    expect(text).not.toMatch(/api\.openai\.com|api\.anthropic\.com|generativelanguage\.googleapis|ahrefs|semrush|moz\.com/i);
+    expect([...text.matchAll(/https?:\/\/[a-z0-9.-]+/gi)].map((m) => new URL(m[0]).hostname).filter((h) => !/^(www\.googleapis\.com|oauth2\.googleapis\.com|schema\.org|example|jaryan|demo)/.test(h) && !h.endsWith(".example") && !h.endsWith(".test"))).toEqual([]);
   });
 });

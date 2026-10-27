@@ -13,6 +13,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Used by the "SEO monitor" workflow to rebuild the site after the published catalogue changed (so new products get pages and the sitemap
+  # stays current). Only ever from main: see the `if` of the build job. It does nothing unless that workflow's opt-in variable is set.
+  workflow_dispatch:
 
 # Least privilege: the workflow only reads the repository.
 permissions:
@@ -26,6 +29,8 @@ concurrency:
 jobs:
   build:
     name: Check and build
+    # A manual/automated run builds and deploys production, so it is only allowed from main.
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -77,6 +82,20 @@ jobs:
             echo "NEXT_PUBLIC_ORDER_API_URL=$ORDER_API_URL" >> "$GITHUB_ENV"
           fi
 
+      # Optional, public values for SEO (see docs/seo/SEO.md): the catalogue the pages are generated from at build time, and the launch switch.
+      # Both come from repository *variables*; when unset nothing changes (the site keeps its closed, sample-content behaviour).
+      - name: Configure SEO catalogue and launch switch
+        env:
+          SNAPSHOT_URL: ${{ vars.CATALOG_SNAPSHOT_URL }}
+          ALLOW_INDEXING: ${{ vars.SEO_ALLOW_INDEXING }}
+        run: |
+          if [ -n "$SNAPSHOT_URL" ]; then
+            echo "CATALOG_SNAPSHOT_URL=$SNAPSHOT_URL" >> "$GITHUB_ENV"
+          fi
+          if [ -n "$ALLOW_INDEXING" ]; then
+            echo "SEO_ALLOW_INDEXING=$ALLOW_INDEXING" >> "$GITHUB_ENV"
+          fi
+
       - name: Build static export
         run: npm run build
 
@@ -100,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Forked PRs cannot read secrets (and must not be deployed from this workflow).
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       # Secrets are only inspected for presence; their values are never printed.
       - name: Check Cloudflare credentials
@@ -132,12 +151,12 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy out --project-name=jaryan-ma --branch=${{ github.event_name == 'push' && 'main' || format('pr-{0}', github.event.pull_request.number) }} --commit-hash=${{ github.sha }}
+          command: pages deploy out --project-name=jaryan-ma --branch=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main' }} --commit-hash=${{ github.sha }}
 
       - name: Summary
         if: steps.creds.outputs.enabled == 'true'
         env:
-          KIND: ${{ github.event_name == 'push' && 'Production' || 'Preview' }}
+          KIND: ${{ github.event_name == 'pull_request' && 'Preview' || 'Production' }}
           DEPLOY_URL: ${{ steps.deploy.outputs.deployment-url }}
           ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
         run: |

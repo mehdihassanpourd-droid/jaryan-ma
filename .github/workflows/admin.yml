@@ -111,3 +111,8 @@ jobs:
           npx vitest run --config vitest.e2e.config.mts admin/e2e/shipping.e2e.ts
         env:
           E2E_DATABASE_URL: postgresql://ci:ci-only-throwaway@127.0.0.1:5432/ci_shipping
+
+      # SEO in a real browser at Android phone size: a launched build from a catalogue created through the real backend (metadata, canonicals,
+      # structured data, sold-out handling, robots.txt, sitemap.xml, crawlability from the home page, image hints, layout stability) and a closed build.
+      - name: SEO output in a real browser (launched and closed builds; 412px phone)
+        run: npx vitest run --config vitest.e2e.config.mts admin/e2e/seo.e2e.ts

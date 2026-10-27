@@ -1,3 +1,4 @@
+import { CatalogLinks } from "@/components/home/CatalogLinks";
 import { BrandStory } from "@/components/home/BrandStory";
 import { CategoryGrid } from "@/components/home/CategoryGrid";
 import { ContactSection } from "@/components/home/ContactSection";
@@ -27,6 +28,7 @@ export default async function HomePage() {
       {!LIVE_CATALOG_BASE && <CategoryGrid />}
       <FeaturedProducts />
       {!LIVE_CATALOG_BASE && <Spotlight />}
+      <CatalogLinks />
       <BrandStory />
       <TrustSection />
       <ContactSection />

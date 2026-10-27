@@ -93,6 +93,25 @@ export function categoryBreadcrumbJsonLd(categorySlug: string, seo: CatalogSeo):
   };
 }
 
+/**
+ * The category as a CollectionPage whose main entity lists its indexable products (name + canonical URL, in a stable order):
+ * a crawlable map of the collection. Only facts that exist in the data; nothing for sample content.
+ */
+export function categoryCollectionJsonLd(categorySlug: string, seo: CatalogSeo): Json | null {
+  const category = seo.categories.get(categorySlug);
+  if (!category?.canonical || !category.indexable) return null;
+  const items = category.productSlugs.map((s) => seo.products.get(s)).filter((p): p is NonNullable<typeof p> => Boolean(p?.indexable && p.canonical));
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "@id": `${category.canonical}#collection`,
+    url: category.canonical,
+    name: category.name,
+    inLanguage: "fa-IR",
+    mainEntity: { "@type": "ItemList", numberOfItems: items.length, itemListElement: items.map((p, i) => ({ "@type": "ListItem", position: i + 1, url: p.canonical, name: p.title })) },
+  };
+}
+
 /** The organisation and website, from the only confirmed facts: brand name and Instagram account. */
 export function siteJsonLd(origin: string | null, name: string, instagramUrl: string): Json[] {
   if (!origin) return [];

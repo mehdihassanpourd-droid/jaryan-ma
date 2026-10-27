@@ -19,8 +19,13 @@ export function buildSitemap(seo: CatalogSeo): MetadataRoute.Sitemap {
   return [...new Set(urls)].sort().map((url) => ({ url }));
 }
 
+/** `/product?` (the live, script-rendered product page) is not `/products/…` (the real pages): the question mark keeps them apart. */
+export const PRIVATE_PATHS = ["/cart", "/checkout", "/order", "/orders", "/product?", "/api/"];
+
 /** robots.txt: closed (as today's demo) unless the owner has launched the site. */
 export function buildRobots(origin: string | null, indexing: boolean): MetadataRoute.Robots {
   if (!indexing || !origin) return { rules: { userAgent: "*", disallow: "/" } };
-  return { rules: { userAgent: "*", allow: "/" }, sitemap: absoluteUrl(origin, "/sitemap.xml") };
+  // Launched: everything public may be crawled, the private shopping pages (cart, checkout, orders, the live product page that
+  // only exists to add to the cart) and the API may not: they carry no content of their own and must never compete with real pages.
+  return { rules: { userAgent: "*", allow: "/", disallow: PRIVATE_PATHS }, sitemap: absoluteUrl(origin, "/sitemap.xml") };
 }

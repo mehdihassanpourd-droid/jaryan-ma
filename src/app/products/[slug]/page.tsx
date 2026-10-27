@@ -11,9 +11,12 @@ import { InstagramIcon } from "@/components/ui/InstagramIcon";
 import { PlaceholderTag } from "@/components/ui/PlaceholderTag";
 import { Price } from "@/components/ui/Price";
 import { formatNumber } from "@/lib/format";
+import { SeoProductCard } from "@/components/product/SeoProductCard";
+import { LIVE_CATALOG_BASE } from "@/lib/live-config";
+import { liveProductHref } from "@/lib/live-catalog";
 import { site } from "@/lib/site";
 import { loadSeo } from "@/seo";
-import { lowestPrice } from "@/seo/catalog-seo";
+import { lowestPrice, relatedProducts } from "@/seo/catalog-seo";
 import { JsonLd } from "@/seo/JsonLd";
 import { breadcrumbJsonLd, productJsonLd } from "@/seo/jsonld";
 import { categoryPath, decodeParam } from "@/seo/urls";
@@ -67,6 +70,10 @@ export default async function ProductPage({ params }: Props) {
   const found = await find(params);
   if (!found) notFound();
   const { product, meta, seo } = found;
+  const related = relatedProducts((await loadSeo()).catalog, product).flatMap((p) => {
+    const m = seo.products.get(p.slug);
+    return m ? [{ product: p, meta: m }] : [];
+  });
   const price = lowestPrice(product);
   const category = product.category ? seo.categories.get(product.category.slug) : undefined;
   const crumbs: Crumb[] = [
@@ -135,6 +142,11 @@ export default async function ProductPage({ params }: Props) {
                 </ul>
               </section>
             )}
+            {LIVE_CATALOG_BASE && !product.isDemo && product.availability !== "sold_out" && (
+              <div className="mt-8">
+                <ButtonLink href={liveProductHref(product.slug)} data-testid="buy-link">انتخاب گزینه و افزودن به سبد خرید</ButtonLink>
+              </div>
+            )}
             <div className="mt-8">
               <ButtonLink href={site.instagramUrl} target="_blank" rel="noopener noreferrer" variant="secondary">
                 <InstagramIcon className="h-4 w-4" />
@@ -143,6 +155,18 @@ export default async function ProductPage({ params }: Props) {
             </div>
           </div>
         </div>
+        {related.length > 0 && (
+          <section aria-labelledby="related-title" className="mt-16" data-testid="related-products">
+            <h2 id="related-title" className="mb-6 text-xl font-bold text-bark-900">آثار دیگر این دسته</h2>
+            <ul className="grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 lg:grid-cols-4">
+              {related.map(({ product: p, meta: m }) => (
+                <li key={p.slug}>
+                  <SeoProductCard product={p} seo={m} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </Container>
     </>
   );
