@@ -56,7 +56,7 @@ export function CartView() {
         ))}
       </ul>
 
-      <section aria-label="جمع سبد خرید" className="sticky bottom-0 -mx-5 mt-6 border-t border-sand-200 bg-ivory-50/95 px-5 py-4 backdrop-blur sm:static sm:mx-0 sm:rounded-2xl sm:border sm:px-6">
+      <section aria-label="جمع سبد خرید" className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] -mx-5 mt-6 border-t border-sand-200 bg-ivory-50/95 px-5 py-4 backdrop-blur sm:static sm:mx-0 sm:rounded-2xl sm:border sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm text-bark-600">جمع کل ({formatNumber(orderable.reduce((n, p) => n + (p.ok ? p.quantity : 0), 0))} کالا)</p>

@@ -30,7 +30,7 @@ export function AddToCart({ product, sku }: { product: PublicProduct; sku: strin
   else if (room === 0) blocked = max === 1 ? "این اثر در سبد خرید شما هست." : "حداکثر تعداد مجاز این کالا در سبد شما هست.";
 
   return (
-    <section aria-label="افزودن به سبد خرید" className="mt-8 rounded-2xl border border-sand-200 bg-ivory-50 p-4 sm:p-5">
+    <section aria-label="افزودن به سبد خرید" className="mt-8 rounded-[1.75rem] border border-sand-200 bg-ivory-100 p-4 sm:p-5">
       {hasVariants && variant && priced && <p className="mb-3 text-sm text-bark-700">قیمت گزینهٔ انتخاب‌شده: <strong>{formatToman(price)}</strong></p>}
       <div className="flex flex-wrap items-center gap-4">
         {max > 1 ? (
@@ -46,14 +46,14 @@ export function AddToCart({ product, sku }: { product: PublicProduct; sku: strin
             cart.add({ slug: product.slug, sku: variant ? variant.sku : null, quantity: amount });
             setAdded(amount);
           }}
-          className="inline-flex min-h-11 items-center justify-center rounded-full bg-bark-700 px-6 py-2.5 text-sm font-medium text-ivory-50 transition-colors hover:bg-bark-900 disabled:cursor-not-allowed disabled:bg-sand-300 disabled:text-bark-600"
+          className="inline-flex min-h-12 items-center justify-center rounded-full bg-bark-900 px-7 py-2.5 text-base font-medium text-ivory-50 transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-sand-300 disabled:text-bark-700"
         >
           افزودن به سبد خرید
         </button>
       </div>
       {blocked && <p className="mt-3 text-sm text-bark-600" role="note">{blocked}</p>}
       {added !== null && (
-        <p role="status" className="mt-3 text-sm text-olive-700">
+        <p role="status" className="mt-3 text-sm text-teal-700">
           به سبد اضافه شد. <Link href="/cart" className="font-semibold underline">مشاهدهٔ سبد خرید</Link>
         </p>
       )}

@@ -140,7 +140,7 @@ export function demoSeoCatalog(): SeoCatalog {
       priceToman: p.priceToman,
       availability: "in_stock",
       leadTimeDays: null,
-      images: p.images.map((i) => ({ url: "", alt: i.alt, placeholder: { tone: i.tone, motif: i.motif } })),
+      images: p.images.map((i) => ({ url: "", alt: i.alt, placeholder: { art: i.art } })),
       variants: [],
       isDemo: true,
     })),

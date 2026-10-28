@@ -1,30 +1,59 @@
 @import "tailwindcss";
 @import "@fontsource-variable/vazirmatn";
 
-/* Design tokens: warm ivory / beige / natural brown / muted olive. */
+/* Wordmark script (local file, SIL OFL; licence next to it). Used only for «جریان‌ما» in the header and footer. */
+@font-face {
+  font-family: "Aref Ruqaa";
+  src: url("./fonts/aref-ruqaa-arabic-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F;
+}
+
+/* Design tokens: warm cream paper, deep teal, terracotta, ceramic blue and leaf green (the approved visual reference).
+   The old token names (ivory / sand / bark / olive) are kept on purpose: cart, checkout and orders use them and follow the new look. */
 @theme {
   --font-sans: "Vazirmatn Variable", "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
+  --font-script: "Aref Ruqaa", "Vazirmatn Variable", ui-serif, serif;
 
-  --color-ivory-50: #fdfbf6;
-  --color-ivory-100: #f8f3e8;
-  --color-ivory-200: #f0e8d6;
+  --color-ivory-50: #fcf7ee;
+  --color-ivory-100: #f7efe0;
+  --color-ivory-200: #f0e4cf;
 
-  --color-sand-100: #ebe0cb;
-  --color-sand-200: #ddcdb0;
-  --color-sand-300: #c9b48f;
+  --color-sand-100: #ecdec6;
+  --color-sand-200: #e0cdaf;
+  --color-sand-300: #cdb28a;
   --color-sand-400: #b39a72;
 
   --color-bark-500: #8a6a4a;
   --color-bark-600: #6f5239;
-  --color-bark-700: #55402d;
-  --color-bark-900: #2e2318;
+  --color-bark-700: #4d3727;
+  --color-bark-900: #2a1d14;
 
   --color-olive-100: #e4e6d3;
   --color-olive-300: #a9b085;
   --color-olive-500: #7a8456;
   --color-olive-700: #566040;
 
-  --shadow-soft: 0 1px 2px rgb(46 35 24 / 0.05), 0 8px 24px -8px rgb(46 35 24 / 0.12);
+  --color-teal-100: #d9e9e4;
+  --color-teal-500: #2f8077;
+  --color-teal-700: #1d4d4a;
+  --color-teal-800: #17403e;
+  --color-teal-900: #11302f;
+
+  --color-clay-100: #f3dccc;
+  --color-clay-500: #bb5733;
+  --color-clay-600: #a9472a;
+  --color-clay-700: #8c3a21;
+
+  --color-cobalt-100: #dce7f4;
+  --color-cobalt-600: #2f5e9e;
+  --color-cobalt-700: #264b80;
+
+  --color-mustard-500: #d9a441;
+
+  --shadow-soft: 0 1px 2px rgb(42 29 20 / 0.05), 0 8px 24px -10px rgb(42 29 20 / 0.14);
 }
 
 @layer base {
@@ -39,11 +68,11 @@
     -webkit-font-smoothing: antialiased;
   }
   ::selection {
-    background-color: var(--color-olive-300);
+    background-color: var(--color-mustard-500);
     color: var(--color-bark-900);
   }
   :focus-visible {
-    outline: 2px solid var(--color-olive-500);
+    outline: 2px solid var(--color-cobalt-600);
     outline-offset: 3px;
     border-radius: 4px;
   }
@@ -56,4 +85,24 @@
       animation-duration: 0.01ms !important;
     }
   }
+}
+
+/* Organic shapes: every picture frame is a different "pebble", never a plain rounded card. */
+@utility blob-a {
+  border-radius: 58% 42% 55% 45% / 46% 54% 46% 54%;
+}
+@utility blob-b {
+  border-radius: 40% 60% 38% 62% / 56% 40% 60% 44%;
+}
+@utility blob-c {
+  border-radius: 64% 36% 52% 48% / 42% 58% 42% 58%;
+}
+@utility blob-d {
+  border-radius: 36% 64% 60% 40% / 60% 38% 62% 40%;
+}
+@utility arch {
+  border-radius: 999px 999px 28px 28px;
+}
+@utility leaf {
+  border-radius: 28px 999px 28px 999px;
 }

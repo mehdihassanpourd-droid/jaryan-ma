@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PhotoGallery } from "@/components/product/PhotoGallery";
 import { ProductGallery } from "@/components/product/ProductGallery";
+import { ArtistNote, chipClass, PricePanel, ProductChips } from "@/components/product/ProductInfo";
 import { Badge } from "@/components/ui/Badge";
 import { Breadcrumb, type Crumb } from "@/components/ui/Breadcrumb";
 import { ButtonLink } from "@/components/ui/Button";
@@ -86,79 +87,86 @@ export default async function ProductPage({ params }: Props) {
   return (
     <>
       <JsonLd data={[productJsonLd(product, seo), breadcrumbJsonLd(product, seo)]} />
-      <Container className="py-10 sm:py-14">
+      <Container className="pb-4 pt-5 sm:pt-10">
         <Breadcrumb items={crumbs} />
-        <div className="mt-8 grid items-start gap-10 lg:grid-cols-2 lg:gap-16">
+        <div className="mt-5 grid items-start gap-9 lg:grid-cols-2 lg:gap-16">
           <div className="mx-auto w-full max-w-md lg:max-w-none">
             {allPlaceholders ? (
-              <ProductGallery images={meta.images.map((i) => ({ tone: i.placeholder!.tone, motif: i.placeholder!.motif, alt: i.alt }))} />
+              <ProductGallery images={meta.images.map((i) => ({ art: i.placeholder!.art, alt: i.alt }))} />
             ) : (
               <PhotoGallery images={meta.images.filter((i) => i.url)} />
             )}
           </div>
-          <div className={product.isDemo ? "rounded-2xl border border-dashed border-sand-400 bg-ivory-50/70 p-6 sm:p-8" : ""}>
-            <div className="flex flex-wrap items-center gap-2">
+          <div>
+            <ProductChips>
               {product.isDemo && <PlaceholderTag label="محتوای نمونه" />}
-              {product.fulfillment === "unique" && <Badge tone="olive">اثر یگانه</Badge>}
-              {!product.isDemo && <Badge tone="neutral">{AVAILABILITY_LABEL[product.availability]}</Badge>}
-            </div>
-            <h1 className="mt-4 text-2xl font-bold leading-10 text-bark-900 sm:text-3xl">{product.name}</h1>
-            {category && (
-              <p className="mt-2 text-sm text-olive-700">
-                <Link href={categoryPath(category.slug)} className="hover:underline">
+              {category && (
+                <Link href={categoryPath(category.slug)} className={`${chipClass} hover:bg-teal-500 hover:text-ivory-50`}>
                   {category.name}
                 </Link>
-              </p>
-            )}
-            <div className="mt-5 flex items-center gap-2">
+              )}
+              {product.fulfillment === "unique" && <Badge tone="olive">اثر یگانه</Badge>}
+              {!product.isDemo && <Badge tone="neutral">{AVAILABILITY_LABEL[product.availability]}</Badge>}
+            </ProductChips>
+            <h1 className="mt-4 text-balance text-3xl font-black leading-[1.4] text-bark-900 sm:text-4xl">{product.name}</h1>
+            <PricePanel>
               {price?.from && <span className="text-sm text-bark-600">از</span>}
               <Price amount={price?.amount ?? null} />
-            </div>
+            </PricePanel>
             {product.availability === "made_to_order" && product.leadTimeDays && (
               <p className="mt-3 text-sm text-bark-600">زمان ساخت: {formatNumber(product.leadTimeDays)} روز</p>
             )}
             {product.isDemo ? (
-              <p className="mt-6 max-w-prose leading-8 text-bark-600">
+              <p className="mt-6 max-w-prose leading-8 text-bark-700">
                 این صفحه نمونه است و اطلاعات واقعی ندارد. توضیحات، ابعاد، مواد و قیمت واقعی پس از دریافت از گالری جایگزین می‌شود.
               </p>
             ) : (
               product.description.trim() && <p className="mt-6 max-w-prose whitespace-pre-line leading-8 text-bark-700">{product.description.trim()}</p>
             )}
+            {product.isDemo && (
+              <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-sand-200 pt-5 text-sm">
+                {["ابعاد", "مواد"].map((label) => (
+                  <div key={label}>
+                    <dt className="text-bark-600">{label}</dt>
+                    <dd className="mt-1 text-bark-700">ثبت نشده</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
             {product.variants.length > 0 && (
               <section aria-labelledby="variants-title" className="mt-8">
-                <h2 id="variants-title" className="mb-3 text-base font-semibold text-bark-900">
+                <h2 id="variants-title" className="mb-3 text-base font-bold text-bark-900">
                   گزینه‌ها
                 </h2>
-                <ul className="divide-y divide-sand-200 rounded-2xl border border-sand-200">
+                <ul className="divide-y divide-sand-200 overflow-hidden rounded-[1.5rem] border border-sand-200 bg-ivory-50">
                   {product.variants.map((v) => (
                     <li key={v.sku} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                       <span className="text-bark-700">{Object.values(v.options).join("، ") || v.sku}</span>
                       <span className="flex items-center gap-3">
                         <Price amount={v.priceToman} />
-                        <span className="text-xs text-bark-500">{v.available ? "موجود" : "ناموجود"}</span>
+                        <span className="text-xs text-bark-600">{v.available ? "موجود" : "ناموجود"}</span>
                       </span>
                     </li>
                   ))}
                 </ul>
               </section>
             )}
-            {LIVE_CATALOG_BASE && !product.isDemo && product.availability !== "sold_out" && (
-              <div className="mt-8">
-                <ButtonLink href={liveProductHref(product.slug)} data-testid="buy-link">انتخاب گزینه و افزودن به سبد خرید</ButtonLink>
-              </div>
-            )}
-            <div className="mt-8">
-              <ButtonLink href={site.instagramUrl} target="_blank" rel="noopener noreferrer" variant="secondary">
-                <InstagramIcon className="h-4 w-4" />
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              {LIVE_CATALOG_BASE && !product.isDemo && product.availability !== "sold_out" && (
+                <ButtonLink href={liveProductHref(product.slug)} size="lg" data-testid="buy-link">انتخاب گزینه و افزودن به سبد خرید</ButtonLink>
+              )}
+              <ButtonLink href={site.instagramUrl} target="_blank" rel="noopener noreferrer" variant="secondary" size="lg">
+                <InstagramIcon className="h-5 w-5" />
                 <span>پرسش درباره این اثر در اینستاگرام</span>
               </ButtonLink>
             </div>
+            {product.isDemo && <ArtistNote />}
           </div>
         </div>
         {related.length > 0 && (
           <section aria-labelledby="related-title" className="mt-16" data-testid="related-products">
-            <h2 id="related-title" className="mb-6 text-xl font-bold text-bark-900">آثار دیگر این دسته</h2>
-            <ul className="grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 lg:grid-cols-4">
+            <h2 id="related-title" className="mb-6 text-2xl font-black text-bark-900">آثار دیگر این دسته</h2>
+            <ul className="grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-5 lg:grid-cols-4">
               {related.map(({ product: p, meta: m }) => (
                 <li key={p.slug}>
                   <SeoProductCard product={p} seo={m} />
