@@ -7,7 +7,7 @@ import { normalizeIranMobile } from "@/domain/phone";
 import { orderApi } from "./orderClient";
 import { Field } from "./Field";
 
-const primary = "inline-flex min-h-12 items-center justify-center rounded-full bg-bark-700 px-7 py-3 text-base font-medium text-ivory-50 hover:bg-bark-900 disabled:cursor-not-allowed disabled:opacity-60";
+const primary = "inline-flex min-h-12 items-center justify-center bg-bark-700 px-7 py-3 text-base font-medium text-ivory-50 hover:bg-bark-900 disabled:cursor-not-allowed disabled:opacity-60";
 
 function errorText(error: unknown): string {
   if (!(error instanceof OrderApiError)) return "خطایی رخ داد. دوباره تلاش کنید.";
@@ -69,7 +69,7 @@ export function SignInPanel({ onSignedIn, onUnavailable }: { onSignedIn: (custom
   }
 
   return (
-    <section aria-labelledby="signin-title" className="rounded-2xl border border-sand-200 bg-ivory-50 p-5 sm:p-6" data-testid="signin">
+    <section aria-labelledby="signin-title" className=" border border-sand-200 bg-ivory-50 p-5 sm:p-6" data-testid="signin">
       <h2 id="signin-title" className="text-lg font-bold text-bark-900">ورود با کد پیامکی</h2>
       <p className="mt-1 text-sm leading-7 text-bark-600">برای ثبت سفارش و دیدن سابقهٔ سفارش‌ها، شمارهٔ موبایل خود را تأیید کنید. رمز عبور لازم نیست.</p>
       {step === "phone" ? (

@@ -7,8 +7,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildStorefront, serveStatic } from "./storefront";
 
 /**
- * The redesigned storefront (approved visual reference: asymmetric organic layouts, deep teal / terracotta / cream, large
- * Persian type, bottom navigation on phones) as the deploy workflow builds it (no optional variables = sample content), on an
+ * The redesigned storefront (a contemporary art gallery: sharp rectangles only, asymmetric editorial compositions, ink black /
+ * warm white / vermilion, very large Persian type, bottom navigation on phones) as the deploy workflow builds it (no optional variables = sample content), on an
  * Android phone (412x915) and at other widths. Behaviour of the shop itself is covered by the shopping / orders / shipping suites.
  */
 const ANDROID = { viewport: { width: 412, height: 915 }, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, locale: "fa-IR", userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36" } as const;
@@ -68,6 +68,15 @@ describe("redesigned storefront on an Android phone (412x915)", () => {
     page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
     const response = await page.goto(`${url}${path}`, { waitUntil: "networkidle" });
     expect(response?.status()).toBe(200);
+    // the page is long: walk down it once so every lazy picture has been asked for, then judge them
+    await page.evaluate(async () => {
+      for (let y = 0; y < document.documentElement.scrollHeight; y += 500) {
+        window.scrollTo({ top: y, behavior: "instant" });
+        await new Promise((r) => setTimeout(r, 80));
+      }
+      window.scrollTo({ top: 0, behavior: "instant" });
+    });
+    await page.waitForLoadState("networkidle");
     const facts = await page.evaluate(async () => {
       await document.fonts.ready;
       const imgs = Array.from(document.images);
@@ -79,7 +88,15 @@ describe("redesigned storefront on an Android phone (412x915)", () => {
         h1: document.querySelectorAll("h1").length,
         brokenImages: imgs.filter((i) => !i.complete || i.naturalWidth === 0).map((i) => i.src),
         missingAlt: imgs.filter((i) => !(i.getAttribute("alt") ?? "").trim()).map((i) => i.src),
-        script: document.fonts.check('700 20px "Aref Ruqaa"'),
+        // the gallery look: straight edges only (native radio buttons and checkboxes keep the browser's own shape)
+        curved: Array.from(document.querySelectorAll("body *"))
+          .filter((e) => {
+            if (e instanceof SVGElement || e.matches('input[type="radio"], input[type="checkbox"]')) return false;
+            const c = getComputedStyle(e);
+            return [c.borderTopLeftRadius, c.borderTopRightRadius, c.borderBottomLeftRadius, c.borderBottomRightRadius].some((v) => parseFloat(v) > 0);
+          })
+          .slice(0, 5)
+          .map((e) => `${e.tagName.toLowerCase()}.${String(e.getAttribute("class") ?? "")}`),
         body: document.fonts.check('400 16px "Vazirmatn Variable"') || document.fonts.check('400 16px "Vazirmatn"'),
       };
     });
@@ -90,19 +107,21 @@ describe("redesigned storefront on an Android phone (412x915)", () => {
     expect(facts.h1).toBe(1);
     expect(facts.brokenImages).toEqual([]);
     expect(facts.missingAlt).toEqual([]);
-    expect(facts.script, "the wordmark script is loaded from our own file").toBe(true);
+    expect(facts.curved, "no curved frames, blobs, pills or rounded cards anywhere").toEqual([]);
     expect(await axeViolations(page)).toEqual([]);
     expect(errors).toEqual([]);
     await ctx.close();
   });
 
-  it("home: the sections of the approved reference, in order, built from the data", async () => {
+  it("home: the gallery sections, in order, built from the data", async () => {
     const ctx = await phone();
     const page = await ctx.newPage();
     await page.goto(`${url}/`, { waitUntil: "networkidle" });
     await pw(page.getByRole("heading", { level: 1 })).toContainText("هنر");
     await pw(page.getByRole("heading", { level: 1 })).toContainText("در زندگی");
     await pw(page.getByRole("heading", { level: 1 })).toContainText("روزمره");
+    // very large type: the heading is a poster headline, not a section title
+    expect(await page.getByRole("heading", { level: 1 }).evaluate((h) => parseFloat(getComputedStyle(h).fontSize))).toBeGreaterThanOrEqual(56);
     // the confirmed slogan stays visible above the heading
     await pw(page.getByText("اینجا هنر در جریان است").first()).toBeVisible();
     const order = await page.evaluate(() => ["collections", "featured", "story", "artists", "feel-title", "trust", "contact"].map((id) => ({ id, top: (document.getElementById(id) ?? document.querySelector(`[aria-labelledby="${id}"]`))?.getBoundingClientRect().top ?? -1 })));
@@ -124,8 +143,7 @@ describe("redesigned storefront on an Android phone (412x915)", () => {
     expect(tall.h).toBeGreaterThan(a.h * 1.8);
     expect(Math.abs(a.h - b.h)).toBeLessThan(2);
     expect(a.x).not.toBeCloseTo(tall.x, 0);
-    const shapes = await page.locator("#collections li a").evaluateAll((els) => els.map((e) => getComputedStyle(e).borderTopLeftRadius));
-    expect(new Set(shapes).size, "each tile has its own organic shape").toBe(3);
+    expect(tall.w, "the columns are unequal too").toBeGreaterThan(a.w * 1.2);
     await ctx.close();
   });
 
@@ -247,7 +265,7 @@ describe("other screen sizes", () => {
 });
 
 describe("what the redesign ships", () => {
-  it("loads nothing from another host (the wordmark font and every picture are our own files)", () => {
+  it("loads nothing from another host (every font and picture is our own file)", () => {
     expect([...requested].filter((h) => !h.startsWith("127.0.0.1")), "foreign hosts requested").toEqual([]);
   });
 

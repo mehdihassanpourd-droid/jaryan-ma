@@ -35,13 +35,13 @@ export function ProductGallery({ images }: { images: CatalogImage[] }) {
         </div>
         {images.length > 1 && (
           <>
-            <button type="button" onClick={() => go(-1)} aria-label="تصویر قبلی" className="absolute start-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-ivory-50/95 text-bark-900 shadow-soft hover:bg-ivory-50">
+            <button type="button" onClick={() => go(-1)} aria-label="تصویر قبلی" className="absolute start-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center bg-ivory-50/95 text-bark-900 shadow-soft hover:bg-ivory-50">
               <Icon name="chevron" className="h-5 w-5 -scale-x-100" />
             </button>
-            <button type="button" onClick={() => go(1)} aria-label="تصویر بعدی" className="absolute end-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-ivory-50/95 text-bark-900 shadow-soft hover:bg-ivory-50">
+            <button type="button" onClick={() => go(1)} aria-label="تصویر بعدی" className="absolute end-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center bg-ivory-50/95 text-bark-900 shadow-soft hover:bg-ivory-50">
               <Icon name="chevron" className="h-5 w-5" />
             </button>
-            <p className="absolute inset-x-0 bottom-4 mx-auto w-fit rounded-full bg-ivory-50/95 px-3 py-0.5 text-xs text-bark-700" aria-live="polite">
+            <p className="absolute inset-x-0 bottom-4 mx-auto w-fit bg-ivory-50/95 px-3 py-0.5 text-xs text-bark-700" aria-live="polite">
               {formatNumber(active + 1)} از {formatNumber(images.length)}
             </p>
           </>

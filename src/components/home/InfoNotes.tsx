@@ -26,7 +26,7 @@ export function InfoNotes() {
           </a>{" "}
           ببینید.
         </p>
-        <div className="divide-y divide-sand-200 overflow-hidden rounded-[1.75rem] border border-sand-200 bg-ivory-50">
+        <div className="divide-y divide-sand-200 overflow-hidden border border-sand-200 bg-ivory-50">
           {pending.map((item) => (
             <details key={item.title} className="group px-5">
               <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 py-3 font-bold text-bark-900 [&::-webkit-details-marker]:hidden">

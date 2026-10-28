@@ -31,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen pb-0 antialiased">
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-bark-900 focus:px-5 focus:py-2 focus:text-ivory-50"
+          className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-50 focus: focus:bg-bark-900 focus:px-5 focus:py-2 focus:text-ivory-50"
         >
           پرش به محتوای اصلی
         </a>

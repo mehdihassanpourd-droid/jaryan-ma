@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CategoryMosaic, CategoryTile } from "@/components/home/CategoryTile";
 import { ProductTile } from "@/components/product/ProductTile";
+import { WALL_SLOTS } from "@/components/product/wall";
 import { Badge } from "@/components/ui/Badge";
 import { Container } from "@/components/ui/Container";
 import { Price } from "@/components/ui/Price";
@@ -26,16 +27,16 @@ export function LiveShop() {
   const frame = (children: React.ReactNode) => (
     <section id="featured" aria-labelledby="featured-title" className="scroll-mt-20 pt-14 sm:pt-20">
       <Container>
-        <SectionHeader id="featured-title" title="آثار" />
+        <SectionHeader id="featured-title" title="آثار" index="۰۲" />
         {children}
       </Container>
     </section>
   );
   if (home.state === "loading") return frame(<p role="status" className="text-bark-600">در حال دریافت محصولات…</p>);
-  if (home.state === "error") return frame(<p role="alert" className="rounded-2xl border border-sand-300 bg-ivory-50 p-5 text-bark-700">در حال حاضر دریافت محصولات ممکن نیست. چند دقیقهٔ دیگر دوباره سر بزنید.</p>);
+  if (home.state === "error") return frame(<p role="alert" className=" border border-sand-300 bg-ivory-50 p-5 text-bark-700">در حال حاضر دریافت محصولات ممکن نیست. چند دقیقهٔ دیگر دوباره سر بزنید.</p>);
 
   const { categories, cards } = home.value;
-  if (cards.length === 0) return frame(<p role="status" className="rounded-2xl border border-sand-300 bg-ivory-50 p-5 text-bark-700">هنوز محصولی منتشر نشده است.</p>);
+  if (cards.length === 0) return frame(<p role="status" className=" border border-sand-300 bg-ivory-50 p-5 text-bark-700">هنوز محصولی منتشر نشده است.</p>);
 
   const chips = [{ slug: ALL_CATEGORIES, name: "همه" }, ...categories];
   const visible = active === ALL_CATEGORIES ? cards : cards.filter((c) => c.categorySlugs.includes(active));
@@ -49,7 +50,7 @@ export function LiveShop() {
       {categories.length > 0 && (
         <section id="collections" aria-labelledby="collections-title" className="scroll-mt-20 pt-14 sm:pt-20">
           <Container>
-            <SectionHeader id="collections-title" title="دسته‌بندی‌ها" href="#featured" />
+            <SectionHeader id="collections-title" title="دسته‌بندی‌ها" index="۰۱" href="#featured" />
             <CategoryMosaic>
               {categories.map((c, i) => {
                 const cover = cards.find((card) => card.categorySlugs.includes(c.slug))?.cover;
@@ -88,7 +89,7 @@ export function LiveShop() {
                     type="button"
                     onClick={() => choose(c.slug)}
                     aria-pressed={active === c.slug}
-                    className={`min-h-11 rounded-full border px-4 text-sm font-medium transition-colors ${active === c.slug ? "border-bark-900 bg-bark-900 text-ivory-50" : "border-bark-900/25 bg-ivory-50 text-bark-900 hover:border-bark-900"}`}
+                    className={`min-h-11 border px-4 text-sm font-medium transition-colors ${active === c.slug ? "border-bark-900 bg-bark-900 text-ivory-50" : "border-bark-900/25 bg-ivory-50 text-bark-900 hover:border-bark-900"}`}
                   >
                     {c.name}
                   </button>
@@ -97,12 +98,12 @@ export function LiveShop() {
             </ul>
           )}
           <p className="mt-4 text-sm text-bark-600" aria-live="polite">{formatNumber(visible.length)} اثر</p>
-          <ul className="mt-5 grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-5 lg:grid-cols-3 [&>li:nth-child(even)]:mt-6 lg:[&>li:nth-child(even)]:mt-0 lg:[&>li:nth-child(3n+2)]:mt-8">
-            {visible.map((p) => {
+          <ul className="mt-8 grid grid-cols-12 items-end gap-x-4 gap-y-14 sm:gap-y-20">
+            {visible.map((p, i) => {
               const cover = p.cover ? safeImageUrl(p.cover.url) : null;
               const price = p.priceFromToman ?? p.priceToman;
               return (
-                <li key={p.slug}>
+                <li key={p.slug} className={WALL_SLOTS[i % WALL_SLOTS.length]}>
                   <ProductTile
                     href={liveProductHref(p.slug)}
                     name={p.name}

@@ -11,7 +11,7 @@ export function CategoryShowcase() {
   return (
     <section id="collections" aria-labelledby="collections-title" className="scroll-mt-20 pt-14 sm:pt-20">
       <Container>
-        <SectionHeader id="collections-title" title="دسته‌بندی‌ها" href="#featured" />
+        <SectionHeader id="collections-title" title="دسته‌بندی‌ها" index="۰۱" href="#featured" />
         <CategoryMosaic>
           {demoCategories.map((c, i) => (
             <li key={c.slug}>

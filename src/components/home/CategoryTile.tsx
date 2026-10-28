@@ -3,9 +3,6 @@ import type { ReactNode } from "react";
 import { PlaceholderTag } from "@/components/ui/PlaceholderTag";
 import { formatNumber } from "@/lib/format";
 
-/** Organic frames, assigned by position so any number of categories keeps the asymmetric rhythm (see `CategoryMosaic`). */
-const SHAPES = ["blob-a", "blob-c", "blob-d"] as const;
-
 interface CategoryTileProps {
   index: number;
   name: string;
@@ -18,22 +15,20 @@ interface CategoryTileProps {
   active?: boolean;
 }
 
-/** One category: its picture in an organic frame, the name over a soft shade at the bottom, an optional count. */
-export function CategoryTile({ index, name, media, count, sample = false, href, onSelect, active }: CategoryTileProps) {
-  const shape = SHAPES[index % SHAPES.length];
-  const frame = `group relative block h-full w-full overflow-hidden ${shape} bg-sand-100 text-start ring-1 ring-sand-200 ${active ? "outline outline-[3px] outline-offset-2 outline-clay-600" : ""}`;
+/** One category: its picture fills a straight-edged rectangle and the name sits on a white wall label at the corner. */
+export function CategoryTile({ name, media, count, sample = false, href, onSelect, active }: CategoryTileProps) {
+  const frame = `group relative block h-full w-full overflow-hidden bg-sand-100 text-start ${active ? "outline outline-4 outline-offset-2 outline-clay-600" : ""}`;
   const body = (
     <>
-      <span className="absolute inset-0 block transition-transform duration-500 group-hover:scale-[1.04]">{media}</span>
-      <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-bark-900/80 via-bark-900/10 to-transparent" />
+      <span className="absolute inset-0 block transition-transform duration-500 group-hover:scale-[1.03]">{media}</span>
       {sample && (
-        <span className="absolute start-[18%] top-[9%]">
+        <span className="absolute start-3 top-3">
           <PlaceholderTag />
         </span>
       )}
-      <span className="absolute inset-x-[17%] bottom-[16%] block">
-        <span className="block text-lg font-black leading-7 text-ivory-50 sm:text-xl">{name}</span>
-        {count !== undefined && <span className="block text-xs text-ivory-50/90">{formatNumber(count)} اثر{sample ? " نمونه" : ""}</span>}
+      <span className="absolute bottom-0 start-0 block max-w-[88%] bg-ivory-50 px-4 py-2.5 transition-colors group-hover:bg-bark-900 group-hover:text-ivory-50">
+        <span className="block text-base font-black leading-6 sm:text-2xl sm:leading-8">{name}</span>
+        {count !== undefined && <span className="block text-xs font-medium">{formatNumber(count)} اثر{sample ? " نمونه" : ""}</span>}
       </span>
     </>
   );
@@ -48,10 +43,13 @@ export function CategoryTile({ index, name, media, count, sample = false, href, 
   );
 }
 
-/** The mosaic grid: in every group of three, the first tile is tall on one side and the other two stack beside it. */
+/**
+ * The asymmetric wall: two columns of unequal width; in every group of three, the first tile is tall and the other two stack beside it,
+ * so any number of categories keeps the rhythm and no two neighbours are the same size.
+ */
 export function CategoryMosaic({ children }: { children: ReactNode }) {
   return (
-    <ul className="mx-auto grid auto-rows-[9.75rem] grid-cols-2 gap-3 sm:auto-rows-[13rem] sm:gap-4 lg:max-w-4xl lg:auto-rows-[15rem] [&>li:nth-child(3n+1)]:row-span-2">
+    <ul className="grid auto-rows-[12.5rem] grid-cols-[1.45fr_1fr] gap-3 sm:auto-rows-[15rem] sm:gap-5 lg:auto-rows-[19rem] [&>li:nth-child(3n+1)]:row-span-2">
       {children}
     </ul>
   );

@@ -7,11 +7,11 @@ export function ProductChips({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap items-center gap-2">{children}</div>;
 }
 
-export const chipClass = "inline-flex min-h-8 items-center rounded-full bg-teal-100 px-3.5 text-sm font-medium text-teal-800";
+export const chipClass = "inline-flex min-h-8 items-center border-2 border-bark-900 px-3 text-sm font-black text-bark-900";
 
 /** Price (or the "not announced" note) in a soft panel, large enough to read at a glance. */
 export function PricePanel({ children }: { children: ReactNode }) {
-  return <div className="mt-5 flex min-h-14 flex-wrap items-center gap-x-2 rounded-2xl bg-ivory-100 px-5 py-2.5 text-lg ring-1 ring-sand-200">{children}</div>;
+  return <div className="mt-6 flex min-h-16 flex-wrap items-center gap-x-2 border-y-2 border-bark-900 py-3 text-2xl font-black">{children}</div>;
 }
 
 /**
@@ -20,8 +20,8 @@ export function PricePanel({ children }: { children: ReactNode }) {
  */
 export function ArtistNote() {
   return (
-    <aside aria-label="هنرمند" className="mt-8 flex items-center gap-4 rounded-[1.75rem] border border-dashed border-sand-400 bg-ivory-50 p-4">
-      <div className="blob-c h-16 w-16 shrink-0 overflow-hidden ring-1 ring-sand-300">
+    <aside aria-label="هنرمند" className="mt-8 flex items-center gap-4 border-2 border-dashed border-bark-700 bg-ivory-50 p-4">
+      <div className="h-16 w-16 shrink-0 overflow-hidden">
         <SampleImage art="artist-1" alt="تصویر موقت: نمایهٔ هنرمند نمونه" />
       </div>
       <div>

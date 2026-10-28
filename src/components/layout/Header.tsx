@@ -14,13 +14,13 @@ import { Wordmark } from "./Wordmark";
  */
 export function Header() {
   return (
-    <header className="sticky top-0 z-40 border-b border-sand-200/60 bg-ivory-50">
-      <Container className="relative flex h-16 items-center justify-between gap-4 md:h-20 md:gap-8">
+    <header className="sticky top-0 z-40 border-b-2 border-bark-900 bg-ivory-50">
+      <Container className="relative flex h-16 items-center justify-between gap-4 md:h-20 md:gap-4 lg:gap-8">
         <Link href="/" aria-label={`${site.name}، صفحهٔ اصلی`} className="order-2 text-bark-900 md:order-1">
-          <Wordmark className="text-[2rem] md:text-4xl" />
+          <Wordmark className="text-2xl md:text-3xl" />
         </Link>
         <nav aria-label="منوی اصلی" className="order-2 hidden md:block">
-          <ul className="flex items-center gap-7 text-sm text-bark-600">
+          <ul className="flex items-center gap-4 text-sm lg:gap-7 font-bold text-bark-700">
             {navLinks.map((l) => (
               <li key={l.href}>
                 <a href={l.href} className="py-2 transition-colors hover:text-bark-900">
@@ -43,7 +43,7 @@ export function Header() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="اینستاگرام جریان ما"
-              className="flex h-11 w-11 items-center justify-center rounded-full text-bark-900 hover:bg-sand-100 md:hidden"
+              className="flex h-11 w-11 items-center justify-center text-bark-900 hover:bg-sand-100 md:hidden"
             >
               <InstagramIcon className="h-6 w-6" />
             </a>

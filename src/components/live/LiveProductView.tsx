@@ -23,7 +23,7 @@ const AVAILABILITY_LABEL = { in_stock: "موجود", sold_out: "ناموجود",
 function Notice({ children, alert }: { children: string; alert?: boolean }) {
   return (
     <Container className="py-16">
-      <p role={alert ? "alert" : "status"} className="rounded-2xl border border-sand-300 bg-ivory-50 p-6 text-bark-700">{children}</p>
+      <p role={alert ? "alert" : "status"} className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">{children}</p>
       <p className="mt-6"><Link href="/" className="text-olive-700 underline">بازگشت به صفحهٔ اصلی</Link></p>
     </Container>
   );
@@ -55,8 +55,8 @@ function ProductDetails({ product }: { product: PublicProduct }) {
   return (
     <Container className="pb-4 pt-5 sm:pt-10">
       <Breadcrumb items={[{ name: "خانه", href: "/" }, ...(product.category ? [{ name: product.category.name }] : []), { name: product.name }]} />
-      <div className="mt-5 grid items-start gap-9 lg:grid-cols-2 lg:gap-16" data-testid="live-product">
-        <div className="mx-auto w-full max-w-md space-y-4 lg:max-w-none" role="group" aria-label="تصاویر محصول">
+      <div className="mt-8 grid items-start gap-16 lg:grid-cols-12 lg:gap-12" data-testid="live-product">
+        <div className="w-full pe-4 sm:pe-6 lg:col-span-7 space-y-4" role="group" aria-label="تصاویر محصول">
           {images[0] && (
             <GalleryFrame>
               {/* eslint-disable-next-line @next/next/no-img-element -- static export: no image optimiser */}
@@ -74,13 +74,13 @@ function ProductDetails({ product }: { product: PublicProduct }) {
             </ul>
           )}
         </div>
-        <div>
+        <div className="lg:col-span-5 lg:pt-10">
           <ProductChips>
-            {product.category && <span className="inline-flex min-h-8 items-center rounded-full bg-teal-100 px-3.5 text-sm font-medium text-teal-800">{product.category.name}</span>}
+            {product.category && <span className="inline-flex min-h-8 items-center bg-teal-100 px-3.5 text-sm font-medium text-teal-800">{product.category.name}</span>}
             {product.fulfillment === "unique" && <Badge tone="olive">اثر یگانه</Badge>}
             <Badge tone="neutral">{AVAILABILITY_LABEL[product.availability]}</Badge>
           </ProductChips>
-          <h1 className="mt-4 text-balance text-3xl font-black leading-[1.4] text-bark-900 sm:text-4xl">{product.name}</h1>
+          <h1 className="mt-5 text-balance text-5xl font-black leading-[1.2] text-bark-900 sm:text-6xl">{product.name}</h1>
           <PricePanel>
             {price.from && <span className="text-sm text-bark-600">از</span>}
             <Price amount={price.amount} />
@@ -90,7 +90,7 @@ function ProductDetails({ product }: { product: PublicProduct }) {
           {product.variants.length > 0 && (
             <section aria-labelledby="variants-title" className="mt-8">
               <h2 id="variants-title" className="mb-3 text-base font-bold text-bark-900">گزینه‌ها</h2>
-              <ul className="divide-y divide-sand-200 overflow-hidden rounded-[1.5rem] border border-sand-200 bg-ivory-50">
+              <ul className="divide-y divide-sand-200 overflow-hidden border border-sand-200 bg-ivory-50">
                 {product.variants.map((v) => (
                   <li key={v.sku} className="text-sm">
                     <label className={`flex min-h-12 cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-3 ${v.available ? "" : "cursor-not-allowed opacity-60"}`}>

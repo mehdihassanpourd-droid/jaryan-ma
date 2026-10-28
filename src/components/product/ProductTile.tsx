@@ -18,13 +18,16 @@ interface ProductTileProps {
   extra?: ReactNode;
 }
 
-/** The one product card: a large 4:5 picture in a soft frame, the category, the name and the price. Used by every product list. */
+/**
+ * The one work on the wall: a large straight-edged 4:5 picture and a museum-style label under a heavy rule (category, name, price).
+ * Used by every product list.
+ */
 export function ProductTile({ href, name, media, categoryName, price, sample = false, unique = false, extra }: ProductTileProps) {
   // "Stretched link": the product NAME is the one real link (so the spoken link name is exactly the visible name), and its
-  // ::after covers the whole card, so the picture and the price tap through to the product too.
+  // ::after covers the whole work, so the picture and the price tap through to the product too.
   return (
-    <article className="group relative flex h-full flex-col rounded-[1.75rem] has-[a:focus-visible]:outline has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-4 has-[a:focus-visible]:outline-cobalt-600">
-      <div className="relative aspect-[4/5] overflow-hidden rounded-[1.75rem] bg-sand-100 ring-1 ring-sand-200">
+    <article className="group relative flex h-full flex-col has-[a:focus-visible]:outline has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-4 has-[a:focus-visible]:outline-cobalt-600">
+      <div className="relative aspect-[4/5] overflow-hidden bg-sand-100">
         <div className="h-full w-full transition-transform duration-500 group-hover:scale-[1.03]">{media}</div>
         <div className="absolute start-3 top-3 flex flex-wrap gap-1.5">
           {sample && <PlaceholderTag />}
@@ -32,9 +35,9 @@ export function ProductTile({ href, name, media, categoryName, price, sample = f
           {extra}
         </div>
       </div>
-      <div className="mt-3 space-y-0.5 px-1">
-        {categoryName && <p className="text-xs font-medium text-teal-700">{categoryName}</p>}
-        <h3 className="font-bold leading-7 text-bark-900">
+      <div className="mt-3 border-t-2 border-bark-900 pt-2">
+        {categoryName && <p className="text-xs font-bold text-clay-700">{categoryName}</p>}
+        <h3 className="text-lg font-black leading-8 text-bark-900 group-hover:text-clay-700">
           <Link href={href} className="outline-none after:absolute after:inset-0 after:content-['']">
             {name}
           </Link>

@@ -89,15 +89,15 @@ export default async function ProductPage({ params }: Props) {
       <JsonLd data={[productJsonLd(product, seo), breadcrumbJsonLd(product, seo)]} />
       <Container className="pb-4 pt-5 sm:pt-10">
         <Breadcrumb items={crumbs} />
-        <div className="mt-5 grid items-start gap-9 lg:grid-cols-2 lg:gap-16">
-          <div className="mx-auto w-full max-w-md lg:max-w-none">
+        <div className="mt-8 grid items-start gap-16 lg:grid-cols-12 lg:gap-12">
+          <div className="w-full pe-4 sm:pe-6 lg:col-span-7">
             {allPlaceholders ? (
               <ProductGallery images={meta.images.map((i) => ({ art: i.placeholder!.art, alt: i.alt }))} />
             ) : (
               <PhotoGallery images={meta.images.filter((i) => i.url)} />
             )}
           </div>
-          <div>
+          <div className="lg:col-span-5 lg:pt-10">
             <ProductChips>
               {product.isDemo && <PlaceholderTag label="محتوای نمونه" />}
               {category && (
@@ -108,7 +108,7 @@ export default async function ProductPage({ params }: Props) {
               {product.fulfillment === "unique" && <Badge tone="olive">اثر یگانه</Badge>}
               {!product.isDemo && <Badge tone="neutral">{AVAILABILITY_LABEL[product.availability]}</Badge>}
             </ProductChips>
-            <h1 className="mt-4 text-balance text-3xl font-black leading-[1.4] text-bark-900 sm:text-4xl">{product.name}</h1>
+            <h1 className="mt-5 text-balance text-5xl font-black leading-[1.2] text-bark-900 sm:text-6xl">{product.name}</h1>
             <PricePanel>
               {price?.from && <span className="text-sm text-bark-600">از</span>}
               <Price amount={price?.amount ?? null} />
@@ -138,7 +138,7 @@ export default async function ProductPage({ params }: Props) {
                 <h2 id="variants-title" className="mb-3 text-base font-bold text-bark-900">
                   گزینه‌ها
                 </h2>
-                <ul className="divide-y divide-sand-200 overflow-hidden rounded-[1.5rem] border border-sand-200 bg-ivory-50">
+                <ul className="divide-y divide-sand-200 overflow-hidden border border-sand-200 bg-ivory-50">
                   {product.variants.map((v) => (
                     <li key={v.sku} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                       <span className="text-bark-700">{Object.values(v.options).join("، ") || v.sku}</span>
@@ -165,7 +165,7 @@ export default async function ProductPage({ params }: Props) {
         </div>
         {related.length > 0 && (
           <section aria-labelledby="related-title" className="mt-16" data-testid="related-products">
-            <h2 id="related-title" className="mb-6 text-2xl font-black text-bark-900">آثار دیگر این دسته</h2>
+            <h2 id="related-title" className="mb-8 border-t-4 border-bark-900 pt-3 text-4xl font-black text-bark-900">آثار دیگر این دسته</h2>
             <ul className="grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-5 lg:grid-cols-4">
               {related.map(({ product: p, meta: m }) => (
                 <li key={p.slug}>

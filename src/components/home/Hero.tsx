@@ -1,48 +1,46 @@
 import { SampleImage } from "@/components/product/SampleImage";
 import { ButtonLink } from "@/components/ui/Button";
 import { Container } from "@/components/ui/Container";
-import { Icon } from "@/components/ui/Icons";
-import { HeroField } from "@/components/ui/Ornaments";
 import { PlaceholderTag } from "@/components/ui/PlaceholderTag";
 import { site } from "@/lib/site";
 
 /**
- * The opening: a deep-teal organic field, a very large heading, one pill button and a big picture in a pebble frame.
- * The brand's confirmed slogan sits above the heading; the picture is a labelled sample illustration until real photography exists.
+ * The opening wall of the exhibition: an ink-black field, a very large heading, and one big picture on a vermilion block that is
+ * offset from it. Everything is a straight-edged rectangle. The brand's confirmed slogan is the eyebrow; the picture is a labelled
+ * sample illustration until real photography exists.
  */
 export function Hero() {
   return (
-    <section aria-labelledby="hero-title" className="relative isolate overflow-hidden pb-14 sm:pb-20">
-      <div aria-hidden="true" className="absolute inset-x-0 top-0 -z-10 h-[calc(100%-3.5rem)] sm:h-[calc(100%-5rem)]">
-        <HeroField className="h-full w-full" />
-      </div>
-      <Container className="grid grid-cols-[1.12fr_0.88fr] items-center gap-4 pb-20 pt-9 sm:gap-8 sm:pb-24 sm:pt-14 lg:pb-32 lg:pt-20">
-        <div className="text-ivory-50">
-          <p className="text-xs font-medium text-sand-200 sm:text-sm">{site.slogan}</p>
-          <h1 id="hero-title" className="mt-3 text-[2.7rem] font-black leading-[1.18] sm:text-6xl lg:text-7xl">
-            هنر <br />
-            در زندگی <br />
-            روزمره
-          </h1>
-          <p className="mt-4 max-w-sm text-[0.95rem] leading-8 text-ivory-100 sm:text-lg">آثار دست‌ساز. برای روزهای خاص و معمولی.</p>
-          <ButtonLink href="#featured" variant="light" size="lg" chevron className="mt-6">
-            دیدن محصولات
-          </ButtonLink>
-        </div>
-        <div className="relative">
-          <div className="blob-b relative aspect-[4/5] overflow-hidden bg-teal-700 shadow-soft ring-4 ring-ivory-50/90">
-            <SampleImage art="vase-1" alt="تصویر موقت: گلدان سفالی آبی با گل‌های سفید" priority />
+    <section aria-labelledby="hero-title" className="overflow-x-clip bg-bark-900 text-ivory-50">
+      <Container className="pb-16 pt-8 sm:pb-28 sm:pt-16">
+        <p className="flex items-center gap-3 text-sm font-bold text-ivory-100">
+          <span aria-hidden="true" className="inline-block h-1 w-10 bg-clay-500" />
+          {site.slogan}
+        </p>
+        <h1 id="hero-title" className="mt-5 text-[3.6rem] font-black leading-[1.1] sm:text-8xl lg:text-[9rem]">
+          هنر <br />
+          در زندگی <br />
+          روزمره
+        </h1>
+        <div className="mt-8 grid items-end gap-10 sm:mt-12 sm:grid-cols-12 sm:gap-6">
+          <div className="sm:col-span-4 sm:pb-6">
+            <p className="max-w-xs text-lg leading-9 text-ivory-100">آثار دست‌ساز. برای روزهای خاص و معمولی.</p>
+            <ButtonLink href="#featured" variant="light" size="lg" chevron className="mt-7">
+              دیدن آثار
+            </ButtonLink>
           </div>
-          <div className="absolute bottom-3 start-3">
-            <PlaceholderTag label="تصویر موقت" />
-          </div>
+          <figure className="relative isolate ms-auto w-[88%] sm:col-span-8 sm:col-start-5 sm:w-[78%] lg:w-[64%]">
+            <div aria-hidden="true" className="absolute -bottom-5 -start-5 top-12 -z-10 w-full bg-clay-600 sm:-start-8" />
+            <div className="relative aspect-[4/5] overflow-hidden bg-teal-700">
+              <SampleImage art="vase-1" alt="تصویر موقت: گلدان سفالی آبی با گل‌های سفید" priority />
+              <div className="absolute start-3 top-3">
+                <PlaceholderTag label="تصویر موقت" />
+              </div>
+            </div>
+            <figcaption className="mt-3 text-xs font-bold text-ivory-100">۰۱ — نمونهٔ تصویر؛ عکس واقعی جایگزین می‌شود</figcaption>
+          </figure>
         </div>
       </Container>
-      <div className="absolute inset-x-0 bottom-14 flex translate-y-1/2 justify-center sm:bottom-20">
-        <a href="#collections" aria-label="رفتن به دسته‌بندی‌ها" className="flex h-12 w-12 items-center justify-center rounded-full border border-bark-900/30 bg-ivory-50 text-bark-900 shadow-soft hover:bg-sand-100">
-          <Icon name="down" className="h-5 w-5" />
-        </a>
-      </div>
     </section>
   );
 }

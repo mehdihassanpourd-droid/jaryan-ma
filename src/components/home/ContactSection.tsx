@@ -19,7 +19,7 @@ export function ContactSection() {
         <SectionHeader id="contact-title" title="با ما در ارتباط باشید" />
         <p className="-mt-2 mb-6 text-bark-700">در حال حاضر مطمئن‌ترین راه ارتباط با گالری، صفحه اینستاگرام است.</p>
         <div className="grid gap-5 lg:grid-cols-2">
-          <div className="rounded-[2rem] bg-teal-900 p-8 text-ivory-50 sm:p-10">
+          <div className=" bg-teal-900 p-8 text-ivory-50 sm:p-10">
             <InstagramIcon className="h-8 w-8 text-sand-200" />
             <p className="mt-5 text-2xl font-black">
               <span dir="ltr">@{site.instagramHandle}</span>
@@ -30,7 +30,7 @@ export function ContactSection() {
             </ButtonLink>
           </div>
 
-          <dl className="divide-y divide-sand-200 rounded-[2rem] border border-sand-200 bg-ivory-50 px-6 sm:px-8">
+          <dl className="divide-y divide-sand-200 border border-sand-200 bg-ivory-50 px-6 sm:px-8">
             {channels.map((c) => (
               <div key={c.label} className="flex items-center justify-between gap-4 py-5">
                 <dt className="text-bark-600">{c.label}</dt>
