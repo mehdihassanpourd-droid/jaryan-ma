@@ -1,30 +1,49 @@
 @import "tailwindcss";
 @import "@fontsource-variable/vazirmatn";
 
-/* Design tokens: warm ivory / beige / natural brown / muted olive. */
+/* Design tokens: a contemporary gallery. Warm white wall, ink black, one vermilion accent, cobalt for focus.
+   The old token names (ivory / sand / bark / olive / teal / clay) are kept on purpose: cart, checkout and orders use them and follow the new look.
+   There are no curved shapes: every frame is a straight-edged rectangle. */
 @theme {
   --font-sans: "Vazirmatn Variable", "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
 
-  --color-ivory-50: #fdfbf6;
-  --color-ivory-100: #f8f3e8;
-  --color-ivory-200: #f0e8d6;
+  --color-ivory-50: #f6f4ef;
+  --color-ivory-100: #ece9e1;
+  --color-ivory-200: #e0dcd2;
 
-  --color-sand-100: #ebe0cb;
-  --color-sand-200: #ddcdb0;
-  --color-sand-300: #c9b48f;
-  --color-sand-400: #b39a72;
+  --color-sand-100: #e6e3da;
+  --color-sand-200: #d3cfc4;
+  --color-sand-300: #b4afa2;
+  --color-sand-400: #8a8579;
 
-  --color-bark-500: #8a6a4a;
-  --color-bark-600: #6f5239;
-  --color-bark-700: #55402d;
-  --color-bark-900: #2e2318;
+  --color-bark-500: #5b5850;
+  --color-bark-600: #46443d;
+  --color-bark-700: #2d2c28;
+  --color-bark-900: #0d0d0c;
 
-  --color-olive-100: #e4e6d3;
-  --color-olive-300: #a9b085;
-  --color-olive-500: #7a8456;
-  --color-olive-700: #566040;
+  --color-olive-100: #e1e3d6;
+  --color-olive-300: #a9ad94;
+  --color-olive-500: #6b6f52;
+  --color-olive-700: #474a35;
 
-  --shadow-soft: 0 1px 2px rgb(46 35 24 / 0.05), 0 8px 24px -8px rgb(46 35 24 / 0.12);
+  --color-teal-100: #dedbd0;
+  --color-teal-500: #6c6a63;
+  --color-teal-700: #2d2c28;
+  --color-teal-800: #1c1b19;
+  --color-teal-900: #0d0d0c;
+
+  --color-clay-100: #f4d9d1;
+  --color-clay-500: #d2401f;
+  --color-clay-600: #c0381a;
+  --color-clay-700: #9c2d14;
+
+  --color-cobalt-100: #dce4f7;
+  --color-cobalt-600: #1f43c4;
+  --color-cobalt-700: #19369c;
+
+  --color-mustard-500: #e3b23c;
+
+  --shadow-soft: 0 0 #0000;
 }
 
 @layer base {
@@ -39,13 +58,12 @@
     -webkit-font-smoothing: antialiased;
   }
   ::selection {
-    background-color: var(--color-olive-300);
+    background-color: var(--color-mustard-500);
     color: var(--color-bark-900);
   }
   :focus-visible {
-    outline: 2px solid var(--color-olive-500);
+    outline: 2px solid var(--color-cobalt-600);
     outline-offset: 3px;
-    border-radius: 4px;
   }
   @media (prefers-reduced-motion: reduce) {
     html {

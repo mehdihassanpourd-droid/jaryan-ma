@@ -1,61 +1,44 @@
-import { ArtPlaceholder } from "@/components/product/ArtPlaceholder";
+import { SampleImage } from "@/components/product/SampleImage";
 import { ButtonLink } from "@/components/ui/Button";
 import { Container } from "@/components/ui/Container";
-import { InstagramIcon } from "@/components/ui/InstagramIcon";
 import { PlaceholderTag } from "@/components/ui/PlaceholderTag";
 import { site } from "@/lib/site";
 
-const highlights = ["دست‌ساز", "هنر ایرانی", "بافته و دکور خانه"];
-
+/**
+ * The opening wall of the exhibition: an ink-black field, a very large heading, and one big picture on a vermilion block that is
+ * offset from it. Everything is a straight-edged rectangle. The brand's confirmed slogan is the eyebrow; the picture is a labelled
+ * sample illustration until real photography exists.
+ */
 export function Hero() {
   return (
-    <section aria-labelledby="hero-title" className="relative overflow-hidden bg-ivory-100">
-      <Container className="grid items-center gap-12 py-12 sm:py-20 lg:grid-cols-12 lg:gap-10 lg:py-24">
-        <div className="lg:col-span-6">
-          <p className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-olive-700">
-            <span aria-hidden="true" className="h-px w-8 bg-olive-500" />
-            گالری آثار هنری دست‌ساز ایرانی
-          </p>
-          <h1 id="hero-title" className="text-balance text-4xl font-extrabold leading-[1.35] text-bark-900 sm:text-6xl sm:leading-[1.3]">
-            {site.slogan}
-          </h1>
-          <p className="mt-6 max-w-xl text-lg leading-9 text-bark-600">{site.description}</p>
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink href="#featured" size="lg">
+    <section aria-labelledby="hero-title" className="overflow-x-clip bg-bark-900 text-ivory-50">
+      <Container className="pb-16 pt-8 sm:pb-28 sm:pt-16">
+        <p className="flex items-center gap-3 text-sm font-bold text-ivory-100">
+          <span aria-hidden="true" className="inline-block h-1 w-10 bg-clay-500" />
+          {site.slogan}
+        </p>
+        <h1 id="hero-title" className="mt-5 text-[3.6rem] font-black leading-[1.1] sm:text-8xl lg:text-[9rem]">
+          هنر <br />
+          در زندگی <br />
+          روزمره
+        </h1>
+        <div className="mt-8 grid items-end gap-10 sm:mt-12 sm:grid-cols-12 sm:gap-6">
+          <div className="sm:col-span-4 sm:pb-6">
+            <p className="max-w-xs text-lg leading-9 text-ivory-100">آثار دست‌ساز. برای روزهای خاص و معمولی.</p>
+            <ButtonLink href="#featured" variant="light" size="lg" chevron className="mt-7">
               دیدن آثار
             </ButtonLink>
-            <ButtonLink href={site.instagramUrl} target="_blank" rel="noopener noreferrer" variant="secondary" size="lg">
-              <InstagramIcon />
-              <span>دنبال کردن در اینستاگرام</span>
-            </ButtonLink>
           </div>
-          <ul className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-sm text-bark-700">
-            {highlights.map((h) => (
-              <li key={h} className="flex items-center gap-2">
-                <span aria-hidden="true" className="h-1.5 w-1.5 rotate-45 bg-olive-500" />
-                {h}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="relative lg:col-span-6">
-          <div className="grid grid-cols-5 gap-3 sm:gap-4">
-            <div className="relative col-span-3 row-span-2 overflow-hidden rounded-[2rem] shadow-soft ring-1 ring-sand-200">
-              <div className="aspect-[3/4]">
-                <ArtPlaceholder tone="sand" motif="fringe" alt="تصویر نمونه دیوارکوب بافته برای معرفی گالری" />
-              </div>
-              <div className="absolute bottom-3 start-3">
-                <PlaceholderTag label="تصویر نمونه" />
+          <figure className="relative isolate ms-auto w-[88%] sm:col-span-8 sm:col-start-5 sm:w-[78%] lg:w-[64%]">
+            <div aria-hidden="true" className="absolute -bottom-5 -start-5 top-12 -z-10 w-full bg-clay-600 sm:-start-8" />
+            <div className="relative aspect-[4/5] overflow-hidden bg-teal-700">
+              <SampleImage art="vase-1" alt="تصویر موقت: گلدان سفالی آبی با گل‌های سفید" priority />
+              <div className="absolute start-3 top-3">
+                <PlaceholderTag label="تصویر موقت" />
               </div>
             </div>
-            <div className="col-span-2 aspect-square overflow-hidden rounded-3xl shadow-soft ring-1 ring-sand-200">
-              <ArtPlaceholder tone="olive" motif="arch" alt="تصویر نمونه ماکرومه قوسی" />
-            </div>
-            <div className="col-span-2 aspect-square overflow-hidden rounded-3xl shadow-soft ring-1 ring-sand-200">
-              <ArtPlaceholder tone="bark" motif="detail" alt="تصویر نمونه بافت از نزدیک" />
-            </div>
-          </div>
+            <figcaption className="mt-3 text-xs font-bold text-ivory-100">۰۱ — نمونهٔ تصویر؛ عکس واقعی جایگزین می‌شود</figcaption>
+          </figure>
         </div>
       </Container>
     </section>

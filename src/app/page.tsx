@@ -1,11 +1,13 @@
+import { ArtistsBand } from "@/components/home/ArtistsBand";
 import { CatalogLinks } from "@/components/home/CatalogLinks";
-import { BrandStory } from "@/components/home/BrandStory";
-import { CategoryGrid } from "@/components/home/CategoryGrid";
+import { CategoryShowcase } from "@/components/home/CategoryShowcase";
 import { ContactSection } from "@/components/home/ContactSection";
 import { FeaturedProducts } from "@/components/home/FeaturedProducts";
+import { FeelBand } from "@/components/home/FeelBand";
 import { Hero } from "@/components/home/Hero";
-import { Spotlight } from "@/components/home/Spotlight";
-import { TrustSection } from "@/components/home/TrustSection";
+import { InfoNotes } from "@/components/home/InfoNotes";
+import { StoryBand } from "@/components/home/StoryBand";
+import { LiveShop } from "@/components/live/LiveShop";
 import type { Metadata } from "next";
 import { LIVE_CATALOG_BASE } from "@/lib/live-config";
 import { site } from "@/lib/site";
@@ -24,13 +26,20 @@ export default async function HomePage() {
     <>
       <JsonLd data={siteJsonLd(origin, site.name, site.instagramUrl)} />
       <Hero />
-      {/* The sample collections and spotlight give way to the real catalogue once one is connected. */}
-      {!LIVE_CATALOG_BASE && <CategoryGrid />}
-      <FeaturedProducts />
-      {!LIVE_CATALOG_BASE && <Spotlight />}
+      {/* The sample categories and products give way to the real catalogue (read live in the browser) once one is connected. */}
+      {LIVE_CATALOG_BASE ? (
+        <LiveShop />
+      ) : (
+        <>
+          <CategoryShowcase />
+          <FeaturedProducts />
+        </>
+      )}
+      <StoryBand />
+      <ArtistsBand />
+      <FeelBand />
       <CatalogLinks />
-      <BrandStory />
-      <TrustSection />
+      <InfoNotes />
       <ContactSection />
     </>
   );

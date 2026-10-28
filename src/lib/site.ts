@@ -1,4 +1,3 @@
-import { LIVE_CATALOG_BASE } from "@/lib/live-config";
 import { ORDER_API_BASE } from "@/lib/order-config";
 
 /**
@@ -10,7 +9,7 @@ export const site = {
   name: "جریان ما",
   slogan: "اینجا هنر در جریان است",
   description:
-    "گالری و فروشگاه آثار هنری دست‌ساز ایرانی؛ دیوارکوب‌های بافته، ماکرومه و دکور خانه برای دیدن، شناختن و همراه کردن هنر در زندگی روزمره.",
+    "گالری و فروشگاه آثار هنری دست‌ساز ایرانی؛ کیف‌های پارچه‌ای نقاشی‌دست، ماندالای قلاب‌بافی و سفال و سرامیک برای دیدن، شناختن و همراه کردن هنر در زندگی روزمره.",
   instagramHandle: "jaryan.ma",
   instagramUrl: "https://instagram.com/jaryan.ma",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
@@ -22,15 +21,14 @@ export const site = {
   },
 } as const;
 
-const allNavLinks = [
-  { href: "/#collections", label: "مجموعه‌ها" },
-  { href: "/#featured", label: "آثار منتخب" },
-  { href: "/#story", label: "داستان ما" },
-  { href: "/#trust", label: "اطمینان" },
+const baseNavLinks = [
+  { href: "/#collections", label: "دسته‌بندی‌ها" },
+  { href: "/#featured", label: "منتخب‌ها" },
+  { href: "/#story", label: "داستان" },
+  { href: "/#artists", label: "هنرمندان" },
+  { href: "/#trust", label: "اطلاعات خرید" },
   { href: "/#contact", label: "تماس" },
 ] as const;
 
-/** The sample "collections" section is not rendered once a live catalogue is connected, so its link goes too. */
-const liveNavLinks = LIVE_CATALOG_BASE ? allNavLinks.filter((l) => l.href !== "/#collections") : allNavLinks;
 /** "My orders" exists only where the store has an order system to read them from. */
-export const navLinks: ReadonlyArray<{ readonly href: string; readonly label: string }> = ORDER_API_BASE ? [...liveNavLinks, { href: "/orders", label: "سفارش‌های من" }] : liveNavLinks;
+export const navLinks: ReadonlyArray<{ readonly href: string; readonly label: string }> = ORDER_API_BASE ? [...baseNavLinks, { href: "/orders", label: "سفارش‌های من" }] : baseNavLinks;

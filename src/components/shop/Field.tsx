@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from "react";
 
-const control = "block min-h-12 w-full rounded-xl border border-sand-300 bg-ivory-50 px-4 py-3 text-base text-bark-900 placeholder:text-bark-500 focus:border-olive-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-olive-700 aria-[invalid=true]:border-red-700";
+const control = "block min-h-12 w-full border border-sand-300 bg-ivory-50 px-4 py-3 text-base text-bark-900 placeholder:text-bark-500 focus:border-olive-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-olive-700 aria-[invalid=true]:border-red-700";
 
 interface FieldProps {
   label: string;

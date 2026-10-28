@@ -18,7 +18,7 @@ export function SectionHeading({ eyebrow, title, description, id, aside }: Secti
           {aside}
         </div>
       )}
-      <h2 id={id} className="text-2xl font-extrabold leading-snug text-bark-900 sm:text-4xl">
+      <h2 id={id} className="text-2xl font-black leading-snug text-bark-900 sm:text-4xl">
         {title}
       </h2>
       {description && <p className="mt-4 text-base text-bark-600 sm:text-lg">{description}</p>}

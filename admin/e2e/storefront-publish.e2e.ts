@@ -111,11 +111,13 @@ describe("admin publish → public storefront, no deployment", () => {
     await eventually(customer, async () => {
       await pw(customer.getByTestId("live-products").getByRole("link", { name: NAME })).toBeVisible({ timeout: 1000 });
     }, "the published product on the home page");
-    const card = customer.getByTestId("live-products").getByRole("link", { name: NAME });
+    const link = customer.getByTestId("live-products").getByRole("link", { name: NAME });
+    // The name is the card's one link (stretched over it); price, badge and picture belong to the card around it.
+    const card = customer.getByTestId("live-products").locator("article").filter({ has: customer.getByRole("link", { name: NAME }) });
     await pw(card).toContainText("۴٬۵۰۰٬۰۰۰ تومان");
     await pw(card).toContainText("اثر یگانه");
     expect(await card.locator("img").evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
-    await card.click();
+    await link.click();
     await pw(customer.getByRole("heading", { level: 1, name: NAME })).toBeVisible();
     await pw(customer.getByTestId("live-product")).toContainText("بافته‌شده با دست");
     await pw(customer.getByTestId("live-product")).toContainText("۴٬۵۰۰٬۰۰۰ تومان");

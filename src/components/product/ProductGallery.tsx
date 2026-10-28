@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { Icon } from "@/components/ui/Icons";
+import { PlaceholderTag } from "@/components/ui/PlaceholderTag";
 import { formatNumber } from "@/lib/format";
 import type { CatalogImage } from "@/types/catalog";
-import { ArtPlaceholder } from "./ArtPlaceholder";
+import { GalleryFrame, thumbClass } from "./GalleryFrame";
+import { SampleImage } from "./SampleImage";
 
-/** Main image, previous/next controls and selectable thumbnails. Keyboard- and screen-reader friendly. */
+/** Main image, previous/next controls and selectable thumbnails for SAMPLE illustrations. Keyboard- and screen-reader friendly. */
 export function ProductGallery({ images }: { images: CatalogImage[] }) {
   const [active, setActive] = useState(0);
   const current = images[active];
@@ -15,7 +18,7 @@ export function ProductGallery({ images }: { images: CatalogImage[] }) {
 
   return (
     <div
-      className="space-y-3"
+      className="space-y-4"
       role="group"
       aria-roledescription="گالری تصاویر"
       aria-label="گالری تصاویر محصول"
@@ -25,53 +28,42 @@ export function ProductGallery({ images }: { images: CatalogImage[] }) {
         if (e.key === "ArrowRight") go(-1);
       }}
     >
-      <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-sand-100 shadow-soft ring-1 ring-sand-200">
-        <ArtPlaceholder tone={current.tone} motif={current.motif} alt={current.alt} />
+      <GalleryFrame>
+        <SampleImage art={current.art} alt={current.alt} priority={active === 0} />
+        <div className="absolute start-4 top-4">
+          <PlaceholderTag label="تصویر موقت" />
+        </div>
         {images.length > 1 && (
           <>
-            <button
-              type="button"
-              onClick={() => go(-1)}
-              aria-label="تصویر قبلی"
-              className="absolute start-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-ivory-50/90 text-bark-900 shadow-soft hover:bg-ivory-50"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M9 6l6 6-6 6" />
-              </svg>
+            <button type="button" onClick={() => go(-1)} aria-label="تصویر قبلی" className="absolute start-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center bg-ivory-50/95 text-bark-900 shadow-soft hover:bg-ivory-50">
+              <Icon name="chevron" className="h-5 w-5 -scale-x-100" />
             </button>
-            <button
-              type="button"
-              onClick={() => go(1)}
-              aria-label="تصویر بعدی"
-              className="absolute end-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-ivory-50/90 text-bark-900 shadow-soft hover:bg-ivory-50"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M15 6l-6 6 6 6" />
-              </svg>
+            <button type="button" onClick={() => go(1)} aria-label="تصویر بعدی" className="absolute end-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center bg-ivory-50/95 text-bark-900 shadow-soft hover:bg-ivory-50">
+              <Icon name="chevron" className="h-5 w-5" />
             </button>
-            <p className="absolute inset-x-0 bottom-3 mx-auto w-fit rounded-full bg-ivory-50/90 px-3 py-0.5 text-xs text-bark-700" aria-live="polite">
+            <p className="absolute inset-x-0 bottom-4 mx-auto w-fit bg-ivory-50/95 px-3 py-0.5 text-xs text-bark-700" aria-live="polite">
               {formatNumber(active + 1)} از {formatNumber(images.length)}
             </p>
           </>
         )}
-      </div>
-      <ul className="flex gap-3" aria-label="تصاویر محصول">
-        {images.map((img, i) => (
-          <li key={`${img.tone}-${img.motif}-${i}`} className="w-20">
-            <button
-              type="button"
-              onClick={() => setActive(i)}
-              aria-label={`نمایش تصویر ${formatNumber(i + 1)}`}
-              aria-pressed={i === active}
-              className={`block aspect-square w-full overflow-hidden rounded-xl ring-2 transition ${
-                i === active ? "ring-bark-700" : "opacity-70 ring-transparent hover:opacity-100"
-              }`}
-            >
-              <ArtPlaceholder tone={img.tone} motif={img.motif} alt="" />
-            </button>
-          </li>
-        ))}
-      </ul>
+      </GalleryFrame>
+      {images.length > 1 && (
+        <ul className="flex gap-3" aria-label="تصاویر محصول">
+          {images.map((img, i) => (
+            <li key={`${img.art}-${i}`} className="w-[4.5rem]">
+              <button
+                type="button"
+                onClick={() => setActive(i)}
+                aria-label={`نمایش تصویر ${formatNumber(i + 1)}`}
+                aria-pressed={i === active}
+                className={`${thumbClass} ${i === active ? "ring-clay-600" : "opacity-70 ring-transparent hover:opacity-100"}`}
+              >
+                <SampleImage art={img.art} alt={img.alt} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

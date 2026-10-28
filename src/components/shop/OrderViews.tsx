@@ -16,7 +16,7 @@ import { orderApi } from "./orderClient";
 import { SignInPanel } from "./SignInPanel";
 import { useCustomer } from "./useCustomer";
 
-const secondary = "inline-flex min-h-12 items-center justify-center rounded-full border border-bark-500/40 px-7 py-3 text-base font-medium text-bark-700 hover:bg-sand-100";
+const secondary = "inline-flex min-h-12 items-center justify-center border border-bark-500/40 px-7 py-3 text-base font-medium text-bark-700 hover:bg-sand-100";
 const dateFormat = new Intl.DateTimeFormat("fa-IR", { dateStyle: "medium", timeStyle: "short" });
 const IMAGE_KEY = /^images\/[A-Za-z0-9-]{1,64}\/[A-Za-z0-9-]{1,64}\.(jpg|png|webp)$/;
 const imageUrl = (key: string | null): string | null => (key && LIVE_CATALOG_BASE && IMAGE_KEY.test(key) ? `${LIVE_CATALOG_BASE}/${key}` : null);
@@ -31,7 +31,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
 }
 
 const Notice = ({ children, alert }: { children: React.ReactNode; alert?: boolean }) => (
-  <p role={alert ? "alert" : "status"} className="rounded-2xl border border-sand-300 bg-ivory-50 p-6 text-bark-700">{children}</p>
+  <p role={alert ? "alert" : "status"} className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">{children}</p>
 );
 
 /** Signed-out / loading / unreachable handling shared by the order pages. Returns the ready content or the right message. */
@@ -105,25 +105,25 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
   return (
     <div className="space-y-6" data-testid="order-detail">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="rounded-full bg-sand-100 px-4 py-1.5 text-sm font-medium text-bark-800" data-testid="order-status">{ORDER_STATUS_LABEL[order.status]}</span>
+        <span className=" bg-sand-100 px-4 py-1.5 text-sm font-medium text-bark-800" data-testid="order-status">{ORDER_STATUS_LABEL[order.status]}</span>
         <span className="text-sm text-bark-600">{dateFormat.format(new Date(order.placedAt))}</span>
       </div>
       {order.status === "pending" && (
-        <p role="note" className="rounded-2xl border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">این سفارش ثبت شده و در انتظار تأیید گالری است. {NO_PAYMENT_NOTE}</p>
+        <p role="note" className=" border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">این سفارش ثبت شده و در انتظار تأیید گالری است. {NO_PAYMENT_NOTE}</p>
       )}
-      {STATUS_NOTE[order.status] && <p role="note" className="rounded-2xl border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">{STATUS_NOTE[order.status]}</p>}
+      {STATUS_NOTE[order.status] && <p role="note" className=" border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">{STATUS_NOTE[order.status]}</p>}
       {(order.status === "rejected" || order.status === "cancelled") && (
-        <p role="note" className="rounded-2xl border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-800" data-testid="refusal-note">
+        <p role="note" className=" border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-800" data-testid="refusal-note">
           {order.status === "rejected" ? "گالری این سفارش را نپذیرفت." : refusal?.by === "customer" ? "شما این سفارش را لغو کردید." : "این سفارش لغو شد."}
           {refusal?.reason && <> دلیل: {refusal.reason}</>} کالاهای این سفارش دیگر برای شما نگه داشته نمی‌شود و هیچ مبلغی دریافت نشده بود.
         </p>
       )}
-      <ul className="divide-y divide-sand-200 rounded-2xl border border-sand-200 bg-ivory-50" aria-label="اقلام سفارش">
+      <ul className="divide-y divide-sand-200 border border-sand-200 bg-ivory-50" aria-label="اقلام سفارش">
         {order.items.map((item, i) => {
           const img = imageUrl(item.imageKey);
           return (
             <li key={`${item.sku ?? item.title}-${i}`} className="flex gap-4 p-4">
-              <div className="h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-sand-100 ring-1 ring-sand-200">
+              <div className="h-20 w-16 shrink-0 overflow-hidden bg-sand-100 ring-1 ring-sand-200">
                 {/* eslint-disable-next-line @next/next/no-img-element -- static export: no image optimiser */}
                 {img && <img src={img} alt={item.title} className="h-full w-full object-cover" />}
               </div>
@@ -136,7 +136,7 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
           );
         })}
       </ul>
-      <dl className="space-y-2 rounded-2xl border border-sand-200 bg-ivory-50 p-5 text-sm" data-testid="order-amounts">
+      <dl className="space-y-2 border border-sand-200 bg-ivory-50 p-5 text-sm" data-testid="order-amounts">
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-bark-700">جمع کالاها</dt>
           <dd className="text-bark-900" data-testid="order-subtotal">{formatToman(order.subtotalToman)}</dd>
@@ -153,7 +153,7 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
           <dd><strong className="text-xl text-bark-900" data-testid="order-total">{formatToman(order.totalToman)}</strong></dd>
         </div>
       </dl>
-      <section aria-labelledby="ship-title" className="rounded-2xl border border-sand-200 bg-ivory-50 p-5 text-sm leading-8 text-bark-800" data-testid="delivery-details">
+      <section aria-labelledby="ship-title" className=" border border-sand-200 bg-ivory-50 p-5 text-sm leading-8 text-bark-800" data-testid="delivery-details">
         <h2 id="ship-title" className="mb-2 text-base font-bold text-bark-900">{order.delivery.method === "pickup" ? "تحویل حضوری" : "نشانی تحویل"}</h2>
         {order.delivery.method && <p data-testid="delivery-method">روش ارسال: <strong>{SHIPPING_METHOD_LABEL[order.delivery.method]}</strong>{etaText(order.delivery.etaMinDays, order.delivery.etaMaxDays) && <span className="text-bark-600"> · {etaText(order.delivery.etaMinDays, order.delivery.etaMaxDays)}</span>}</p>}
         {order.delivery.note && <p className="text-bark-700">{order.delivery.note}</p>}
@@ -174,7 +174,7 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
           </div>
         )}
       </section>
-      <section aria-labelledby="history-title" className="rounded-2xl border border-sand-200 bg-ivory-50 p-5 text-sm leading-8 text-bark-800">
+      <section aria-labelledby="history-title" className=" border border-sand-200 bg-ivory-50 p-5 text-sm leading-8 text-bark-800">
         <h2 id="history-title" className="mb-2 text-base font-bold text-bark-900">روند سفارش</h2>
         <ol className="space-y-2" data-testid="order-history">
           {order.history.map((h, i) => (
@@ -187,15 +187,15 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
         </ol>
       </section>
       {canCancel && (
-        <section aria-label="لغو سفارش" className="rounded-2xl border border-sand-200 bg-ivory-50 p-5">
+        <section aria-label="لغو سفارش" className=" border border-sand-200 bg-ivory-50 p-5">
           {!asking ? (
-            <button type="button" onClick={() => setAsking(true)} className="inline-flex min-h-12 items-center rounded-full border border-red-800/40 px-6 text-sm font-medium text-red-900 hover:bg-red-50" data-testid="cancel-order">لغو سفارش</button>
+            <button type="button" onClick={() => setAsking(true)} className="inline-flex min-h-12 items-center border border-red-800/40 px-6 text-sm font-medium text-red-900 hover:bg-red-50" data-testid="cancel-order">لغو سفارش</button>
           ) : (
             <div className="space-y-3" role="group" aria-label="تأیید لغو سفارش">
               <p className="text-sm leading-7 text-bark-800">سفارش لغو شود؟ کالاها دوباره برای دیگران آزاد می‌شود و این کار قابل بازگشت نیست.</p>
               <div className="flex flex-wrap gap-3">
-                <button type="button" onClick={onCancel} disabled={cancelling} className="inline-flex min-h-12 items-center rounded-full bg-red-800 px-6 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-60" data-testid="confirm-cancel">{cancelling ? "در حال لغو…" : "بله، لغو شود"}</button>
-                <button type="button" onClick={() => setAsking(false)} disabled={cancelling} className="inline-flex min-h-12 items-center rounded-full border border-bark-500/40 px-6 text-sm font-medium text-bark-700 hover:bg-sand-100">انصراف</button>
+                <button type="button" onClick={onCancel} disabled={cancelling} className="inline-flex min-h-12 items-center bg-red-800 px-6 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-60" data-testid="confirm-cancel">{cancelling ? "در حال لغو…" : "بله، لغو شود"}</button>
+                <button type="button" onClick={() => setAsking(false)} disabled={cancelling} className="inline-flex min-h-12 items-center border border-bark-500/40 px-6 text-sm font-medium text-bark-700 hover:bg-sand-100">انصراف</button>
               </div>
             </div>
           )}
@@ -332,7 +332,7 @@ export function OrdersPageView() {
           <ul className="space-y-3" aria-label="فهرست سفارش‌ها" data-testid="orders-list">
             {state.items.map((o) => (
               <li key={o.number}>
-                <Link href={`/order?number=${o.number}`} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sand-200 bg-ivory-50 p-4 hover:bg-sand-100">
+                <Link href={`/order?number=${o.number}`} className="flex flex-wrap items-center justify-between gap-3 border border-sand-200 bg-ivory-50 p-4 hover:bg-sand-100">
                   <span>
                     <strong className="block text-bark-900">{formatOrderNumber(o.number)}</strong>
                     <span className="text-xs text-bark-600">{dateFormat.format(new Date(o.placedAt))} · {formatNumber(o.items.reduce((n, i) => n + i.quantity, 0))} کالا</span>

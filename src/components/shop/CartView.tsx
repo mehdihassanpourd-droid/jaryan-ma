@@ -22,12 +22,12 @@ export function CartView() {
   const { products, retry } = useCartProducts(cart.lines.map((l) => l.slug));
   const freeShipping = useFreeShippingPolicy();
 
-  if (!LIVE_CATALOG_BASE) return <Shell><p className="rounded-2xl border border-sand-300 bg-ivory-50 p-6 text-bark-700">سبد خرید فقط برای فروشگاه متصل به فهرست محصولات کار می‌کند.</p></Shell>;
+  if (!LIVE_CATALOG_BASE) return <Shell><p className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">سبد خرید فقط برای فروشگاه متصل به فهرست محصولات کار می‌کند.</p></Shell>;
   if (!cart.hydrated) return <Shell><p role="status" className="text-bark-600">در حال بارگذاری سبد خرید…</p></Shell>;
   if (cart.lines.length === 0) {
     return (
       <Shell>
-        <p role="status" className="rounded-2xl border border-sand-300 bg-ivory-50 p-6 text-bark-700">سبد خرید شما خالی است.</p>
+        <p role="status" className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">سبد خرید شما خالی است.</p>
         <p className="mt-6"><ButtonLink href="/#featured">دیدن آثار</ButtonLink></p>
       </Shell>
     );
@@ -36,9 +36,9 @@ export function CartView() {
   if (products.state === "error") {
     return (
       <Shell>
-        <div role="alert" className="rounded-2xl border border-sand-300 bg-ivory-50 p-6 text-bark-700">
+        <div role="alert" className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">
           <p>در حال حاضر بررسی قیمت و موجودی ممکن نیست؛ سبد شما حفظ شده است.</p>
-          <button type="button" onClick={retry} className="mt-4 inline-flex min-h-11 items-center rounded-full border border-bark-500/40 px-5 text-sm text-bark-700 hover:bg-sand-100">تلاش دوباره</button>
+          <button type="button" onClick={retry} className="mt-4 inline-flex min-h-11 items-center border border-bark-500/40 px-5 text-sm text-bark-700 hover:bg-sand-100">تلاش دوباره</button>
         </div>
       </Shell>
     );
@@ -50,13 +50,13 @@ export function CartView() {
 
   return (
     <Shell>
-      <ul className="divide-y divide-sand-200 rounded-2xl border border-sand-200 bg-ivory-50" aria-label="کالاهای سبد خرید" data-testid="cart-lines">
+      <ul className="divide-y divide-sand-200 border border-sand-200 bg-ivory-50" aria-label="کالاهای سبد خرید" data-testid="cart-lines">
         {priced.map((p) => (
           <CartLineRow key={lineKey(p.line)} priced={p} onQuantity={(q) => cart.setQuantity(lineKey(p.line), q)} onRemove={() => cart.remove(lineKey(p.line))} />
         ))}
       </ul>
 
-      <section aria-label="جمع سبد خرید" className="sticky bottom-0 -mx-5 mt-6 border-t border-sand-200 bg-ivory-50/95 px-5 py-4 backdrop-blur sm:static sm:mx-0 sm:rounded-2xl sm:border sm:px-6">
+      <section aria-label="جمع سبد خرید" className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] -mx-5 mt-6 border-t border-sand-200 bg-ivory-50/95 px-5 py-4 backdrop-blur sm:static sm:mx-0 sm: sm:border sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm text-bark-600">جمع کل ({formatNumber(orderable.reduce((n, p) => n + (p.ok ? p.quantity : 0), 0))} کالا)</p>
@@ -65,7 +65,7 @@ export function CartView() {
           {orderable.length > 0 ? (
             <ButtonLink href="/checkout" size="lg">ادامه و تکمیل سفارش</ButtonLink>
           ) : (
-            <span aria-disabled="true" className="inline-flex cursor-not-allowed items-center rounded-full bg-sand-300 px-7 py-3.5 text-base font-medium text-bark-600">کالای قابل سفارشی در سبد نیست</span>
+            <span aria-disabled="true" className="inline-flex cursor-not-allowed items-center bg-sand-300 px-7 py-3.5 text-base font-medium text-bark-600">کالای قابل سفارشی در سبد نیست</span>
           )}
         </div>
         {orderable.length > 0 && <FreeShippingNote policy={freeShipping} subtotalToman={total} />}
@@ -92,7 +92,7 @@ function CartLineRow({ priced, onQuantity, onRemove }: { priced: PricedLine; onQ
   const unavailable = !priced.ok;
   return (
     <li className={`flex gap-4 p-4 ${unavailable ? "bg-sand-100/60" : ""}`} data-testid="cart-line" data-available={unavailable ? "false" : "true"}>
-      <div className="h-24 w-20 shrink-0 overflow-hidden rounded-xl bg-sand-100 ring-1 ring-sand-200">
+      <div className="h-24 w-20 shrink-0 overflow-hidden bg-sand-100 ring-1 ring-sand-200">
         {image && (
           // eslint-disable-next-line @next/next/no-img-element -- static export: no image optimiser
           <img src={image} alt={product?.images[0]?.alt || name} className={`h-full w-full object-cover ${unavailable ? "opacity-50" : ""}`} />
@@ -105,7 +105,7 @@ function CartLineRow({ priced, onQuantity, onRemove }: { priced: PricedLine; onQ
             {priced.ok && priced.variantLabel && <p className="text-sm text-bark-600">{priced.variantLabel}</p>}
             {priced.ok && priced.madeToOrder && <p className="text-xs text-bark-600">ساخت پس از سفارش{product?.leadTimeDays ? ` (حدود ${formatNumber(product.leadTimeDays)} روز)` : ""}</p>}
           </div>
-          <button type="button" onClick={onRemove} aria-label={`حذف ${name} از سبد`} className="shrink-0 rounded-full px-3 py-2 text-sm text-bark-700 underline hover:text-bark-900">حذف</button>
+          <button type="button" onClick={onRemove} aria-label={`حذف ${name} از سبد`} className="shrink-0 px-3 py-2 text-sm text-bark-700 underline hover:text-bark-900">حذف</button>
         </div>
         {priced.ok ? (
           <div className="flex flex-wrap items-center justify-between gap-3">

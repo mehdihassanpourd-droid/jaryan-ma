@@ -27,7 +27,7 @@ export async function CatalogLinks() {
           <ul className="mt-6 flex flex-wrap gap-3" aria-label="دسته‌ها">
             {categories.map((c) => (
               <li key={c.slug}>
-                <Link href={c.path} className="inline-flex min-h-11 items-center rounded-full border border-sand-300 px-5 text-sm text-bark-800 hover:bg-sand-100">
+                <Link href={c.path} className="inline-flex min-h-11 items-center border border-sand-300 px-5 text-sm text-bark-800 hover:bg-sand-100">
                   {c.name} <span className="ms-2 text-xs text-bark-500">({formatNumber(c.productSlugs.length)})</span>
                 </Link>
               </li>

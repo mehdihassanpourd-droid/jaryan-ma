@@ -13,7 +13,7 @@ export function FreeShippingNote({ policy, subtotalToman }: { policy: FreeShippi
   const methods = policy.methods.map((m) => SHIPPING_METHOD_LABEL[m]).join("، ");
   const percent = Math.min(100, Math.floor((subtotal / policy.thresholdToman) * 100));
   return (
-    <div className="mt-3 rounded-xl border border-sand-300 bg-white p-3 text-sm leading-7 text-bark-800" data-testid="free-shipping-note" data-qualified={progress.qualified ? "true" : "false"}>
+    <div className="mt-3 border border-sand-300 bg-white p-3 text-sm leading-7 text-bark-800" data-testid="free-shipping-note" data-qualified={progress.qualified ? "true" : "false"}>
       <p>
         {progress.qualified
           ? <>هزینهٔ ارسال با روش‌های <strong>{methods}</strong> برای این سفارش رایگان است.</>
@@ -26,9 +26,9 @@ export function FreeShippingNote({ policy, subtotalToman }: { policy: FreeShippi
         aria-valuemax={100}
         aria-valuenow={percent}
         aria-valuetext={`${percent} درصد از حداقل ${formatToman(policy.thresholdToman)}`}
-        className="mt-2 h-2 overflow-hidden rounded-full bg-sand-200"
+        className="mt-2 h-2 overflow-hidden bg-sand-200"
       >
-        <div className="h-full rounded-full bg-olive-700" style={{ inlineSize: `${percent}%` }} />
+        <div className="h-full bg-olive-700" style={{ inlineSize: `${percent}%` }} />
       </div>
       <p className="mt-1 text-xs text-bark-600">حداقل جمع کالاها: {formatToman(policy.thresholdToman)}. فقط برای مقصدهایی که روش ارسال دارند.</p>
     </div>
