@@ -1,0 +1,18 @@
+{
+ "period": "monthly",
+ "start": "2026-10-02",
+ "end": "2026-10-29",
+ "dataDays": 0,
+ "expectedDays": 28,
+ "source": "none",
+ "clicks": 0,
+ "impressions": 0,
+ "ctr": 0,
+ "position": 0,
+ "clicksChange": null,
+ "drops": 0,
+ "lowCtrPages": 0,
+ "opportunities": 0,
+ "auditCritical": 0,
+ "auditWarnings": 0
+}
