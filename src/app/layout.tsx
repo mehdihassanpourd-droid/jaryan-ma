@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { DemoBanner } from "@/components/layout/DemoBanner";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { HomeScrollReset } from "@/components/layout/HomeScrollReset";
 import { TabBar } from "@/components/layout/TabBar";
 import { site } from "@/lib/site";
 import { loadSeo } from "@/seo";
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           پرش به محتوای اصلی
         </a>
+        <HomeScrollReset />
         <DemoBanner />
         <Header />
         <main id="main">{children}</main>

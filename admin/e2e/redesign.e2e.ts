@@ -33,7 +33,7 @@ afterAll(async () => {
   if (dir) rmSync(dir, { recursive: true, force: true });
 });
 
-async function phone(options: { viewport?: { width: number; height: number }; isMobile?: boolean; hasTouch?: boolean } = {}): Promise<BrowserContext> {
+async function phone(options: { viewport?: { width: number; height: number }; isMobile?: boolean; hasTouch?: boolean; reducedMotion?: "reduce" | "no-preference" } = {}): Promise<BrowserContext> {
   const ctx = await browser.newContext({ ...ANDROID, ...options });
   ctx.on("request", (r) => {
     if (/^https?:/.test(r.url())) requested.add(new URL(r.url()).host);
@@ -430,6 +430,175 @@ describe("redesigned storefront on an Android phone (412x915)", () => {
 });
 
 const isPhone = (width: number) => width < 768;
+
+/** Records every window.scrollTo call the page makes (setup in these tests scrolls through scrollTop, so it never shows up here). */
+const spyOnScrollTo = (page: Page) =>
+  page.addInitScript(() => {
+    const w = window as unknown as { __scrolls: string[] };
+    w.__scrolls = [];
+    const original = window.scrollTo.bind(window) as (...args: unknown[]) => void;
+    window.scrollTo = ((...args: unknown[]) => {
+      w.__scrolls.push(JSON.stringify(args[0]));
+      return original(...args);
+    }) as typeof window.scrollTo;
+  });
+const scrollCalls = (page: Page) => page.evaluate(() => (window as unknown as { __scrolls: string[] }).__scrolls);
+const scrollDownTo = async (page: Page, y: number) => {
+  await page.evaluate((top) => {
+    document.scrollingElement!.scrollTop = top;
+  }, y);
+  await page.waitForFunction((top) => Math.abs(window.scrollY - top) < 2, y); // the page may scroll smoothly
+};
+/** Is the hero entirely below the sticky header, with nothing of it hidden? */
+const heroBelowHeader = (page: Page) =>
+  page.evaluate(() => {
+    const header = document.querySelector("header")!.getBoundingClientRect();
+    const hero = document.querySelector('section[aria-labelledby="hero-title"]')!.getBoundingClientRect();
+    const h1 = document.querySelector("h1")!.getBoundingClientRect();
+    return { scrollY: Math.round(window.scrollY), heroTop: Math.round(hero.top), headerBottom: Math.round(header.bottom), h1Top: Math.round(h1.top) };
+  });
+const LOGO = "جریان ما، صفحهٔ اصلی";
+
+describe("the logo on the home page: scroll to the top", () => {
+  it("a tap scrolls smoothly to the top, stays on /, and works from the keyboard", async () => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    await spyOnScrollTo(page);
+    await page.goto(`${url}/`, { waitUntil: "networkidle" });
+    const logo = page.locator("header").getByRole("link", { name: LOGO });
+    await scrollDownTo(page, 1500);
+    await logo.tap();
+    await page.waitForFunction(() => window.scrollY === 0, null, { timeout: 5000 });
+    expect(page.url()).toBe(`${url}/`);
+    expect(await scrollCalls(page), "an animated scroll was requested").toContain(JSON.stringify({ top: 0, left: 0, behavior: "smooth" }));
+    // the keyboard does the same: focus stays on the link, Enter scrolls up
+    await scrollDownTo(page, 1200);
+    await logo.focus();
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => window.scrollY === 0, null, { timeout: 5000 });
+    await pw(logo).toBeFocused();
+    expect(page.url()).toBe(`${url}/`);
+    await ctx.close();
+  });
+
+  it("with reduced motion the jump is instant (no animation is requested)", async () => {
+    const ctx = await phone({ reducedMotion: "reduce" });
+    const page = await ctx.newPage();
+    await spyOnScrollTo(page);
+    await page.goto(`${url}/`, { waitUntil: "networkidle" });
+    await scrollDownTo(page, 1500);
+    await page.locator("header").getByRole("link", { name: LOGO }).tap();
+    await page.waitForFunction(() => window.scrollY === 0, null, { timeout: 600 });
+    const calls = await scrollCalls(page);
+    expect(calls.some((c) => c.includes('"smooth"')), "no smooth scrolling under reduced motion").toBe(false);
+    expect(calls).toContain(JSON.stringify({ top: 0, left: 0, behavior: "auto" }));
+    await ctx.close();
+  });
+
+  it("a #section in the address is dropped, a modified click is left to the browser, and a desktop click works too", async () => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    await page.goto(`${url}/#featured`, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => window.scrollY > 100);
+    await page.locator("header").getByRole("link", { name: LOGO }).tap();
+    await page.waitForFunction(() => window.scrollY === 0, null, { timeout: 5000 });
+    expect(new URL(page.url()).hash, "the #featured is gone").toBe("");
+    // ctrl/cmd/shift-click and middle-click are not intercepted (they open a new tab in a real browser)
+    const prevented = await page.locator("header").getByRole("link", { name: LOGO }).evaluate((a) => {
+      const e = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true, button: 0 });
+      a.addEventListener("click", (ev) => ev.preventDefault(), { once: true, capture: false }); // keep the test page where it is
+      let seen = false;
+      a.addEventListener("click", (ev) => { seen = ev.defaultPrevented; }, { once: true, capture: true });
+      a.dispatchEvent(e);
+      return seen;
+    });
+    expect(prevented, "the logo handler did not claim a ctrl-click").toBe(false);
+    await ctx.close();
+    const desktop = await phone({ viewport: { width: 1280, height: 900 }, isMobile: false, hasTouch: false });
+    const dpage = await desktop.newPage();
+    await dpage.goto(`${url}/`, { waitUntil: "networkidle" });
+    await scrollDownTo(dpage, 1500);
+    await dpage.locator("header").getByRole("link", { name: LOGO }).click();
+    await dpage.waitForFunction(() => window.scrollY === 0, null, { timeout: 5000 });
+    expect(dpage.url()).toBe(`${url}/`);
+    await desktop.close();
+  });
+});
+
+describe("arriving at the home page from another page", () => {
+  it.each([
+    ["a collection page", "/category/ceramics"],
+    ["a product page", "/products/demo-blue-vase"],
+    ["the cart", "/cart"],
+  ])("from %s (scrolled down) the logo lands on the top of the home page, hero fully below the header", async (_name, path) => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    await page.goto(`${url}${path}`, { waitUntil: "networkidle" });
+    await scrollDownTo(page, Math.min(900, await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)));
+    await page.locator("header").getByRole("link", { name: LOGO }).tap();
+    await page.waitForURL(`${url}/`);
+    await page.waitForTimeout(700); // any late scroll adjustment would have happened by now
+    const at = await heroBelowHeader(page);
+    expect(at.scrollY, `${path}: starts at the top`).toBe(0);
+    expect(at.heroTop, `${path}: the hero starts right under the header`).toBeGreaterThanOrEqual(at.headerBottom - 1);
+    expect(at.h1Top, `${path}: the heading is not hidden by the header`).toBeGreaterThan(at.headerBottom);
+    await ctx.close();
+  });
+
+  it("the same after in-app navigation (tap a collection, scroll, tap the logo), via the tab bar, and via the breadcrumb", async () => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    await page.goto(`${url}/`, { waitUntil: "networkidle" });
+    await page.locator('#collections a[href^="/category/"]').first().tap();
+    await page.waitForURL(/\/category\//);
+    await scrollDownTo(page, 500);
+    await page.locator("header").getByRole("link", { name: LOGO }).tap();
+    await page.waitForURL(`${url}/`);
+    await page.waitForTimeout(700);
+    expect((await heroBelowHeader(page)).scrollY, "after a collection").toBe(0);
+    // tab bar "خانه" from a scrolled product page
+    await page.goto(`${url}/products/demo-blue-vase`, { waitUntil: "networkidle" });
+    await scrollDownTo(page, 800);
+    await page.getByRole("navigation", { name: "پیمایش سریع" }).getByRole("link", { name: "خانه" }).tap();
+    await page.waitForURL(`${url}/`);
+    await page.waitForTimeout(700);
+    expect((await heroBelowHeader(page)).scrollY, "via the tab bar").toBe(0);
+    // breadcrumb "خانه" on a product page
+    await page.goto(`${url}/products/demo-blue-vase`, { waitUntil: "networkidle" });
+    await page.getByRole("navigation", { name: /مسیر|breadcrumb/i }).getByRole("link", { name: "خانه" }).tap();
+    await page.waitForURL(`${url}/`);
+    await page.waitForTimeout(700);
+    expect((await heroBelowHeader(page)).scrollY, "via the breadcrumb").toBe(0);
+    await ctx.close();
+  });
+
+  it("what must stay untouched: a link to a #section, and back/forward", async () => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    await spyOnScrollTo(page);
+    // menu link to /#collections from a product page: the section is brought into view, the page is NOT sent to the top
+    await page.goto(`${url}/products/demo-blue-vase`, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "باز کردن منو" }).tap();
+    await page.locator("#mobile-menu").getByRole("link", { name: "مجموعه‌ها" }).tap();
+    await page.waitForURL(`${url}/#collections`);
+    await page.waitForFunction(() => window.scrollY > 50);
+    await page.waitForTimeout(700);
+    const section = await page.locator("#collections").boundingBox();
+    expect(section!.y, "#collections is in view").toBeLessThan(400);
+    expect((await scrollCalls(page)).some((c) => c.includes('"instant"')), "the home reset did not run for a #section link").toBe(false);
+    // back/forward: the browser's own scroll restoration is not overridden
+    await page.goto(`${url}/`, { waitUntil: "networkidle" });
+    await scrollDownTo(page, 900);
+    await page.locator('#featured a[href^="/products/"]').first().tap();
+    await page.waitForURL(/\/products\//);
+    const before = (await scrollCalls(page)).length;
+    await page.goBack();
+    await page.waitForURL(`${url}/`);
+    await page.waitForTimeout(700);
+    expect((await scrollCalls(page)).slice(before).some((c) => c.includes('"instant"')), "going back did not force the top").toBe(false);
+    await ctx.close();
+  });
+});
 
 describe("the mobile viewport", () => {
   it("every storefront page ships the viewport tag, so a phone lays it out at its own width (not a 980px desktop layout)", async () => {
