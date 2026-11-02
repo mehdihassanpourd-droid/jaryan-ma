@@ -321,6 +321,47 @@ describe("redesigned storefront on an Android phone (412x915)", () => {
     await ctx.close();
   });
 
+  it("header logo: a semantic link to the home page that works by tap, click and keyboard, on phone and desktop", async () => {
+    const LABEL = "جریان ما، صفحهٔ اصلی";
+    for (const device of [
+      { name: "phone 412px", ctx: () => phone(), tap: true },
+      { name: "desktop 1280px", ctx: () => phone({ viewport: { width: 1280, height: 900 }, isMobile: false, hasTouch: false }), tap: false },
+    ]) {
+      const ctx = await device.ctx();
+      const page = await ctx.newPage();
+      await page.goto(`${url}/products/demo-blue-vase`, { waitUntil: "networkidle" });
+      const link = page.locator("header").getByRole("link", { name: LABEL });
+      // semantics: a real <a href="/">, named in Persian, holding the official logo file (alt = brand name), big enough to touch
+      await pw(link).toHaveCount(1);
+      await pw(link).toHaveAttribute("href", "/");
+      expect(await link.evaluate((a) => a.tagName), `${device.name}: a real anchor`).toBe("A");
+      await pw(link.locator('img[src*="/brand/jaryan-ma-mark-cream"]')).toHaveAttribute("alt", "جریان ما");
+      const box = (await link.boundingBox())!;
+      expect(box.width, `${device.name}: touch width`).toBeGreaterThanOrEqual(44);
+      expect(box.height, `${device.name}: touch height`).toBeGreaterThanOrEqual(44);
+      // nothing sits on top of it: the element at its centre is the logo itself
+      expect(await link.evaluate((a) => { const r = a.getBoundingClientRect(); return a.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), `${device.name}: nothing covers the logo`).toBe(true);
+      // pointer: tap on a phone, click on a desktop
+      if (device.tap) await link.tap();
+      else await link.click();
+      await page.waitForURL(`${url}/`);
+      await pw(page.getByRole("heading", { level: 1 })).toContainText("هنر");
+      // keyboard: from another page, Tab reaches the logo link (after the skip link), it shows a focus ring, Enter goes home
+      await page.goto(`${url}/category/ceramics`, { waitUntil: "networkidle" });
+      let reached = false;
+      for (let i = 0; i < 6 && !reached; i++) {
+        await page.keyboard.press("Tab");
+        reached = await page.evaluate((label) => document.activeElement?.getAttribute("aria-label") === label, LABEL);
+      }
+      expect(reached, `${device.name}: Tab reaches the logo link`).toBe(true);
+      expect(await page.evaluate(() => getComputedStyle(document.activeElement!).outlineStyle), `${device.name}: visible focus`).not.toBe("none");
+      await page.keyboard.press("Enter");
+      await page.waitForURL(`${url}/`);
+      await pw(page.getByRole("heading", { level: 1 })).toContainText("هنر");
+      await ctx.close();
+    }
+  });
+
   it("official logo: the real mark in header and footer, no square around it, original proportions, readable on a phone", async () => {
     const ctx = await phone();
     const page = await ctx.newPage();
