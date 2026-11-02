@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -371,5 +372,33 @@ describe("SEO automation (tools/seo-growth and its workflow)", () => {
     const text = tools.map(read).join("\n");
     expect(text).not.toMatch(/api\.openai\.com|api\.anthropic\.com|generativelanguage\.googleapis|ahrefs|semrush|moz\.com/i);
     expect([...text.matchAll(/https?:\/\/[a-z0-9.-]+/gi)].map((m) => new URL(m[0]).hostname).filter((h) => !/^(www\.googleapis\.com|oauth2\.googleapis\.com|schema\.org|example|jaryan|demo)/.test(h) && !h.endsWith(".example") && !h.endsWith(".test"))).toEqual([]);
+  });
+});
+
+describe("the visual identity follows the official logo", () => {
+  const storefront = [...walk("src/app", (f) => /\.(tsx?|css)$/.test(f)), ...walk("src/components", (f) => /\.tsx?$/.test(f))];
+
+  it("keeps the uploaded logo byte-for-byte as received", () => {
+    const sha = createHash("sha256").update(readFileSync(join(ROOT, "brand/original/jaryan-ma-logo-official.jpg"))).digest("hex");
+    expect(sha).toBe("b6f8f3bfff8e90061497e26c50155c711c5adbe33ed55aa8e54da87cf184b7da");
+  });
+
+  it("ships the logo's own colours as the brand tokens (burgundy and cream sampled from the original)", () => {
+    const css = read("src/app/globals.css").toLowerCase();
+    expect(css).toContain("--color-burgundy-600: #5e1526");
+    expect(css).toContain("--color-ivory-200: #e9d8c4");
+    expect(css).toContain("--color-ivory-50: #faf8f4");
+    expect(css).toContain("--color-bark-900: #292524");
+  });
+
+  it("draws no curved frames: no rounded utilities, blobs, arches or radius rules anywhere in the storefront", () => {
+    const offenders = storefront.filter((f) => /\brounded(-[a-z0-9[\]./%_-]+)?(?=[\s"'`])|\bblob-[a-d]\b|border-radius|@utility (arch|leaf)/.test(read(f)));
+    expect(offenders).toEqual([]);
+  });
+
+  it("uses the official logo files, never a redrawn or typed one", () => {
+    expect(read("src/components/layout/Header.tsx")).toContain("<Logo");
+    expect(read("src/components/layout/Footer.tsx")).toContain("<Logo");
+    expect(read("src/components/layout/Logo.tsx")).toContain("/brand/jaryan-ma-mark-");
   });
 });

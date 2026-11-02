@@ -29,7 +29,7 @@ import { useCart } from "./useCart";
 import { useCartProducts } from "./useCartProducts";
 import { useCustomer } from "./useCustomer";
 
-const primary = "inline-flex min-h-12 items-center justify-center bg-bark-700 px-7 py-3 text-base font-medium text-ivory-50 hover:bg-bark-900 disabled:cursor-not-allowed disabled:opacity-60";
+const primary = "inline-flex min-h-12 items-center justify-center bg-burgundy-600 px-7 py-3 text-base font-bold text-ivory-50 hover:bg-bark-900 disabled:cursor-not-allowed disabled:opacity-60";
 const secondary = "inline-flex min-h-12 items-center justify-center border border-bark-500/40 px-7 py-3 text-base font-medium text-bark-700 hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-60";
 
 const LINE_REASON_TEXT: Record<LineProblem["reason"], string> = {
@@ -124,7 +124,7 @@ export function CheckoutView() {
     return shell(
       <div className=" border border-sand-300 bg-ivory-50 p-6">
         <p role="status" className="text-bark-700">سبد خرید شما خالی است.</p>
-        <p className="mt-4"><Link href="/#featured" className="text-olive-700 underline">دیدن آثار</Link></p>
+        <p className="mt-4"><Link href="/#featured" className="text-burgundy-600 underline">دیدن آثار</Link></p>
       </div>,
     );
   }
@@ -157,7 +157,7 @@ export function CheckoutView() {
           </div>
         )}
         <p role="status" className="text-bark-700">کالای قابل سفارشی در سبد شما نیست.</p>
-        <p className="mt-4"><Link href="/cart" className="text-olive-700 underline">بازگشت به سبد خرید</Link></p>
+        <p className="mt-4"><Link href="/cart" className="text-burgundy-600 underline">بازگشت به سبد خرید</Link></p>
       </div>,
     );
   }
@@ -259,7 +259,7 @@ export function CheckoutView() {
           سفارش شما با وضعیت «در انتظار تأیید» ثبت می‌شود. {NO_PAYMENT_NOTE}
         </p>
       ) : (
-        <div role="note" data-testid="demo-banner" className=" border-2 border-dashed border-olive-700 bg-ivory-50 p-4 text-sm leading-7 text-bark-800">
+        <div role="note" data-testid="demo-banner" className=" border-2 border-dashed border-burgundy-600 bg-ivory-50 p-4 text-sm leading-7 text-bark-800">
           <strong>حالت آزمایشی:</strong> این فروشگاه هنوز به سامانهٔ ثبت سفارش متصل نیست؛ در این صفحه <strong>هیچ سفارشی ثبت نمی‌شود</strong>. می‌توانید اطلاعات را وارد کنید و متن سفارش را بسازید تا از راه اینستاگرام برای گالری بفرستید. {NO_PAYMENT_NOTE}
         </div>
       )}
@@ -267,7 +267,7 @@ export function CheckoutView() {
       <section aria-labelledby="summary-title" className=" border border-sand-200 bg-ivory-50 p-5 sm:p-6">
         <div className="flex items-baseline justify-between gap-3">
           <h2 id="summary-title" className="text-lg font-bold text-bark-900">خلاصهٔ سفارش</h2>
-          <Link href="/cart" className="text-sm text-olive-700 underline">ویرایش سبد</Link>
+          <Link href="/cart" className="text-sm text-burgundy-600 underline">ویرایش سبد</Link>
         </div>
         <ul className="mt-4 divide-y divide-sand-200" data-testid="summary-lines">
           {priced.map((p) => {
@@ -398,7 +398,7 @@ export function CheckoutView() {
       )}
 
       {orderText && (
-        <section aria-labelledby="text-title" className="space-y-4 border-2 border-dashed border-olive-700 bg-ivory-50 p-5 sm:p-6" data-testid="order-text">
+        <section aria-labelledby="text-title" className="space-y-4 border-2 border-dashed border-burgundy-600 bg-ivory-50 p-5 sm:p-6" data-testid="order-text">
           <h2 id="text-title" className="text-lg font-bold text-bark-900">پیش‌نمایش سفارش (ثبت نشده)</h2>
           <p className="text-sm leading-7 text-bark-700"><strong>این یک سفارش ثبت‌شده نیست.</strong> متن زیر را کپی کنید و در پیام مستقیم اینستاگرام برای گالری بفرستید. سفارش وقتی معتبر است که گالری آن را تأیید کند. سبد شما دست‌نخورده می‌ماند.</p>
           <textarea readOnly rows={Math.min(14, orderText.split("\n").length + 1)} value={orderText} aria-label="متن سفارش" className="block w-full border border-sand-300 bg-white p-4 text-sm leading-7 text-bark-900" />

@@ -6,7 +6,7 @@ import { CartLink } from "@/components/shop/CartLink";
 import { LIVE_CATALOG_BASE } from "@/lib/live-config";
 import { navLinks, site } from "@/lib/site";
 import { MobileNav } from "./MobileNav";
-import { Wordmark } from "./Wordmark";
+import { Logo } from "./Logo";
 
 /**
  * Phone layout follows the approved reference: the cart (or, while nothing can be bought yet, the Instagram account) on one side,
@@ -14,16 +14,16 @@ import { Wordmark } from "./Wordmark";
  */
 export function Header() {
   return (
-    <header className="sticky top-0 z-40 border-b-2 border-bark-900 bg-ivory-50">
-      <Container className="relative flex h-16 items-center justify-between gap-4 md:h-20 md:gap-4 lg:gap-8">
-        <Link href="/" aria-label={`${site.name}، صفحهٔ اصلی`} className="order-2 text-bark-900 md:order-1">
-          <Wordmark className="text-2xl md:text-3xl" />
+    <header className="sticky top-0 z-40 border-b border-ivory-50/25 bg-burgundy-600 text-ivory-50">
+      <Container className="relative flex h-[6rem] items-center justify-between gap-4 md:h-28 md:gap-4 lg:gap-8">
+        <Link href="/" aria-label={`${site.name}، صفحهٔ اصلی`} className="order-2 md:order-1">
+          <Logo height={80} eager className="h-[4.25rem] w-auto md:h-[5rem]" />
         </Link>
         <nav aria-label="منوی اصلی" className="order-2 hidden md:block">
-          <ul className="flex items-center gap-4 text-sm lg:gap-7 font-bold text-bark-700">
+          <ul className="flex items-center gap-4 text-sm lg:gap-7 font-bold text-ivory-100">
             {navLinks.map((l) => (
               <li key={l.href}>
-                <a href={l.href} className="py-2 transition-colors hover:text-bark-900">
+                <a href={l.href} className="py-2 transition-colors hover:text-ivory-50 hover:underline hover:underline-offset-8">
                   {l.label}
                 </a>
               </li>
@@ -31,7 +31,7 @@ export function Header() {
           </ul>
         </nav>
         <div className="order-1 flex min-w-11 items-center justify-start gap-2 md:order-3">
-          <ButtonLink href={site.instagramUrl} target="_blank" rel="noopener noreferrer" variant="secondary" className="max-md:hidden">
+          <ButtonLink href={site.instagramUrl} target="_blank" rel="noopener noreferrer" variant="onDark" className="max-md:hidden">
             <InstagramIcon className="h-4 w-4" />
             <span dir="ltr">@{site.instagramHandle}</span>
           </ButtonLink>
@@ -43,7 +43,7 @@ export function Header() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="اینستاگرام جریان ما"
-              className="flex h-11 w-11 items-center justify-center text-bark-900 hover:bg-sand-100 md:hidden"
+              className="flex h-11 w-11 items-center justify-center text-ivory-50 hover:bg-ivory-50/15 md:hidden"
             >
               <InstagramIcon className="h-6 w-6" />
             </a>

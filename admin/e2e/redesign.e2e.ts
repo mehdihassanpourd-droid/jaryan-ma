@@ -155,12 +155,12 @@ describe("redesigned storefront on an Android phone (412x915)", () => {
     expect(text).toContain("نمونه");
     expect(text, "no invented price").not.toMatch(/[\d۰-۹][\d۰-۹,٬.]*\s*(تومان|ریال)/);
     expect(text).not.toMatch(/پرفروش|ستاره|نظر مشتری:/);
-    for (const label of await page.locator("img").evaluateAll((els) => els.map((e) => e.getAttribute("alt") ?? ""))) expect(label, "every sample picture says it is temporary or a sample").toMatch(/موقت|نمونه/);
+    for (const label of await page.locator('img:not([src*="/brand/"])').evaluateAll((els) => els.map((e) => e.getAttribute("alt") ?? ""))) expect(label, "every sample picture says it is temporary or a sample").toMatch(/موقت|نمونه/);
     expect(await page.locator("#featured").getByText("قیمت به‌زودی اعلام می‌شود").count()).toBe(6);
     await ctx.close();
   });
 
-  it("navigation: wordmark home link, menu sheet, bottom tab bar that follows what this build can do", async () => {
+  it("navigation: logo home link, menu sheet, bottom tab bar that follows what this build can do", async () => {
     const ctx = await phone();
     const page = await ctx.newPage();
     await page.goto(`${url}/products/demo-blue-vase`, { waitUntil: "networkidle" });
@@ -240,9 +240,74 @@ describe("redesigned storefront on an Android phone (412x915)", () => {
     expect(imgs.every((i) => i.w && i.h), "every picture reserves its space (width + height)").toBe(true);
     const hero = imgs.find((i) => i.src.includes("vase-1"));
     expect(hero?.priority, "the hero picture loads first").toBe("high");
-    expect(imgs.filter((i) => i !== hero && i.loading !== "lazy"), "everything below the hero loads lazily").toEqual([]);
+    expect(imgs.filter((i) => i !== hero && i.loading !== "lazy" && !i.src.includes("/brand/jaryan-ma-mark-cream-240")), "everything below the hero loads lazily (the header logo is the one other eager picture)").toEqual([]);
     const cls = await page.evaluate(() => (window as unknown as { __cls: number }).__cls);
     expect(cls, "layout shift").toBeLessThan(0.1);
+    await ctx.close();
+  });
+  it("official logo: the real mark in header and footer, no square around it, original proportions, readable on a phone", async () => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    await page.goto(`${url}/`, { waitUntil: "networkidle" });
+    await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "instant" }));
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(300);
+    const logos = await page.locator('img[src*="/brand/jaryan-ma-mark"]').evaluateAll((els) =>
+      Promise.all(
+        els.map(async (e) => {
+          const img = e as HTMLImageElement;
+          await img.decode();
+          const r = img.getBoundingClientRect();
+          const c = document.createElement("canvas");
+          c.width = img.naturalWidth;
+          c.height = img.naturalHeight;
+          const g = c.getContext("2d")!;
+          g.drawImage(img, 0, 0);
+          const corners = [[1, 1], [c.width - 2, 1], [1, c.height - 2], [c.width - 2, c.height - 2]].map(([x, y]) => g.getImageData(x!, y!, 1, 1).data[3]!);
+          return { place: img.closest("header") ? "header" : img.closest("footer") ? "footer" : "other", w: r.width, h: r.height, ratio: img.naturalWidth / img.naturalHeight, corners, alt: img.alt, src: img.currentSrc };
+        }),
+      ),
+    );
+    const header = logos.find((l) => l.place === "header");
+    const footer = logos.find((l) => l.place === "footer");
+    expect(header, "the header shows the logo").toBeTruthy();
+    expect(footer, "the footer shows the logo").toBeTruthy();
+    expect(header!.h, "recognisable on a phone").toBeGreaterThanOrEqual(56);
+    expect(footer!.h).toBeGreaterThan(header!.h);
+    for (const l of logos) {
+      expect(Math.abs(l.w / l.h - 702 / 996), "original proportions").toBeLessThan(0.02);
+      expect(Math.abs(l.ratio - 702 / 996), "the file keeps the original proportions").toBeLessThan(0.02);
+      expect(l.corners, "transparent corners: no square background").toEqual([0, 0, 0, 0]);
+      expect(l.alt).toBe("جریان ما");
+    }
+    // the logo sits on the brand burgundy, with the logo's own cream (colours sampled from the original file)
+    const colours = await page.evaluate(() => ({ header: getComputedStyle(document.querySelector("header")!).backgroundColor, footer: getComputedStyle(document.querySelector("footer")!).backgroundColor }));
+    expect(colours.header).toBe("rgb(94, 21, 38)");
+    expect(colours.footer).toBe("rgb(94, 21, 38)");
+    await ctx.close();
+  });
+
+  it("home: says what the gallery is (curated home decor and handicrafts) and does not limit itself to the first collections", async () => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    await page.goto(`${url}/`, { waitUntil: "networkidle" });
+    await pw(page.locator("#scope")).toContainText("دکوراسیون خانه و هنرهای دست‌ساز");
+    for (const area of ["دکور دست‌ساز خانه", "هنر تزئینی", "سفال و سرامیک", "هنر نساجی", "اکسسوری دست‌ساز", "اشیای هنری یگانه"]) await pw(page.locator("#scope")).toContainText(area);
+    await pw(page.locator("#scope")).toContainText("گسترش می‌یابند");
+    expect(await page.title()).not.toMatch(/کیف|ماندالا/);
+    await ctx.close();
+  });
+
+  it("product: facts come only from the data (sample products show labelled placeholders, never invented materials or sizes)", async () => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    await page.goto(`${url}/products/demo-blue-vase`, { waitUntil: "networkidle" });
+    const facts = page.getByTestId("product-facts");
+    await pw(facts).toBeVisible();
+    for (const label of ["مواد", "ابعاد", "نگهداری", "ارسال"]) await pw(facts.getByText(label, { exact: true })).toBeVisible();
+    expect(await facts.getByText("ثبت نشده").count()).toBe(4);
+    expect(await facts.getByText("نمونه", { exact: true }).count()).toBe(4);
+    expect(await facts.innerText()).not.toMatch(/سانتی|گرم|پنبه|خاک|چینی|شستشو/);
     await ctx.close();
   });
 });

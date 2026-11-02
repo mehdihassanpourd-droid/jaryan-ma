@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PhotoGallery } from "@/components/product/PhotoGallery";
 import { ProductGallery } from "@/components/product/ProductGallery";
-import { ArtistNote, chipClass, PricePanel, ProductChips } from "@/components/product/ProductInfo";
+import { ArtistNote, chipClass, PricePanel, ProductChips, ProductFacts, SHIPPING_FACT } from "@/components/product/ProductInfo";
 import { Badge } from "@/components/ui/Badge";
 import { Breadcrumb, type Crumb } from "@/components/ui/Breadcrumb";
 import { ButtonLink } from "@/components/ui/Button";
@@ -101,11 +101,11 @@ export default async function ProductPage({ params }: Props) {
             <ProductChips>
               {product.isDemo && <PlaceholderTag label="محتوای نمونه" />}
               {category && (
-                <Link href={categoryPath(category.slug)} className={`${chipClass} hover:bg-teal-500 hover:text-ivory-50`}>
+                <Link href={categoryPath(category.slug)} className={`${chipClass} hover:bg-burgundy-500 hover:text-ivory-50`}>
                   {category.name}
                 </Link>
               )}
-              {product.fulfillment === "unique" && <Badge tone="olive">اثر یگانه</Badge>}
+              {product.fulfillment === "unique" && <Badge tone="brand">اثر یگانه</Badge>}
               {!product.isDemo && <Badge tone="neutral">{AVAILABILITY_LABEL[product.availability]}</Badge>}
             </ProductChips>
             <h1 className="mt-5 text-balance text-5xl font-black leading-[1.2] text-bark-900 sm:text-6xl">{product.name}</h1>
@@ -122,16 +122,6 @@ export default async function ProductPage({ params }: Props) {
               </p>
             ) : (
               product.description.trim() && <p className="mt-6 max-w-prose whitespace-pre-line leading-8 text-bark-700">{product.description.trim()}</p>
-            )}
-            {product.isDemo && (
-              <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-sand-200 pt-5 text-sm">
-                {["ابعاد", "مواد"].map((label) => (
-                  <div key={label}>
-                    <dt className="text-bark-600">{label}</dt>
-                    <dd className="mt-1 text-bark-700">ثبت نشده</dd>
-                  </div>
-                ))}
-              </dl>
             )}
             {product.variants.length > 0 && (
               <section aria-labelledby="variants-title" className="mt-8">
@@ -160,6 +150,20 @@ export default async function ProductPage({ params }: Props) {
                 <span>پرسش درباره این اثر در اینستاگرام</span>
               </ButtonLink>
             </div>
+            <ProductFacts
+              facts={
+                product.isDemo
+                  ? [
+                      { label: "مواد", value: "ثبت نشده", placeholder: true },
+                      { label: "ابعاد", value: "ثبت نشده", placeholder: true },
+                      { label: "نگهداری", value: "ثبت نشده", placeholder: true },
+                      { label: "ارسال", value: "ثبت نشده", placeholder: true },
+                    ]
+                  : LIVE_CATALOG_BASE && product.availability !== "sold_out"
+                    ? [SHIPPING_FACT]
+                    : []
+              }
+            />
             {product.isDemo && <ArtistNote />}
           </div>
         </div>

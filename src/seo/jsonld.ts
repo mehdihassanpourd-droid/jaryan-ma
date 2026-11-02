@@ -116,7 +116,7 @@ export function categoryCollectionJsonLd(categorySlug: string, seo: CatalogSeo):
 export function siteJsonLd(origin: string | null, name: string, instagramUrl: string): Json[] {
   if (!origin) return [];
   return [
-    { "@context": "https://schema.org", "@type": "Organization", "@id": `${origin}/#organization`, name, url: `${origin}/`, sameAs: [instagramUrl] },
+    { "@context": "https://schema.org", "@type": "Organization", "@id": `${origin}/#organization`, name, url: `${origin}/`, logo: `${origin}/brand/jaryan-ma-logo-square.jpg`, sameAs: [instagramUrl] },
     { "@context": "https://schema.org", "@type": "WebSite", "@id": `${origin}/#website`, name, url: `${origin}/`, inLanguage: "fa-IR", publisher: { "@id": `${origin}/#organization` } },
   ];
 }

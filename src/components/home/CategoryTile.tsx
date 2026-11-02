@@ -17,7 +17,7 @@ interface CategoryTileProps {
 
 /** One category: its picture fills a straight-edged rectangle and the name sits on a white wall label at the corner. */
 export function CategoryTile({ name, media, count, sample = false, href, onSelect, active }: CategoryTileProps) {
-  const frame = `group relative block h-full w-full overflow-hidden bg-sand-100 text-start ${active ? "outline outline-4 outline-offset-2 outline-clay-600" : ""}`;
+  const frame = `group relative block h-full w-full overflow-hidden bg-sand-100 text-start ${active ? "outline outline-4 outline-offset-2 outline-burgundy-600" : ""}`;
   const body = (
     <>
       <span className="absolute inset-0 block transition-transform duration-500 group-hover:scale-[1.03]">{media}</span>
@@ -26,7 +26,7 @@ export function CategoryTile({ name, media, count, sample = false, href, onSelec
           <PlaceholderTag />
         </span>
       )}
-      <span className="absolute bottom-0 start-0 block max-w-[88%] bg-ivory-50 px-4 py-2.5 transition-colors group-hover:bg-bark-900 group-hover:text-ivory-50">
+      <span className="absolute bottom-0 start-0 block max-w-[88%] bg-ivory-50 px-4 py-2.5 transition-colors group-hover:bg-burgundy-600 group-hover:text-ivory-50">
         <span className="block text-base font-black leading-6 sm:text-2xl sm:leading-8">{name}</span>
         {count !== undefined && <span className="block text-xs font-medium">{formatNumber(count)} اثر{sample ? " نمونه" : ""}</span>}
       </span>

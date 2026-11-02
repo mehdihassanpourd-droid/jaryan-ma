@@ -47,7 +47,7 @@ export function TabBar() {
               <span className={`relative flex h-8 w-14 items-center justify-center transition-colors ${active ? "bg-bark-900 text-ivory-50" : "text-bark-700"}`}>
                 {tab.icon === "instagram" ? <InstagramIcon className="h-6 w-6" /> : <Icon name={tab.icon} className="h-6 w-6" />}
                 {tab.key === "cart" && count > 0 && (
-                  <span data-testid="tab-cart-count" aria-hidden="true" className="absolute -end-0.5 -top-1 flex h-5 min-w-5 items-center justify-center bg-clay-600 px-1 text-[11px] font-bold text-ivory-50">
+                  <span data-testid="tab-cart-count" aria-hidden="true" className="absolute -end-0.5 -top-1 flex h-5 min-w-5 items-center justify-center bg-burgundy-600 px-1 text-[11px] font-bold text-ivory-50">
                     {formatNumber(count)}
                   </span>
                 )}

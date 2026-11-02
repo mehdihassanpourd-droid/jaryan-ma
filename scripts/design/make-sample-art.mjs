@@ -19,7 +19,7 @@ const svg = (body, defs = "", bg = "none", w = W, h = H) =>
 
 const C = {
   cream: "#F4E9D8", cream2: "#EBDAC0", blush: "#EAD3BA", ink: "#2A1D14",
-  teal: "#1D4D4A", tealD: "#12302F", leaf: "#2F8077", leaf2: "#5B8A5A", sage: "#C9D3BC",
+  teal: "#5E1526", tealD: "#3D0E19", leaf: "#2F8077", leaf2: "#5B8A5A", sage: "#C9D3BC",
   clay: "#A9472A", orange: "#D9663A", cobalt: "#2F5E9E", cobaltD: "#223F6E", sky: "#8FB6D9",
   mustard: "#D9A441", olive: "#7A8456", stone: "#B49B7C", wood: "#8A6A4A", woodD: "#6B4E34", white: "#FBF6EC",
 };
@@ -235,20 +235,20 @@ const out = (name, text) => writeFileSync(join(OUT, `${name}.svg`), text);
 
 out("tote-1", tote({ bg: "#EAD3BA", fabric: "#F4E9D8", strap: "#C8B28A", motif: "bouquet", paint: [C.orange, C.cobalt, { stem: C.leaf, leaf: C.leaf, leaf2: C.leaf2 }], tasselColor: C.clay }));
 out("tote-2", tote({ bg: C.teal, fabric: "#F4E9D8", strap: C.clay, motif: "allover", paint: [C.orange, C.cobalt, { stem: C.leaf, leaf: C.leaf, leaf2: C.leaf2 }], tasselColor: C.mustard }));
-out("tote-3", tote({ bg: "#D3D8BF", fabric: "#EFE3CB", strap: C.olive, motif: "arch", paint: [C.clay, C.cobalt, { stem: C.leaf, leaf: C.leaf, leaf2: C.leaf2 }], tasselColor: C.cobalt }));
+out("tote-3", tote({ bg: "#E9D8C4", fabric: "#EFE3CB", strap: C.olive, motif: "arch", paint: [C.clay, C.cobalt, { stem: C.leaf, leaf: C.leaf, leaf2: C.leaf2 }], tasselColor: C.cobalt }));
 
 out("mandala-1", mandala({ bg: "#EAD3BA", c: [C.orange, C.cobalt, C.cream, C.ink, C.mustard], hoop: null, fringe: [C.cobalt, C.cream, C.orange] }));
 out("mandala-2", mandala({ bg: C.teal, c: [C.cobalt, C.cream, C.orange, C.mustard, C.ink], hoop: C.wood, fringe: [C.cream, C.orange, C.mustard], scale: 0.95 }));
-out("mandala-3", mandala({ bg: "#D3D8BF", c: [C.clay, C.mustard, C.cream, C.cobalt, C.ink], hoop: null, fringe: [C.clay, C.cream], scale: 0.92, dy: 10 }));
+out("mandala-3", mandala({ bg: "#E9D8C4", c: [C.clay, C.mustard, C.cream, C.cobalt, C.ink], hoop: null, fringe: [C.clay, C.cream], scale: 0.92, dy: 10 }));
 
 out("vase-1", vaseScene());
 out("vase-2", shelfScene({ bg: "#EAD3BA", shelf: C.wood, items: [{ cx: 235, profile: CUP, clay: C.cream, glaze: C.clay, glazeTo: 0.5, k: 0.9 }, { cx: 395, profile: BOWL, clay: C.cream, glaze: "#3AA6A0", glazeTo: 0.8, k: 0.85 }, { cx: 585, profile: VASE, clay: C.cream, glaze: C.cobalt, glazeTo: 0.6, decor: "ornament", k: 0.78 }] }));
-out("vase-3", shelfScene({ bg: "#D3D8BF", shelf: C.wood, items: [{ cx: 215, profile: VASE, clay: C.cream, glaze: C.clay, glazeTo: 0.62, k: 0.78 }, { cx: 400, profile: POT, clay: C.cream, glaze: C.cobalt, glazeTo: 0.6, decor: "ornament", k: 0.62 }, { cx: 585, profile: JAR, clay: C.cream, glaze: C.mustard, glazeTo: 0.55, k: 0.62 }] }));
+out("vase-3", shelfScene({ bg: "#E9D8C4", shelf: C.wood, items: [{ cx: 215, profile: VASE, clay: C.cream, glaze: C.clay, glazeTo: 0.62, k: 0.78 }, { cx: 400, profile: POT, clay: C.cream, glaze: C.cobalt, glazeTo: 0.6, decor: "ornament", k: 0.62 }, { cx: 585, profile: JAR, clay: C.cream, glaze: C.mustard, glazeTo: 0.55, k: 0.62 }] }));
 
 out("studio-1", studioBrushes());
 out("studio-2", studioWheel());
 
 out("artist-1", avatar({ bg: "#EAD3BA", a: C.clay, b: C.cream, c: C.leaf, kind: 1 }));
-out("artist-2", avatar({ bg: "#D3D8BF", a: C.leaf, b: C.cream, c: C.orange, kind: 2 }));
-out("artist-3", avatar({ bg: "#DCE7F4", a: C.mustard, b: C.cobalt, c: C.cream, kind: 3 }));
+out("artist-2", avatar({ bg: "#E9D8C4", a: C.leaf, b: C.cream, c: C.orange, kind: 2 }));
+out("artist-3", avatar({ bg: "#F1E0DC", a: C.mustard, b: C.cobalt, c: C.cream, kind: 3 }));
 console.log("sample art written to", OUT);

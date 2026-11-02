@@ -1,47 +1,35 @@
 @import "tailwindcss";
 @import "@fontsource-variable/vazirmatn";
 
-/* Design tokens: a contemporary gallery. Warm white wall, ink black, one vermilion accent, cobalt for focus.
-   The old token names (ivory / sand / bark / olive / teal / clay) are kept on purpose: cart, checkout and orders use them and follow the new look.
+/* Design tokens: derived from the official logo (sampled from the original file: burgundy #5E1526, cream #E9D8C4), plus a warm
+   off-white wall and charcoal text. Burgundy marks the brand and selected sections; cream is the complementary surface.
+   The names ivory / sand / bark are kept on purpose: cart, checkout and orders use them and follow the new palette.
    There are no curved shapes: every frame is a straight-edged rectangle. */
 @theme {
   --font-sans: "Vazirmatn Variable", "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
 
-  --color-ivory-50: #f6f4ef;
-  --color-ivory-100: #ece9e1;
-  --color-ivory-200: #e0dcd2;
+  /* Warm off-white (page) and cream (the logo's own cream, as a complementary surface) */
+  --color-ivory-50: #faf8f4;
+  --color-ivory-100: #f3eee5;
+  --color-ivory-200: #e9d8c4;
 
-  --color-sand-100: #e6e3da;
-  --color-sand-200: #d3cfc4;
-  --color-sand-300: #b4afa2;
-  --color-sand-400: #8a8579;
+  /* Cream-tinted neutrals for rules, borders and quiet surfaces */
+  --color-sand-100: #eee7db;
+  --color-sand-200: #ddd2c1;
+  --color-sand-300: #bcae96;
+  --color-sand-400: #8c8171;
 
-  --color-bark-500: #5b5850;
-  --color-bark-600: #46443d;
-  --color-bark-700: #2d2c28;
-  --color-bark-900: #0d0d0c;
+  /* Charcoal text */
+  --color-bark-500: #78716c;
+  --color-bark-600: #57534e;
+  --color-bark-700: #44403c;
+  --color-bark-900: #292524;
 
-  --color-olive-100: #e1e3d6;
-  --color-olive-300: #a9ad94;
-  --color-olive-500: #6b6f52;
-  --color-olive-700: #474a35;
-
-  --color-teal-100: #dedbd0;
-  --color-teal-500: #6c6a63;
-  --color-teal-700: #2d2c28;
-  --color-teal-800: #1c1b19;
-  --color-teal-900: #0d0d0c;
-
-  --color-clay-100: #f4d9d1;
-  --color-clay-500: #d2401f;
-  --color-clay-600: #c0381a;
-  --color-clay-700: #9c2d14;
-
-  --color-cobalt-100: #dce4f7;
-  --color-cobalt-600: #1f43c4;
-  --color-cobalt-700: #19369c;
-
-  --color-mustard-500: #e3b23c;
+  /* Deep burgundy of the logo */
+  --color-burgundy-100: #f1e0dc;
+  --color-burgundy-500: #7c2c40;
+  --color-burgundy-600: #5e1526;
+  --color-burgundy-700: #470f1d;
 
   --shadow-soft: 0 0 #0000;
 }
@@ -58,12 +46,14 @@
     -webkit-font-smoothing: antialiased;
   }
   ::selection {
-    background-color: var(--color-mustard-500);
-    color: var(--color-bark-900);
+    background-color: var(--color-ivory-200);
+    color: var(--color-burgundy-600);
   }
+  /* A burgundy ring with an off-white halo: visible on the light wall and on burgundy fields alike. */
   :focus-visible {
-    outline: 2px solid var(--color-cobalt-600);
-    outline-offset: 3px;
+    outline: 2px solid var(--color-burgundy-600);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 5px var(--color-ivory-50);
   }
   @media (prefers-reduced-motion: reduce) {
     html {

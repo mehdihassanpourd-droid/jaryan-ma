@@ -38,7 +38,7 @@ export function DeliveryOptions({ quotes, loading, failed, selected, onSelect, o
             <label
               key={q.method}
               htmlFor={id}
-              className={`flex items-start gap-3 border p-4 ${q.available ? "cursor-pointer border-sand-300 bg-ivory-50 has-[:checked]:border-olive-700 has-[:checked]:bg-white" : "border-sand-200 bg-sand-100/60 text-bark-600"}`}
+              className={`flex items-start gap-3 border p-4 ${q.available ? "cursor-pointer border-sand-300 bg-ivory-50 has-[:checked]:border-burgundy-600 has-[:checked]:bg-white" : "border-sand-200 bg-sand-100/60 text-bark-600"}`}
             >
               <input
                 id={id}
@@ -55,12 +55,12 @@ export function DeliveryOptions({ quotes, loading, failed, selected, onSelect, o
                 <span className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-medium text-bark-900">{SHIPPING_METHOD_LABEL[q.method]}</span>
                   {q.available && (
-                    <span className={q.feeToman === 0 && q.method !== "pickup" ? "font-bold text-olive-800" : "text-bark-900"} data-testid={`${id}-fee`}>
+                    <span className={q.feeToman === 0 && q.method !== "pickup" ? "font-bold text-burgundy-600" : "text-bark-900"} data-testid={`${id}-fee`}>
                       {q.method === "pickup" ? "بدون هزینه" : feeText(q.feeToman)}
                     </span>
                   )}
                 </span>
-                {q.available && q.free && <span className="block text-sm text-olive-800">ارسال رایگان برای این سفارش</span>}
+                {q.available && q.free && <span className="block text-sm text-burgundy-600">ارسال رایگان برای این سفارش</span>}
                 {eta && <span className="block text-sm text-bark-700">{eta}</span>}
                 {q.available && q.note && <span className="block text-sm leading-7 text-bark-700">{q.note}</span>}
                 {!q.available && <span className="block text-sm">{UNAVAILABLE_REASON_TEXT[q.reason]}</span>}

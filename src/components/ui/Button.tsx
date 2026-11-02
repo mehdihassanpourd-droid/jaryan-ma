@@ -14,12 +14,12 @@ const sizes: Record<Size, string> = {
 };
 
 const variants: Record<Variant, string> = {
-  primary: "bg-bark-900 text-ivory-50 hover:bg-clay-600",
+  primary: "bg-burgundy-600 text-ivory-50 hover:bg-bark-900",
   secondary: "border-2 border-bark-900 text-bark-900 hover:bg-bark-900 hover:text-ivory-50",
   ghost: "text-bark-600 hover:text-bark-900",
-  light: "bg-ivory-50 text-bark-900 hover:bg-clay-600 hover:text-ivory-50",
-  onDark: "border-2 border-ivory-50 text-ivory-50 hover:bg-ivory-50 hover:text-bark-900",
-  accent: "bg-clay-600 text-ivory-50 hover:bg-bark-900",
+  light: "bg-ivory-50 text-burgundy-600 hover:bg-ivory-200",
+  onDark: "border-2 border-ivory-50 text-ivory-50 hover:bg-ivory-50 hover:text-burgundy-600",
+  accent: "bg-bark-900 text-ivory-50 hover:bg-burgundy-600",
 };
 
 interface ButtonLinkProps extends Omit<ComponentProps<typeof Link>, "className"> {

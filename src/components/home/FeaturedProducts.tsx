@@ -12,7 +12,7 @@ export function FeaturedProducts() {
   return (
     <section id="featured" aria-labelledby="featured-title" className="scroll-mt-20 pt-20 sm:pt-32">
       <Container>
-        <SectionHeader id="featured-title" title="منتخب‌های امروز" index="۰۲" />
+        <SectionHeader id="featured-title" title="منتخب‌های امروز" index="۰۳" />
         <p className="-mt-4 mb-10 max-w-xl text-sm leading-7 text-bark-600">این آثار نمونه‌اند تا ظاهر فروشگاه دیده شود؛ تصویر، نام و قیمت واقعی پس از دریافت از گالری جایگزین می‌شود.</p>
         <ul className="grid grid-cols-12 items-end gap-x-4 gap-y-14 sm:gap-y-20">
           {featuredProducts.map((p, i) => {

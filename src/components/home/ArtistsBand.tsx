@@ -14,10 +14,10 @@ const STAGGER = ["", "mt-10 sm:mt-16", "mt-5 sm:mt-8"] as const;
 export function ArtistsBand({ artists = [] }: { artists?: ArtistProfile[] }) {
   const real = artists.length > 0;
   return (
-    <section id="artists" aria-labelledby="artists-title" className="mt-24 scroll-mt-20 bg-bark-900 pb-20 pt-4 text-ivory-50 sm:mt-40 sm:pb-32">
+    <section id="artists" aria-labelledby="artists-title" className="mt-24 scroll-mt-20 bg-burgundy-600 pb-20 pt-4 text-ivory-50 sm:mt-40 sm:pb-32">
       <Container>
         <div className="border-t-4 border-ivory-50 pt-3">
-          <p aria-hidden="true" className="text-sm font-black text-ivory-50">۰۴</p>
+          <p aria-hidden="true" className="text-sm font-black text-ivory-50">۰۵</p>
           <div className="mt-1 grid gap-6 sm:grid-cols-12 sm:gap-8">
             <h2 id="artists-title" className="text-balance text-5xl font-black leading-[1.15] sm:col-span-7 sm:text-7xl">
               از هنرمندان، <br />
@@ -36,7 +36,7 @@ export function ArtistsBand({ artists = [] }: { artists?: ArtistProfile[] }) {
           {real
             ? artists.map((a, i) => (
                 <li key={a.slug} className={STAGGER[i % 3]}>
-                  <div className="aspect-[3/4] overflow-hidden bg-teal-700">
+                  <div className="aspect-[3/4] overflow-hidden bg-burgundy-700">
                     {a.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element -- static export: no image optimiser
                       <img src={a.imageUrl} alt={a.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
@@ -49,7 +49,7 @@ export function ArtistsBand({ artists = [] }: { artists?: ArtistProfile[] }) {
               ))
             : PLACEHOLDER_ART.map((art, i) => (
                 <li key={art} className={STAGGER[i]}>
-                  <div className="aspect-[3/4] overflow-hidden bg-teal-700">
+                  <div className="aspect-[3/4] overflow-hidden bg-burgundy-700">
                     <SampleImage art={art} alt={`تصویر موقت: نمایهٔ هنرمند منتخب نمونه ${["۱", "۲", "۳"][i]}`} />
                   </div>
                   <p className="mt-3 border-t-2 border-ivory-50 pt-2 text-xs font-bold leading-6">

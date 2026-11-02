@@ -21,7 +21,7 @@ export function InfoNotes() {
         <SectionHeader id="trust-title" title="اطلاعات خرید" />
         <p className="mb-5 leading-8 text-bark-700">
           {site.name} گالری و فروشگاه آثار هنری دست‌ساز ایرانی است. تازه‌ترین آثار را در{" "}
-          <a href={site.instagramUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-teal-700 underline underline-offset-4" dir="ltr">
+          <a href={site.instagramUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-burgundy-600 underline underline-offset-4" dir="ltr">
             @{site.instagramHandle}
           </a>{" "}
           ببینید.

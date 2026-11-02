@@ -7,7 +7,7 @@ import { normalizeIranMobile } from "@/domain/phone";
 import { orderApi } from "./orderClient";
 import { Field } from "./Field";
 
-const primary = "inline-flex min-h-12 items-center justify-center bg-bark-700 px-7 py-3 text-base font-medium text-ivory-50 hover:bg-bark-900 disabled:cursor-not-allowed disabled:opacity-60";
+const primary = "inline-flex min-h-12 items-center justify-center bg-burgundy-600 px-7 py-3 text-base font-bold text-ivory-50 hover:bg-bark-900 disabled:cursor-not-allowed disabled:opacity-60";
 
 function errorText(error: unknown): string {
   if (!(error instanceof OrderApiError)) return "خطایی رخ داد. دوباره تلاش کنید.";

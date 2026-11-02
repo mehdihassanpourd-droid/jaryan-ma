@@ -145,7 +145,7 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
           <dt className="text-bark-700">هزینهٔ ارسال{order.delivery.method ? ` (${SHIPPING_METHOD_LABEL[order.delivery.method]})` : ""}</dt>
           <dd className="text-bark-900" data-testid="order-shipping-fee">
             {order.delivery.method === null ? "ثبت نشده" : order.delivery.method === "pickup" ? "بدون هزینه" : feeText(order.shippingFeeToman)}
-            {order.delivery.free && <span className="ms-2 text-olive-800">(ارسال رایگان)</span>}
+            {order.delivery.free && <span className="ms-2 text-burgundy-600">(ارسال رایگان)</span>}
           </dd>
         </div>
         <div className="flex items-baseline justify-between gap-3 border-t border-sand-200 pt-3">

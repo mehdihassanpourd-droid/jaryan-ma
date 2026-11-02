@@ -14,7 +14,7 @@ export function SectionHeading({ eyebrow, title, description, id, aside }: Secti
     <div className="mb-10 max-w-2xl sm:mb-12">
       {(eyebrow || aside) && (
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          {eyebrow && <p className="text-sm font-medium text-olive-700">{eyebrow}</p>}
+          {eyebrow && <p className="text-sm font-medium text-burgundy-600">{eyebrow}</p>}
           {aside}
         </div>
       )}

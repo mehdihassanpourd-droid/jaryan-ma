@@ -46,14 +46,14 @@ export function AddToCart({ product, sku }: { product: PublicProduct; sku: strin
             cart.add({ slug: product.slug, sku: variant ? variant.sku : null, quantity: amount });
             setAdded(amount);
           }}
-          className="inline-flex min-h-12 items-center justify-center bg-bark-900 px-7 py-2.5 text-base font-medium text-ivory-50 transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-sand-300 disabled:text-bark-700"
+          className="inline-flex min-h-12 items-center justify-center bg-burgundy-600 px-7 py-2.5 text-base font-bold text-ivory-50 transition-colors hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:bg-sand-300 disabled:text-bark-700"
         >
           افزودن به سبد خرید
         </button>
       </div>
       {blocked && <p className="mt-3 text-sm text-bark-600" role="note">{blocked}</p>}
       {added !== null && (
-        <p role="status" className="mt-3 text-sm text-teal-700">
+        <p role="status" className="mt-3 text-sm text-burgundy-600">
           به سبد اضافه شد. <Link href="/cart" className="font-semibold underline">مشاهدهٔ سبد خرید</Link>
         </p>
       )}

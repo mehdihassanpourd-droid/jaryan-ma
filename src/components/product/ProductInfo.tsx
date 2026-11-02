@@ -33,3 +33,33 @@ export function ArtistNote() {
     </aside>
   );
 }
+
+export interface ProductFact {
+  label: string;
+  value: ReactNode;
+  /** The catalogue has no such data yet: shown as a labelled placeholder, never as an invented value. */
+  placeholder?: boolean;
+}
+
+/** What the gallery states about a piece, only from data the catalogue really has (never invented materials, sizes or care text). */
+export function ProductFacts({ facts }: { facts: ProductFact[] }) {
+  if (facts.length === 0) return null;
+  return (
+    <section aria-labelledby="facts-title" className="mt-10" data-testid="product-facts">
+      <h2 id="facts-title" className="border-t-2 border-bark-900 pt-2 text-xl font-black text-bark-900">مشخصات و ارسال</h2>
+      <dl className="mt-2 divide-y divide-bark-900/15">
+        {facts.map((f) => (
+          <div key={f.label} className="grid grid-cols-[6.5rem_1fr] gap-4 py-3 text-sm leading-7">
+            <dt className="font-bold text-bark-600">{f.label}</dt>
+            <dd className="text-bark-900">
+              {f.value} {f.placeholder && <PlaceholderTag />}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+/** Shipping is priced by the server at checkout (destination, weight, method); this is what is true of every purchasable piece. */
+export const SHIPPING_FACT: ProductFact = { label: "ارسال", value: "هزینهٔ ارسال هنگام ثبت سفارش، بر اساس مقصد و وزن بسته محاسبه می‌شود." };

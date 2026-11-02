@@ -28,7 +28,7 @@ export function FreeShippingNote({ policy, subtotalToman }: { policy: FreeShippi
         aria-valuetext={`${percent} درصد از حداقل ${formatToman(policy.thresholdToman)}`}
         className="mt-2 h-2 overflow-hidden bg-sand-200"
       >
-        <div className="h-full bg-olive-700" style={{ inlineSize: `${percent}%` }} />
+        <div className="h-full bg-burgundy-600" style={{ inlineSize: `${percent}%` }} />
       </div>
       <p className="mt-1 text-xs text-bark-600">حداقل جمع کالاها: {formatToman(policy.thresholdToman)}. فقط برای مقصدهایی که روش ارسال دارند.</p>
     </div>

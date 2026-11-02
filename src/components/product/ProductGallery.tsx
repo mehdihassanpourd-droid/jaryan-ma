@@ -56,7 +56,7 @@ export function ProductGallery({ images }: { images: CatalogImage[] }) {
                 onClick={() => setActive(i)}
                 aria-label={`نمایش تصویر ${formatNumber(i + 1)}`}
                 aria-pressed={i === active}
-                className={`${thumbClass} ${i === active ? "ring-clay-600" : "opacity-70 ring-transparent hover:opacity-100"}`}
+                className={`${thumbClass} ${i === active ? "ring-burgundy-600" : "opacity-70 ring-transparent hover:opacity-100"}`}
               >
                 <SampleImage art={img.art} alt={img.alt} />
               </button>

@@ -10,7 +10,7 @@ import { Container } from "@/components/ui/Container";
 import { InstagramIcon } from "@/components/ui/InstagramIcon";
 import { Price } from "@/components/ui/Price";
 import { GalleryFrame, thumbClass } from "@/components/product/GalleryFrame";
-import { PricePanel, ProductChips } from "@/components/product/ProductInfo";
+import { PricePanel, ProductChips, ProductFacts, SHIPPING_FACT } from "@/components/product/ProductInfo";
 import { AddToCart } from "@/components/shop/AddToCart";
 import { formatNumber } from "@/lib/format";
 import { isLiveSlug, livePrice, safeImageUrl } from "@/lib/live-catalog";
@@ -24,7 +24,7 @@ function Notice({ children, alert }: { children: string; alert?: boolean }) {
   return (
     <Container className="py-16">
       <p role={alert ? "alert" : "status"} className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">{children}</p>
-      <p className="mt-6"><Link href="/" className="text-olive-700 underline">بازگشت به صفحهٔ اصلی</Link></p>
+      <p className="mt-6"><Link href="/" className="text-burgundy-600 underline">بازگشت به صفحهٔ اصلی</Link></p>
     </Container>
   );
 }
@@ -76,8 +76,8 @@ function ProductDetails({ product }: { product: PublicProduct }) {
         </div>
         <div className="lg:col-span-5 lg:pt-10">
           <ProductChips>
-            {product.category && <span className="inline-flex min-h-8 items-center bg-teal-100 px-3.5 text-sm font-medium text-teal-800">{product.category.name}</span>}
-            {product.fulfillment === "unique" && <Badge tone="olive">اثر یگانه</Badge>}
+            {product.category && <span className="inline-flex min-h-8 items-center bg-sand-100 px-3.5 text-sm font-medium text-burgundy-700">{product.category.name}</span>}
+            {product.fulfillment === "unique" && <Badge tone="brand">اثر یگانه</Badge>}
             <Badge tone="neutral">{AVAILABILITY_LABEL[product.availability]}</Badge>
           </ProductChips>
           <h1 className="mt-5 text-balance text-5xl font-black leading-[1.2] text-bark-900 sm:text-6xl">{product.name}</h1>
@@ -95,7 +95,7 @@ function ProductDetails({ product }: { product: PublicProduct }) {
                   <li key={v.sku} className="text-sm">
                     <label className={`flex min-h-12 cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-3 ${v.available ? "" : "cursor-not-allowed opacity-60"}`}>
                       <span className="flex items-center gap-3 text-bark-700">
-                        <input type="radio" name="variant" value={v.sku} checked={sku === v.sku} disabled={!v.available} onChange={() => setSku(v.sku)} className="h-5 w-5 accent-clay-600" />
+                        <input type="radio" name="variant" value={v.sku} checked={sku === v.sku} disabled={!v.available} onChange={() => setSku(v.sku)} className="h-5 w-5 accent-burgundy-600" />
                         {Object.values(v.options).join("، ") || v.sku}
                       </span>
                       <span className="flex items-center gap-3">
@@ -109,6 +109,7 @@ function ProductDetails({ product }: { product: PublicProduct }) {
             </section>
           )}
           <AddToCart product={product} sku={sku} />
+          <ProductFacts facts={product.availability === "sold_out" ? [] : [SHIPPING_FACT]} />
           <div className="mt-6">
             <ButtonLink href={site.instagramUrl} target="_blank" rel="noopener noreferrer" variant="secondary" size="lg">
               <InstagramIcon className="h-5 w-5" />

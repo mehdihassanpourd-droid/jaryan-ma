@@ -27,7 +27,7 @@ export function LiveShop() {
   const frame = (children: React.ReactNode) => (
     <section id="featured" aria-labelledby="featured-title" className="scroll-mt-20 pt-14 sm:pt-20">
       <Container>
-        <SectionHeader id="featured-title" title="آثار" index="۰۲" />
+        <SectionHeader id="featured-title" title="آثار" index="۰۳" />
         {children}
       </Container>
     </section>
@@ -50,7 +50,7 @@ export function LiveShop() {
       {categories.length > 0 && (
         <section id="collections" aria-labelledby="collections-title" className="scroll-mt-20 pt-14 sm:pt-20">
           <Container>
-            <SectionHeader id="collections-title" title="دسته‌بندی‌ها" index="۰۱" href="#featured" />
+            <SectionHeader id="collections-title" title="مجموعه‌ها" index="۰۲" href="#featured" />
             <CategoryMosaic>
               {categories.map((c, i) => {
                 const cover = cards.find((card) => card.categorySlugs.includes(c.slug))?.cover;
@@ -68,7 +68,7 @@ export function LiveShop() {
                           // eslint-disable-next-line @next/next/no-img-element -- static export: no image optimiser
                           <img src={url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                         ) : (
-                          <span className="block h-full w-full bg-teal-100" />
+                          <span className="block h-full w-full bg-sand-100" />
                         )
                       }
                     />

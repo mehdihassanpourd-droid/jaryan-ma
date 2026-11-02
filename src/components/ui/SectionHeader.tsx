@@ -18,7 +18,7 @@ export function SectionHeader({ id, title, index, href, linkLabel = "همه", to
   return (
     <div className={`mb-8 border-t-4 pt-3 sm:mb-12 ${light ? "border-ivory-50" : "border-bark-900"}`}>
       {index && (
-        <p aria-hidden="true" className={`text-sm font-black ${light ? "text-ivory-50" : "text-clay-600"}`}>
+        <p aria-hidden="true" className={`text-sm font-black ${light ? "text-ivory-50" : "text-burgundy-600"}`}>
           {index}
         </p>
       )}
@@ -27,7 +27,7 @@ export function SectionHeader({ id, title, index, href, linkLabel = "همه", to
           {title}
         </h2>
         {href && (
-          <a href={href} className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 text-sm font-bold ${light ? "border-ivory-50 text-ivory-50" : "border-bark-900 text-bark-900 hover:text-clay-600"}`}>
+          <a href={href} className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 text-sm font-bold ${light ? "border-ivory-50 text-ivory-50" : "border-bark-900 text-bark-900 hover:text-burgundy-600"}`}>
             {linkLabel}
             <Icon name="arrow" className="h-4 w-4" />
           </a>

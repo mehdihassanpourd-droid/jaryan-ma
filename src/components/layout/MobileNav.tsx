@@ -25,7 +25,7 @@ export function MobileNav() {
         aria-expanded={open}
         aria-controls="mobile-menu"
         aria-label={open ? "بستن منو" : "باز کردن منو"}
-        className="flex h-11 w-11 items-center justify-center text-bark-900 hover:bg-sand-100"
+        className="flex h-11 w-11 items-center justify-center text-ivory-50 hover:bg-ivory-50/15"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
           {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}

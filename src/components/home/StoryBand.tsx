@@ -9,7 +9,7 @@ export function StoryBand() {
     <section id="story" aria-labelledby="story-title" className="mt-24 scroll-mt-20 overflow-x-clip border-t-4 border-bark-900 pt-4 sm:mt-40">
       <Container className="grid gap-12 sm:grid-cols-12 sm:gap-8">
         <div className="sm:col-span-6 sm:pt-10">
-          <p aria-hidden="true" className="text-sm font-black text-clay-600">۰۳</p>
+          <p aria-hidden="true" className="text-sm font-black text-burgundy-600">۰۴</p>
           <h2 id="story-title" className="mt-1 text-balance text-5xl font-black leading-[1.15] text-bark-900 sm:text-7xl">
             هر اثر، <br />
             یک داستان است
@@ -26,13 +26,13 @@ export function StoryBand() {
               </li>
             ))}
           </ul>
-          <a href="#contact" className="mt-6 inline-flex min-h-11 items-center gap-2 border-b-2 border-bark-900 font-bold text-bark-900 hover:text-clay-600">
+          <a href="#contact" className="mt-6 inline-flex min-h-11 items-center gap-2 border-b-2 border-bark-900 font-bold text-bark-900 hover:text-burgundy-600">
             ارتباط با گالری
             <Icon name="arrow" className="h-4 w-4" />
           </a>
         </div>
         <figure className="relative isolate sm:col-span-5 sm:col-start-8">
-          <div aria-hidden="true" className="absolute -bottom-5 -end-5 top-16 -z-10 w-full bg-clay-600 sm:-end-8" />
+          <div aria-hidden="true" className="absolute -bottom-5 -end-5 top-16 -z-10 w-full bg-burgundy-600 sm:-end-8" />
           <div className="relative aspect-[4/5] overflow-hidden bg-sand-100">
             <SampleImage art="studio-1" alt="تصویر موقت: میز کار با قلم‌مو، رنگ و کیف پارچه‌ای" />
             <div className="absolute start-3 top-3">
