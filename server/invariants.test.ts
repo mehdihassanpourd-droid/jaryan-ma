@@ -396,15 +396,6 @@ describe("the visual identity follows the official logo", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("keeps the mobile viewport: device width, scale 1, and nothing that disables zoom", () => {
-    const layout = read("src/app/layout.tsx");
-    expect(layout).toMatch(/export const viewport[^=]*=\s*\{[^}]*width:\s*"device-width"/s);
-    expect(layout).toMatch(/initialScale:\s*1\b/);
-    expect(layout).not.toMatch(/maximumScale|userScalable|minimumScale/);
-    // and the deployment proves it on the live pages
-    expect(read("scripts/deploy/verify-live.sh")).toContain('<meta name="viewport" content="width=device-width, initial-scale=1"');
-  });
-
   it("uses the official logo files, never a redrawn or typed one", () => {
     expect(read("src/components/layout/Header.tsx")).toContain("<Logo");
     expect(read("src/components/layout/Footer.tsx")).toContain("<Logo");

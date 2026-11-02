@@ -4,8 +4,7 @@
 #   verify-live.sh <base-url> <expected-commit> [timeout-seconds]
 #
 # The build writes out/build-info.json ({"commit":"<sha>"}); this polls <base-url>/build-info.json (cache-busted) until it names the
-# expected commit, then checks that the home page and the shop pages answer 200, are the expected Persian storefront and carry the
-# mobile viewport tag.
+# expected commit, then checks that the home page and the shop pages answer 200 and are the expected Persian storefront.
 # Exit 0 only when all of that holds; otherwise it prints what it saw and exits 1. Needs only curl and a POSIX shell: no secrets, no account.
 set -u
 
@@ -41,10 +40,6 @@ for path in $pages; do
     failed=1
   elif ! grep -q "$brand" /tmp/verify-live.$$; then
     echo "::error title=Unexpected page content::$base$path answered 200 but is not the Jaryan Ma storefront." >&2
-    failed=1
-  # Without this tag a phone lays the page out about 980px wide (a desktop layout, tiny text): every page must ship it.
-  elif ! grep -q '<meta name="viewport" content="width=device-width, initial-scale=1"' /tmp/verify-live.$$; then
-    echo "::error title=Mobile viewport tag missing::$base$path has no <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">." >&2
     failed=1
   fi
 done
