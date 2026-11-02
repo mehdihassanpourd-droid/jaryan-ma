@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { ConfigError, loadConfig } from "./config";
 import { createNodeHandler } from "./node-adapter";
+import { observeRequests } from "./observability/logger";
 import { createRuntime, jsonLogger as log } from "./runtime";
 
 /** Admin API server. Run behind a TLS-terminating reverse proxy (see docs/admin/SELF-HOSTING.md). */
@@ -17,7 +18,7 @@ async function main() {
   }
 
   const runtime = await createRuntime(config);
-  const server = createServer(createNodeHandler(runtime.handle, { trustProxy: config.trustProxy, maxBodyBytes: 6 * 1024 * 1024, media: runtime.media, adminUi: runtime.adminUi }));
+  const server = createServer(createNodeHandler(observeRequests(runtime.handle, { log }), { trustProxy: config.trustProxy, maxBodyBytes: 6 * 1024 * 1024, media: runtime.media, adminUi: runtime.adminUi }));
   server.requestTimeout = 60_000;
   server.headersTimeout = 20_000;
   server.keepAliveTimeout = 5_000;

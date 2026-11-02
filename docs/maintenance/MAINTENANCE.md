@@ -126,3 +126,29 @@ node dist/server/cli/ops.mjs log-action --action deploy --target "release:$(git 
 3. Provide a scratch PostgreSQL (can be a second cluster or another machine), set `RESTORE_TEST_ADMIN_URL`, `ops restore-test` → must print `RESTORE TEST PASSED`.
 4. `ops backup-status` → `operational` (exit 0). Only now may the owner call backups operational.
 5. Copy the encrypted file off-server and, once, decrypt+restore *that copy* to prove the off-site path works.
+
+## 10. Reliability tooling (Phase 1)
+
+Everything here is local-first (stdout, local files, systemd) and works on an Iranian VPS without any foreign service. None of it changes orders, payments or inventory. Incident procedure (P0–P3): `INCIDENT-RESPONSE-FA.md`.
+
+### Health and readiness
+| Endpoint | Who | Meaning |
+|---|---|---|
+| `GET /healthz` | anyone (admin API) | the process is alive |
+| `GET /readyz` | anyone | 200 only when the database answers and all migrations are applied; otherwise 503. Body: `{ready, checkedAt, checks:[{name,status}]}` (no error text, hosts or versions). Not cached; cheap (no storage write). Use it for load-balancer/watchdog checks |
+| `GET /health` | anyone | overall state only (cached 30 s) |
+| `GET /api/v1/maintenance/health`, `npm run ops -- health` | owner / operator | every check, with detail |
+
+### Structured logs and request IDs
+`server/observability/logger.ts`: one JSON line per event on stdout. Every request gets an id (`x-request-id`; a well-formed id from the reverse proxy is reused) that appears in the response and in the access line (method, path **without** query, status, duration). A thrown error becomes a logged, redacted `request_failed` line and a `500 {"error":"internal_error","requestId":…}`. Values under sensitive key names (phone, code, token, cookie, address, note, e-mail, password…) are replaced by `[redacted]`, and secrets/phones/e-mails/URLs with credentials inside strings are masked (`redactSensitive`). Bodies, headers and cookies are never logged.
+
+### Reconciliation report (read-only)
+`npm run ops -- reconcile [--out FILE]` or `GET /api/v1/maintenance/reconciliation` (owner/maintainers). It compares what the database already holds and reports, by order number only (no personal data): total ≠ subtotal + shipping, subtotal ≠ sum of lines, reserved units above the line quantity, cancelled/rejected orders still holding stock, negative inventory, orders whose status disagrees with their history (or have none), `pending` orders older than 72 h, and an informational per-SKU view of open-order reservations. Exit code 1 = errors, 2 = warnings. The run is recorded in the maintenance log (counts only). Fixing a finding is always a manual decision through the admin panel.
+
+### Backup verification and restore drill
+- `npm run ops -- backup-verify [--file F]`: offline, no database. Checks manifest, checksum, age (`BACKUP_MAX_AGE_HOURS`, default 36), decryption (authentication tag) and that `pg_restore --list` can read the dump. Level `full` / `checksum` (no key or no `pg_restore` here). It does **not** make a backup operational.
+- `scripts/maintenance/restore-drill.sh`: `backup-verify`, then `restore-test` into a throw-away database on a **scratch** server. Refuses to run (exit 64) if `RESTORE_TEST_ADMIN_URL` is the production server (override: `ALLOW_SAME_SERVER=yes`, still a new throw-away database). Only a passing `restore-test` records the backup as proven.
+- Suggested timers: nightly `backup` then `backup-verify`; weekly `restore-drill.sh` (see §4 for the unit file pattern).
+
+### Alerting
+`server/alerts/alerts.ts`: `AlertPublisher.notify({priority P0–P3, key, title, message})` → `AlertManager` → sinks. Built in: `console` (default), `file` (JSON lines), optional `webhook` (off unless `ALERT_WEBHOOK_URL`; https or private address; 5 s timeout; no redirects). Per-sink minimum priority, 15-minute de-duplication per key, `resolved` after `firing`, redaction before delivery, and a failing sink never breaks the caller. The 5-minute health cycle raises P0/P1/P2 (incident severity critical/major/minor) when it opens an incident and `resolved` when it closes it. A new channel (e-mail, messenger, monitoring system) is one class implementing `AlertSink`. Configuration: see `.env.example`.

@@ -67,7 +67,7 @@ function profileView(c: CustomerRecord) {
 }
 
 /** True when the request path belongs to this module. */
-export const isCustomerApiPath = (pathname: string) => pathname === "/health" || pathname.startsWith(`${PREFIX}customer/`) || pathname.startsWith(`${PREFIX}public/`);
+export const isCustomerApiPath = (pathname: string) => pathname === "/health" || pathname === "/readyz" || pathname.startsWith(`${PREFIX}customer/`) || pathname.startsWith(`${PREFIX}public/`);
 
 /**
  * Customer-facing and public API (the admin API is separate, with its own cookie, origins and CSRF token).
@@ -108,6 +108,11 @@ export function createCustomerApi(deps: CustomerApiDeps) {
       if (!healthCache || now - healthCache.at > (deps.healthCacheMs ?? 30_000)) healthCache = { at: now, report: await deps.maintenance.runHealth() };
       const view = publicHealth(healthCache.report);
       return json(view, view.status === "down" ? 503 : 200);
+    }
+    if (url.pathname === "/readyz" && method === "GET") {
+      // Readiness for load balancers / watchdogs: 200 only when the database answers and all migrations are applied. Never cached.
+      const readiness = await deps.maintenance.runReadiness();
+      return json({ ready: readiness.ready, checkedAt: readiness.checkedAt.toISOString(), checks: readiness.checks }, readiness.ready ? 200 : 503);
     }
     if (url.pathname === `${PREFIX}public/faq` && method === "GET") {
       const response = json({ categories: await deps.support.publicFaq() }, 200, { "cache-control": "public, max-age=300" });

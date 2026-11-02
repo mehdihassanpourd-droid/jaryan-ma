@@ -312,6 +312,15 @@ describe("public health and client error reports", () => {
     expect(JSON.stringify(r.body)).not.toMatch(/database|storage|backup/);
   });
 
+  it("/readyz is public, uncached, answers 200 when the database and migrations are fine, and reveals only check names", async () => {
+    const r = await ccall({ path: "/readyz" });
+    expect(r.res.status).toBe(200);
+    expect(r.body.ready).toBe(true);
+    expect(r.body.checks).toEqual([{ name: "database", status: "ok" }, { name: "migrations", status: "ok" }]);
+    expect(r.res.headers.get("cache-control")).toBe("no-store");
+    expect(Object.keys(r.body).sort()).toEqual(["checkedAt", "checks", "ready"]);
+  });
+
   it("accepts sanitised, rate-limited storefront error reports", async () => {
     const report = { name: "TypeError", message: "failed for ali@example.com 09121234567", stack: "TypeError\n    at x (https://shop.example.test/a.js:1:1)", url: "https://shop.example.test/p?token=SECRET" };
     expect((await ccall({ method: "POST", path: "/api/v1/public/client-errors", body: report })).status).toBe(204);

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readMigrations } from "../db/migrations";
-import { decryptFile, encryptFile, parseBackupKey, pgEnv, pruneBackups, restoreTest, sha256File, takeBackup } from "./backup-tools";
+import { decryptFile, encryptFile, parseBackupKey, pgEnv, pruneBackups, restoreTest, sha256File, takeBackup, verifyBackup } from "./backup-tools";
 
 let dir: string;
 beforeAll(async () => void (dir = await mkdtemp(join(tmpdir(), "jm-backup-test-"))));
@@ -111,6 +111,15 @@ describe.skipIf(!external || !haveTools)("backup and restore test against a real
     expect(result.notes.join(" ")).toContain("match the manifest");
     const left = await admin.query(`SELECT datname FROM pg_database WHERE datname LIKE 'jm_restore_test_%'`);
     expect(left.rows).toEqual([]); // scratch database dropped
+  }, 120_000);
+
+  it("verifies a real backup offline at the 'full' level, and never calls it restored", async () => {
+    const backup = await takeBackup({ databaseUrl: sourceUrl, directory: dir, encryptionKey: key });
+    const r = await verifyBackup({ file: backup.file, manifestFile: backup.manifestFile, encryptionKey: key });
+    expect(r).toMatchObject({ ok: true, level: "full" });
+    expect(r.notes.join(" ")).toContain("readable by pg_restore");
+    expect((await readdir(dir)).filter((n) => n.endsWith(".tmp"))).toEqual([]);
+    expect((await verifyBackup({ file: backup.file, manifestFile: backup.manifestFile, encryptionKey: randomBytes(32).toString("base64") })).ok).toBe(false);
   }, 120_000);
 
   it("fails the restore test for a corrupted file, a wrong key and a manifest mismatch", async () => {

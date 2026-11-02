@@ -261,3 +261,84 @@ export async function restoreTest(options: RestoreTestOptions): Promise<RestoreT
     if (decrypted) await rm(decrypted, { force: true });
   }
 }
+
+// ---- offline verification (no database needed) ---------------------------------------------------------
+
+export interface VerifyBackupOptions {
+  file: string;
+  manifestFile: string;
+  /** Needed to open an encrypted backup. Without it only the checksum is checked (level "checksum"). */
+  encryptionKey?: string;
+  /** The backup is "stale" (not ok) when older than this many hours. Default 36. */
+  maxAgeHours?: number;
+  now?: Date;
+}
+
+export interface VerifyBackupResult {
+  ok: boolean;
+  /** "full": checksum + decryption + dump structure read; "checksum": only the file's integrity. Never "restored". */
+  level: "full" | "checksum" | "failed";
+  notes: string[];
+}
+
+/**
+ * Cheap, safe check that can run every night on the backup host: it opens NO database connection and changes nothing except
+ * a temporary decrypted copy that is always removed. It does NOT make a backup "operational" (only `restoreTest` does).
+ */
+export async function verifyBackup(options: VerifyBackupOptions): Promise<VerifyBackupResult> {
+  const notes: string[] = [];
+  const fail = (note: string): VerifyBackupResult => ({ ok: false, level: "failed", notes: [...notes, note] });
+  let manifest: BackupManifest;
+  try {
+    manifest = JSON.parse(await readFile(options.manifestFile, "utf8")) as BackupManifest;
+  } catch {
+    return fail("manifest missing or not valid JSON");
+  }
+  if (manifest.version !== MANIFEST_VERSION || typeof manifest.dumpSha256 !== "string" || typeof manifest.tables !== "object" || manifest.tables === null || !Array.isArray(manifest.migrations)) return fail("manifest has an unexpected format");
+  const tableCount = Object.keys(manifest.tables).length;
+  if (tableCount === 0) return fail("manifest lists no tables");
+
+  let size: number;
+  try {
+    size = (await stat(options.file)).size;
+  } catch {
+    return fail("backup file is missing");
+  }
+  if (size === 0) return fail("backup file is empty");
+  if ((await sha256File(options.file)) !== manifest.dumpSha256) return fail("checksum does not match the manifest (corrupted or modified)");
+  notes.push(`checksum matches (${size} bytes, ${tableCount} tables in manifest)`);
+
+  const taken = Date.parse(manifest.takenAt);
+  const now = (options.now ?? new Date()).getTime();
+  const maxAgeMs = (options.maxAgeHours ?? 36) * 3600_000;
+  if (!Number.isFinite(taken)) return fail("manifest has no valid backup time");
+  if (now - taken > maxAgeMs) return fail(`backup is older than ${options.maxAgeHours ?? 36} hours`);
+  notes.push("backup is recent");
+
+  let dumpFile = options.file;
+  let temp: string | null = null;
+  try {
+    if (manifest.encrypted) {
+      if (!options.encryptionKey) return { ok: true, level: "checksum", notes: [...notes, "encrypted: no key given, so the content was not opened"] };
+      temp = `${options.file}.verify.tmp`;
+      try {
+        await decryptFile(options.file, temp, parseBackupKey(options.encryptionKey));
+      } catch (error) {
+        return fail(`could not decrypt: ${error instanceof Error ? error.message : "error"}`);
+      }
+      dumpFile = temp;
+      notes.push("decrypts with the key (authentication tag valid)");
+    }
+    let listing: { code: number; stderr: string };
+    try {
+      listing = await run("pg_restore", ["--list", dumpFile], {});
+    } catch {
+      return { ok: true, level: "checksum", notes: [...notes, "pg_restore is not installed here, so the dump structure was not read"] };
+    }
+    if (listing.code !== 0) return fail("pg_restore cannot read the dump structure");
+    notes.push("dump structure is readable by pg_restore");
+    return { ok: true, level: "full", notes };
+  } finally {
+    if (temp) await rm(temp, { force: true });
+  }
+}

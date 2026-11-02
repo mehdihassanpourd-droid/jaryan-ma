@@ -411,3 +411,39 @@ describe("the visual identity follows the official logo", () => {
     expect(read("src/components/layout/Logo.tsx")).toContain("/brand/jaryan-ma-mark-");
   });
 });
+
+describe("store reliability tooling stays read-only, local and redacted (Phase 1)", () => {
+  const WRITES = /\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(|\$executeRaw|\$queryRawUnsafe|\bINSERT\b|\bUPDATE\b\s+\w|\bDELETE\s+FROM\b|\bTRUNCATE\b/;
+
+  it("the reconciliation modules never write to the database", () => {
+    for (const file of ["src/domain/maintenance/reconciliation.ts", "server/maintenance/reconciliation.ts"]) {
+      expect(read(file), file).not.toMatch(WRITES);
+      expect(read(file), file).not.toMatch(/from "node:(fs|child_process|http|https|net)/);
+    }
+  });
+
+  it("the reconciliation query selects no personal column", () => {
+    const source = read("server/maintenance/reconciliation.ts");
+    expect(source).not.toMatch(/\b(customer|shipping|customerNote|phone|firstName|lastName|email|address|recipient)\b\s*:/);
+  });
+
+  it("only the optional webhook sink may reach the network, and the restore drill refuses the production server", () => {
+    const alerts = read("server/alerts/alerts.ts");
+    expect(alerts.match(/fetchImpl\(|fetch\(/g)?.length).toBe(1);
+    expect(alerts).not.toMatch(/https?:\/\/[a-z0-9.-]+\.[a-z]{2,}/i);
+    const drill = read("scripts/maintenance/restore-drill.sh");
+    expect(drill).toContain("the scratch server is the production server");
+    expect(drill).not.toMatch(/\bDROP\b|pg_restore\b.*DATABASE_URL/);
+  });
+
+  it("the HTTP entry point wraps the handler with request ids and redacted logging", () => {
+    expect(read("server/main.ts")).toContain("observeRequests(runtime.handle");
+    expect(read("server/runtime.ts")).toContain("createLogger");
+  });
+
+  it("request bodies, headers and cookies are never passed to the logger by the request wrapper", () => {
+    const wrapper = read("server/observability/logger.ts");
+    expect(wrapper).not.toMatch(/request\.(text|json|formData|arrayBuffer|body)\b/);
+    expect(wrapper).not.toMatch(/headers\.get\("(cookie|authorization)"\)/i);
+  });
+});

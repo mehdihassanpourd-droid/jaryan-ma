@@ -4,6 +4,8 @@ import { fingerprintInput, redactSensitive, redactUrlCredentials, sanitizeError 
 import { summarizeHealth, type CheckResult, type HealthReport } from "../../src/domain/maintenance/health";
 import { canIncidentTransition, type IncidentCreate, type IncidentUpdate } from "../../src/domain/maintenance/incident";
 import { securityChecks, type SecurityFacts } from "../../src/domain/maintenance/security-checks";
+import { priorityForSeverity, noAlerts, type AlertPublisher } from "../alerts/alerts";
+import type { ReconReport } from "../../src/domain/maintenance/reconciliation";
 import { can, type Action, type Role } from "../auth/rbac";
 import type { BackupKind, MaintenanceStore } from "./ports";
 
@@ -29,6 +31,8 @@ export interface HealthProbes {
   security(): SecurityFacts;
   /** Customer accounts waiting for erasure past their deadline (a stuck job). */
   overdueDeletions?(): Promise<number>;
+  /** Read-only order/stock comparison (never changes data). */
+  reconciliation?(now: Date): Promise<ReconReport>;
 }
 
 export interface MaintenanceSettings {
@@ -77,6 +81,7 @@ export class MaintenanceService {
     private readonly probes: HealthProbes,
     private readonly settings: MaintenanceSettings = DEFAULT_MAINTENANCE_SETTINGS,
     private readonly clock: () => Date = () => new Date(),
+    private readonly alerts: AlertPublisher = noAlerts,
   ) {}
 
   private require(op: Operator, action: Action) {
@@ -84,6 +89,15 @@ export class MaintenanceService {
   }
 
   // ---- health ----------------------------------------------------------------------------------
+
+  /** Read-only order and inventory reconciliation for the owner/maintainers. Records only that it ran, with counts. */
+  async reconciliationFor(op: Operator): Promise<ReconReport> {
+    this.require(op, "maintenance:read");
+    if (!this.probes.reconciliation) throw new MaintenanceError("not_found");
+    const report = await this.probes.reconciliation(this.clock());
+    await this.store.log({ actor: op.email, action: "reconciliation.run", target: null, outcome: report.counts.error === 0 ? "success" : "failure", detail: report.counts }, this.clock());
+    return report;
+  }
 
   /** Detailed health for an authenticated operator. */
   async healthFor(op: Operator): Promise<HealthReport> {
@@ -94,6 +108,18 @@ export class MaintenanceService {
   async backupStatusFor(op: Operator) {
     this.require(op, "maintenance:read");
     return this.backupStatus();
+  }
+
+  /**
+   * Readiness: can this instance serve traffic right now? Only what a request cannot work without (database reachable,
+   * migrations applied). Cheap (no storage write, no store queries beyond those), so a load balancer or systemd watchdog
+   * may call it every few seconds. Messages are fixed strings; nothing from the underlying error leaves the process.
+   */
+  async runReadiness(): Promise<{ ready: boolean; checkedAt: Date; checks: Array<Pick<CheckResult, "name" | "status">> }> {
+    const database = await timed("database", () => this.probes.database(), "database reachable");
+    const migrations = database.status === "ok" ? await timed("migrations", () => this.probes.migrations(), "all migrations applied") : { name: "migrations", status: "fail" as const };
+    const checks = [database, migrations].map(({ name, status }) => ({ name, status }));
+    return { ready: checks.every((c) => c.status !== "fail"), checkedAt: this.clock(), checks };
   }
 
   /** Runs every check. Safe to call often; the storage probe writes and deletes one tiny object. */
@@ -149,9 +175,11 @@ export class MaintenanceService {
         now,
       );
       await this.store.log({ actor: "system", action: "incident.auto_opened", target: `incident:${incident.number}`, outcome: "failure", detail: { checks: failing.map((c) => c.name) } }, now);
+      await this.alerts.notify({ priority: priorityForSeverity(incident.severity), key: "health.unhealthy", title: incident.title, message: `Failing checks: ${failing.map((c) => c.name).join(", ")} (incident #${incident.number})`, source: "health_check" });
     } else if (failing.length === 0 && open) {
       await this.store.updateIncident(open.number, { status: "resolved", message: "All health checks pass again.", author: "system" }, now);
       await this.store.log({ actor: "system", action: "incident.auto_resolved", target: `incident:${open.number}`, outcome: "success", detail: {} }, now);
+      await this.alerts.notify({ priority: priorityForSeverity(open.severity), key: "health.unhealthy", state: "resolved", title: open.title, message: `All health checks pass again (incident #${open.number})`, source: "health_check" });
     }
     return report;
   }

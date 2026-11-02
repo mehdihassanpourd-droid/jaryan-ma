@@ -1,8 +1,8 @@
-import { mkdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { ConfigError, loadConfig, type Config } from "../config";
 import { RateLimiter } from "../auth/rate-limit";
-import { parseBackupKey, pruneBackups, restoreTest, takeBackup, type BackupManifest } from "../maintenance/backup-tools";
+import { parseBackupKey, pruneBackups, restoreTest, takeBackup, verifyBackup, type BackupManifest } from "../maintenance/backup-tools";
 import { createPlatformServices } from "../services";
 import { checkMigrations, createSmsProvider, createStorage, openDatabase, resolveMasterKey, securityFacts } from "../runtime";
 import { randomBytes } from "node:crypto";
@@ -15,6 +15,8 @@ import type { Operator } from "../maintenance/service";
  *   npm run ops -- security-check               configuration review; exit 1 on any failure
  *   npm run ops -- backup                       pg_dump -> encrypted file + manifest; records it as TAKEN (not verified)
  *   npm run ops -- restore-test [--file F]      restores the newest (or given) backup into a scratch database and verifies it
+ *   npm run ops -- backup-verify [--file F]     offline check of the newest (or given) backup: checksum, decryption, dump structure (no database; does NOT make it "operational")
+ *   npm run ops -- reconcile [--out FILE]       READ-ONLY order/stock reconciliation report (JSON); exit 1 on errors, 2 on warnings
  *   npm run ops -- backup-status                what is actually proven (never "ok" without a successful restore test)
  *   npm run ops -- log-action --action A --outcome success|failure [--target T] [--actor U]
  *   npm run ops -- run-deletions | purge | faq-seed
@@ -128,6 +130,27 @@ async function main() {
         exit = result.ok ? 0 : 1;
         break;
       }
+      case "backup-verify": {
+        const file = option(args, "file") ?? (await latestBackupFile(dir));
+        const result = await verifyBackup({ file, manifestFile: file.replace(/\.dump(\.enc)?$/, ".manifest.json"), encryptionKey: process.env.BACKUP_ENCRYPTION_KEY, maxAgeHours: process.env.BACKUP_MAX_AGE_HOURS ? Number(process.env.BACKUP_MAX_AGE_HOURS) : undefined });
+        for (const note of result.notes) console.log(`  ${note}`);
+        await maintenance.logAction("ops-cli", "backup.verify", null, result.ok ? "success" : "failure", { level: result.level, notes: result.notes });
+        console.log(result.ok ? `BACKUP VERIFIED (${result.level}). Not proven restorable until \`restore-test\` passes.` : "BACKUP VERIFICATION FAILED");
+        exit = result.ok ? 0 : 1;
+        break;
+      }
+      case "reconcile": {
+        const report = await maintenance.reconciliationFor(OWNER);
+        const text = JSON.stringify(report, null, 2);
+        const out = option(args, "out");
+        if (out) {
+          await mkdir(dirname(out), { recursive: true });
+          await writeFile(out, text, { mode: 0o600 });
+          console.log(`Report written to ${out}: ${report.counts.error} error(s), ${report.counts.warn} warning(s), ${report.counts.info} note(s). Nothing was changed.`);
+        } else console.log(text);
+        exit = report.counts.error > 0 ? 1 : report.counts.warn > 0 ? 2 : 0;
+        break;
+      }
       case "backup-status": {
         const status = await maintenance.backupStatus();
         console.log(JSON.stringify(status, null, 2));
@@ -151,7 +174,7 @@ async function main() {
         console.log(`Added ${await services.support.seedDefaultFaq()} FAQ draft(s).`);
         break;
       default:
-        console.error("Commands: health, security-check, backup, restore-test, backup-status, log-action, run-deletions, purge, faq-seed");
+        console.error("Commands: health, security-check, backup, backup-verify, restore-test, reconcile, backup-status, log-action, run-deletions, purge, faq-seed");
         exit = 64;
     }
   } finally {
