@@ -273,6 +273,7 @@ describe("JSON-LD serialisation is safe inside a <script> tag", () => {
   it("describes the organisation only with confirmed facts", () => {
     const [org, web] = siteJsonLd(ORIGIN, "جریان ما", "https://instagram.com/jaryan.ma");
     expect(org).toMatchObject({ "@type": "Organization", name: "جریان ما", sameAs: ["https://instagram.com/jaryan.ma"] });
+    expect((org as { logo: string }).logo).toMatch(/\/brand\/jaryan-ma-logo-square\.jpg$/);
     expect(org).not.toHaveProperty("telephone");
     expect(org).not.toHaveProperty("address");
     expect(org).not.toHaveProperty("email");

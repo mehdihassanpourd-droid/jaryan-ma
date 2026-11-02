@@ -38,7 +38,8 @@ describe("verify-live.sh (is the live site really serving the deployed commit?)"
   });
   afterEach(async () => new Promise<void>((r) => server.close(() => r())));
 
-  const site = (commit: string) => (path: string) => (path === "/build-info.json" ? { status: 200, body: JSON.stringify({ commit }) } : { status: 200, body: "<html><title>جریان ما</title></html>" });
+  const VIEWPORT = '<meta name="viewport" content="width=device-width, initial-scale=1"/>';
+  const site = (commit: string) => (path: string) => (path === "/build-info.json" ? { status: 200, body: JSON.stringify({ commit }) } : { status: 200, body: `<html><head>${VIEWPORT}</head><title>جریان ما</title></html>` });
   const runAsync = (args: string[]) => run(verify, args, { VERIFY_POLL_SECONDS: "1" });
 
   it("passes when the site serves the expected commit and its pages answer", async () => {
@@ -74,6 +75,13 @@ describe("verify-live.sh (is the live site really serving the deployed commit?)"
     const r = await runAsync([base, SHA, "5"]);
     expect(r.status).toBe(1);
     expect(r.out).toContain("not the Jaryan Ma storefront");
+  });
+
+  it("fails when a page lacks the mobile viewport tag (a phone would show a tiny 980px desktop layout)", async () => {
+    serve = (path) => (path === "/orders" ? { status: 200, body: "<html><head></head><title>جریان ما</title></html>" } : site(SHA)(path));
+    const r = await runAsync([base, SHA, "5"]);
+    expect(r.status).toBe(1);
+    expect(r.out).toContain("Mobile viewport tag missing");
   });
 
   it("fails fast when nothing answers at all", async () => {

@@ -121,3 +121,8 @@ jobs:
       # honest demo-only checkout, nothing private or foreign in the published files.
       - name: Public preview build on an Android phone (412px)
         run: npx vitest run --config vitest.e2e.config.mts admin/e2e/preview.e2e.ts
+
+      # The redesigned storefront (approved visual reference) on an Android phone and at other widths: sections and asymmetric layout, labelled
+      # sample content, navigation, accessibility (axe), performance guards, no foreign hosts.
+      - name: Redesigned storefront on an Android phone (412px and other widths)
+        run: npx vitest run --config vitest.e2e.config.mts admin/e2e/redesign.e2e.ts

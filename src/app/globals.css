@@ -1,30 +1,37 @@
 @import "tailwindcss";
 @import "@fontsource-variable/vazirmatn";
 
-/* Design tokens: warm ivory / beige / natural brown / muted olive. */
+/* Design tokens: derived from the official logo (sampled from the original file: burgundy #5E1526, cream #E9D8C4), plus a warm
+   off-white wall and charcoal text. Burgundy marks the brand and selected sections; cream is the complementary surface.
+   The names ivory / sand / bark are kept on purpose: cart, checkout and orders use them and follow the new palette.
+   There are no curved shapes: every frame is a straight-edged rectangle. */
 @theme {
   --font-sans: "Vazirmatn Variable", "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
 
-  --color-ivory-50: #fdfbf6;
-  --color-ivory-100: #f8f3e8;
-  --color-ivory-200: #f0e8d6;
+  /* Warm off-white (page) and cream (the logo's own cream, as a complementary surface) */
+  --color-ivory-50: #faf8f4;
+  --color-ivory-100: #f3eee5;
+  --color-ivory-200: #e9d8c4;
 
-  --color-sand-100: #ebe0cb;
-  --color-sand-200: #ddcdb0;
-  --color-sand-300: #c9b48f;
-  --color-sand-400: #b39a72;
+  /* Cream-tinted neutrals for rules, borders and quiet surfaces */
+  --color-sand-100: #eee7db;
+  --color-sand-200: #ddd2c1;
+  --color-sand-300: #bcae96;
+  --color-sand-400: #8c8171;
 
-  --color-bark-500: #8a6a4a;
-  --color-bark-600: #6f5239;
-  --color-bark-700: #55402d;
-  --color-bark-900: #2e2318;
+  /* Charcoal text */
+  --color-bark-500: #78716c;
+  --color-bark-600: #57534e;
+  --color-bark-700: #44403c;
+  --color-bark-900: #292524;
 
-  --color-olive-100: #e4e6d3;
-  --color-olive-300: #a9b085;
-  --color-olive-500: #7a8456;
-  --color-olive-700: #566040;
+  /* Deep burgundy of the logo */
+  --color-burgundy-100: #f1e0dc;
+  --color-burgundy-500: #7c2c40;
+  --color-burgundy-600: #5e1526;
+  --color-burgundy-700: #470f1d;
 
-  --shadow-soft: 0 1px 2px rgb(46 35 24 / 0.05), 0 8px 24px -8px rgb(46 35 24 / 0.12);
+  --shadow-soft: 0 0 #0000;
 }
 
 @layer base {
@@ -39,13 +46,14 @@
     -webkit-font-smoothing: antialiased;
   }
   ::selection {
-    background-color: var(--color-olive-300);
-    color: var(--color-bark-900);
+    background-color: var(--color-ivory-200);
+    color: var(--color-burgundy-600);
   }
+  /* A burgundy ring with an off-white halo: visible on the light wall and on burgundy fields alike. */
   :focus-visible {
-    outline: 2px solid var(--color-olive-500);
-    outline-offset: 3px;
-    border-radius: 4px;
+    outline: 2px solid var(--color-burgundy-600);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 5px var(--color-ivory-50);
   }
   @media (prefers-reduced-motion: reduce) {
     html {

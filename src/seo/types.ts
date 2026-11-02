@@ -1,9 +1,9 @@
 import type { PublicImage, PublicProduct } from "@/domain/product/snapshot";
-import type { Motif, Tone } from "@/types/catalog";
+import type { SampleArt } from "@/types/catalog";
 
 /** A product image. Sample content has no photograph yet, so it carries the placeholder artwork instead of a URL. */
 export interface SeoImage extends PublicImage {
-  placeholder?: { tone: Tone; motif: Motif };
+  placeholder?: { art: SampleArt };
 }
 
 /**

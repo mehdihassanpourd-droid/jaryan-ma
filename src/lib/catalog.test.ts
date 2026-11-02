@@ -8,9 +8,9 @@ describe("filterByCategory", () => {
   });
 
   it("keeps only products of the requested category", () => {
-    const result = filterByCategory(demoProducts, "home-decor");
+    const result = filterByCategory(demoProducts, "ceramics");
     expect(result.length).toBeGreaterThan(0);
-    expect(result.every((p) => p.categorySlug === "home-decor")).toBe(true);
+    expect(result.every((p) => p.categorySlug === "ceramics")).toBe(true);
   });
 
   it("returns nothing for an unknown category", () => {

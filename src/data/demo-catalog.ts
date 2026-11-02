@@ -1,105 +1,102 @@
 /**
  * DEMO CONTENT — placeholder data used until the real catalogue is connected
  * to PostgreSQL. Titles are generic on purpose: no real artists, no real
- * prices (every `priceToman` is null), no real photographs. Category names are
- * proposals pending the gallery's confirmation.
+ * prices (every `priceToman` is null), no real photographs (the images are
+ * labelled sample illustrations). The three categories are the gallery's
+ * current ones (hand-painted fabric tote bags, crochet mandala wall art,
+ * handmade pottery and ceramics); their exact names await the gallery's confirmation.
  * Replace with data from the database (see ARCHITECTURE.md).
  */
 import type { CatalogCategory, CatalogProduct } from "@/types/catalog";
 
 export const demoCategories: CatalogCategory[] = [
-  { slug: "wall-hangings", name: "دیوارکوب بافته", blurb: "بافته‌های آویز برای دیوار", tone: "sand", motif: "fringe", isDemo: true },
-  { slug: "macrame", name: "ماکرومه", blurb: "گره‌چینی و ریشه‌دوزی", tone: "ivory", motif: "arch", isDemo: true },
-  { slug: "woven-panels", name: "تابلوی بافته", blurb: "نقش و بافت قاب‌شده", tone: "olive", motif: "diamond", isDemo: true },
-  { slug: "home-decor", name: "دکور و منسوجات خانه", blurb: "رانر، کوسن و جزئیات خانه", tone: "bark", motif: "stripes", isDemo: true },
+  { slug: "tote-bags", name: "کیف پارچه‌ای نقاشی‌دست", blurb: "کیف‌های پارچه‌ای نقاشی‌شده با دست", art: "tote-1", isDemo: true },
+  { slug: "mandala-wall-art", name: "ماندالای قلاب‌بافی", blurb: "دیوارکوب‌های قلاب‌بافی‌شده", art: "mandala-1", isDemo: true },
+  { slug: "ceramics", name: "سفال و سرامیک", blurb: "سفال و سرامیک دست‌ساز", art: "vase-1", isDemo: true },
 ];
 
 export const demoVendorName = "گالری جریان ما (نمونه)";
 
 export const demoProducts: CatalogProduct[] = [
   {
-    slug: "demo-wall-hanging",
-    title: "دیوارکوب بافته نمونه",
-    categorySlug: "wall-hangings",
+    slug: "demo-floral-tote",
+    title: "کیف پارچه‌ای گل‌دار نمونه",
+    categorySlug: "tote-bags",
     vendorName: demoVendorName,
     priceToman: null,
     isUnique: true,
     images: [
-      { tone: "sand", motif: "fringe", alt: "تصویر نمونه دیوارکوب بافته با ریشه، نمای روبه‌رو" },
-      { tone: "bark", motif: "detail", alt: "تصویر نمونه بافت دیوارکوب از نزدیک" },
-      { tone: "ivory", motif: "fringe", alt: "تصویر نمونه دیوارکوب در رنگ روشن" },
+      { art: "tote-1", alt: "تصویر نمونه کیف پارچه‌ای با نقاشی گل، نمای روبه‌رو" },
+      { art: "studio-1", alt: "تصویر نمونه میز کار با قلم‌مو و رنگ" },
     ],
     isDemo: true,
   },
   {
-    slug: "demo-arch-macrame",
-    title: "ماکرومه قوسی نمونه",
-    categorySlug: "macrame",
+    slug: "demo-mandala-sunburst",
+    title: "ماندالای قلاب‌بافی خورشیدی نمونه",
+    categorySlug: "mandala-wall-art",
     vendorName: demoVendorName,
     priceToman: null,
     isUnique: true,
     images: [
-      { tone: "ivory", motif: "arch", alt: "تصویر نمونه ماکرومه قوسی" },
-      { tone: "sand", motif: "detail", alt: "تصویر نمونه گره‌ها از نزدیک" },
+      { art: "mandala-1", alt: "تصویر نمونه ماندالای قلاب‌بافی با ریشه" },
+      { art: "mandala-3", alt: "تصویر نمونه ماندالا در رنگ‌های خاکی" },
     ],
     isDemo: true,
   },
   {
-    slug: "demo-diamond-panel",
-    title: "تابلوی بافته لوزی‌نقش نمونه",
-    categorySlug: "woven-panels",
+    slug: "demo-blue-vase",
+    title: "گلدان سفالی آبی نمونه",
+    categorySlug: "ceramics",
     vendorName: demoVendorName,
     priceToman: null,
     isUnique: true,
     images: [
-      { tone: "olive", motif: "diamond", alt: "تصویر نمونه تابلوی بافته با نقش لوزی" },
-      { tone: "sand", motif: "detail", alt: "تصویر نمونه بافت تابلو از نزدیک" },
+      { art: "vase-1", alt: "تصویر نمونه گلدان سفالی آبی با گل" },
+      { art: "vase-2", alt: "تصویر نمونه سفال‌ها روی قفسه" },
+      { art: "studio-2", alt: "تصویر نمونه کارگاه سفالگری" },
     ],
     isDemo: true,
   },
   {
-    slug: "demo-woven-runner",
-    title: "رانر بافته نمونه",
-    categorySlug: "home-decor",
+    slug: "demo-patterned-tote",
+    title: "کیف پارچه‌ای طرح‌دار نمونه",
+    categorySlug: "tote-bags",
     vendorName: demoVendorName,
     priceToman: null,
     isUnique: false,
     images: [
-      { tone: "bark", motif: "stripes", alt: "تصویر نمونه رانر راه‌راه بافته" },
-      { tone: "ivory", motif: "detail", alt: "تصویر نمونه بافت رانر از نزدیک" },
+      { art: "tote-2", alt: "تصویر نمونه کیف پارچه‌ای با طرح گل‌های پراکنده" },
+      { art: "tote-3", alt: "تصویر نمونه کیف پارچه‌ای با طرح قوس‌ها" },
     ],
     isDemo: true,
   },
   {
-    slug: "demo-fringe-hanging",
-    title: "دیوارکوب ریشه‌دار نمونه",
-    categorySlug: "wall-hangings",
+    slug: "demo-mandala-night",
+    title: "ماندالای قلاب‌بافی شب نمونه",
+    categorySlug: "mandala-wall-art",
     vendorName: demoVendorName,
     priceToman: null,
     isUnique: true,
-    images: [
-      { tone: "olive", motif: "fringe", alt: "تصویر نمونه دیوارکوب ریشه‌دار سبز" },
-      { tone: "bark", motif: "fringe", alt: "تصویر نمونه دیوارکوب ریشه‌دار قهوه‌ای" },
-    ],
+    images: [{ art: "mandala-2", alt: "تصویر نمونه ماندالا روی زمینهٔ سبز تیره" }],
     isDemo: true,
   },
   {
-    slug: "demo-cushion",
-    title: "کوسن بافته نمونه",
-    categorySlug: "home-decor",
+    slug: "demo-ceramic-set",
+    title: "ست سفالی نمونه",
+    categorySlug: "ceramics",
     vendorName: demoVendorName,
     priceToman: null,
     isUnique: false,
     images: [
-      { tone: "sand", motif: "diamond", alt: "تصویر نمونه کوسن بافته" },
-      { tone: "olive", motif: "detail", alt: "تصویر نمونه بافت کوسن از نزدیک" },
+      { art: "vase-3", alt: "تصویر نمونه سه ظرف سفالی" },
+      { art: "vase-2", alt: "تصویر نمونه کاسه و لیوان سفالی" },
     ],
     isDemo: true,
   },
 ];
 
 export const featuredProducts = demoProducts;
-export const spotlightProduct = demoProducts[0]!;
 
 export function getCategory(slug: string): CatalogCategory | undefined {
   return demoCategories.find((c) => c.slug === slug);

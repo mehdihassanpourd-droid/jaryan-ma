@@ -11,7 +11,7 @@ interface PlaceholderPanelProps {
 /** Dashed card that visibly says "this is sample content". */
 export function PlaceholderPanel({ title, children, tagLabel, className = "" }: PlaceholderPanelProps) {
   return (
-    <div className={`rounded-2xl border border-dashed border-sand-400 bg-ivory-50/70 p-6 ${className}`}>
+    <div className={` border border-dashed border-sand-400 bg-ivory-50/70 p-6 ${className}`}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="font-bold text-bark-900">{title}</h3>
         <PlaceholderTag label={tagLabel} />

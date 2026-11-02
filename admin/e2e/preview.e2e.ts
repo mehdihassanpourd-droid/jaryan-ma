@@ -51,7 +51,7 @@ describe("public preview on an Android phone (412x915)", () => {
   it("opens every page without horizontal scrolling, in Persian RTL, labelled as sample content and not indexable", async () => {
     const ctx = await phone();
     const page = await ctx.newPage();
-    const routes = ["/", "/category/macrame", "/category/wall-hangings", "/products/demo-wall-hanging", "/products/demo-cushion", "/cart", "/checkout", "/orders", "/order", "/product"];
+    const routes = ["/", "/category/tote-bags", "/category/ceramics", "/products/demo-blue-vase", "/products/demo-patterned-tote", "/cart", "/checkout", "/orders", "/order", "/product"];
     for (const route of routes) {
       const response = await page.goto(`${url}${route}`, { waitUntil: "networkidle" });
       expect(response?.status(), route).toBe(200);
@@ -77,7 +77,7 @@ describe("public preview on an Android phone (412x915)", () => {
     await ctx.close();
   });
 
-  it("can be browsed by tapping: home -> collection -> product, and home -> product, with the sample badge and no price made up", async () => {
+  it("can be browsed by tapping: home -> category -> product, and home -> product, with the sample badge and no price made up", async () => {
     const ctx = await phone();
     const page = await ctx.newPage();
     await page.goto(`${url}/`, { waitUntil: "networkidle" });
@@ -92,9 +92,8 @@ describe("public preview on an Android phone (412x915)", () => {
     expect(text).toContain("قیمت به‌زودی اعلام می‌شود");
     // Sample products carry no price (never invented), so they cannot be added to a cart in the preview.
     await pw(page.getByRole("button", { name: /افزودن به سبد/ })).toHaveCount(0);
-    // The product grid of the home page links to the same pages, and the category chips filter it.
+    // The product grid of the home page links to the same pages.
     await page.goto(`${url}/`, { waitUntil: "networkidle" });
-    await page.locator("#featured").getByRole("button", { name: "ماکرومه" }).tap();
     await page.locator('#featured a[href^="/products/"]').first().tap();
     await page.waitForURL(/\/products\//);
     await pw(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -129,7 +128,7 @@ describe("public preview on an Android phone (412x915)", () => {
     page.on("console", (m) => {
       if (m.type() === "error") errors.push(m.text());
     });
-    for (const route of ["/", "/category/macrame", "/products/demo-cushion", "/cart", "/checkout"]) await page.goto(`${url}${route}`, { waitUntil: "networkidle" });
+    for (const route of ["/", "/category/tote-bags", "/products/demo-patterned-tote", "/cart", "/checkout"]) await page.goto(`${url}${route}`, { waitUntil: "networkidle" });
     await ctx.close();
     expect([...requested].filter((h) => !h.startsWith("127.0.0.1")), "foreign hosts requested").toEqual([]);
     expect(errors).toEqual([]);
