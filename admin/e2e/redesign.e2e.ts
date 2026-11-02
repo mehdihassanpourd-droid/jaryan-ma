@@ -592,10 +592,14 @@ describe("arriving at the home page from another page", () => {
     await page.locator('#featured a[href^="/products/"]').first().tap();
     await page.waitForURL(/\/products\//);
     const before = (await scrollCalls(page)).length;
+    // a slow phone (or a busy CI machine) lets the router finish before event listeners run: the reset must not depend on that order
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
     await page.goBack();
     await page.waitForURL(`${url}/`);
     await page.waitForTimeout(700);
     expect((await scrollCalls(page)).slice(before).some((c) => c.includes('"instant"')), "going back did not force the top").toBe(false);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
     await ctx.close();
   });
 });
