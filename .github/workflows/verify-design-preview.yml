@@ -1,5 +1,6 @@
-# TEMPORARY, read-only: fetches the live PR #23 preview from a GitHub runner and prints exactly what the browser receives
-# (viewport tag, headers, CSS breakpoints, deployed commit). No secrets, no third-party actions. Delete this branch afterwards.
+# TEMPORARY, read-only: taps the logo of the LIVE PR #23 preview with real touch events on emulated Android phones, from a
+# collection page, a product page and the cart (direct and via in-app navigation) and prints what happened.
+# No secrets, no writes; only a public page is fetched. Delete this branch afterwards.
 name: Verify design preview (temporary)
 
 on:
@@ -10,32 +11,102 @@ permissions:
   contents: read
 
 jobs:
-  verify:
-    name: Fetch the live preview
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  logo-tap:
+    name: Tap the logo on the live preview (Android emulation)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - name: Fetch
+      - name: Checkout the PR branch (only to get the pinned Playwright)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/redesign-reference
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Install Playwright only
+        run: npm ci --ignore-scripts
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Which commit does the live preview serve?
+        run: curl -sS -L --max-time 30 "https://pr-23.jaryan-ma.pages.dev/build-info.json?v=$RANDOM"; echo
+      - name: Tap the logo
+        env:
+          BASE: https://pr-23.jaryan-ma.pages.dev
         run: |
-          base="https://pr-23.jaryan-ma.pages.dev"
-          for ua in "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"; do
-            echo "=================== UA: $ua"
-            curl -sS -L --max-time 30 -A "$ua" -D /tmp/h -o /tmp/b "$base/" -w 'HTTP %{http_code}, %{size_download} bytes\n'
-            echo "--- response headers"; tr -d '\r' < /tmp/h
-            echo "--- viewport / theme-color / charset / lang+dir"
-            grep -o '<meta name="viewport"[^>]*>' /tmp/b || echo "NO VIEWPORT META"
-            grep -o '<meta name="theme-color"[^>]*>' /tmp/b || true
-            grep -o '<meta charSet="[^"]*"' /tmp/b || grep -o '<meta charset="[^"]*"' /tmp/b || true
-            grep -o '<html[^>]*>' /tmp/b
-            echo "--- first 600 bytes of the page"; head -c 600 /tmp/b; echo
-            echo "--- sha256 of the HTML"; sha256sum /tmp/b
-          done
-          echo "=================== CSS actually served"
-          for css in $(grep -o '/_next/static/[^"]*\.css' /tmp/b | sort -u); do
-            curl -sS -L --max-time 30 -o /tmp/c "$base$css" -w "%{http_code} ${css} %{size_download}B\n"
-            printf 'min-width:48rem rules: '; grep -o '@media (min-width:48rem)' /tmp/c | wc -l
-            printf 'min-width:40rem rules: '; grep -o '@media (min-width:40rem)' /tmp/c | wc -l
-            printf 'md:hidden / max-md hidden present: '; grep -c 'md\\:hidden\|max-md' /tmp/c || true
-          done
-          echo "=================== Deployed commit"
-          curl -sS -L --max-time 30 "$base/build-info.json" || echo "no build-info.json"; echo
+          cat > /tmp/probe.cjs <<'JS'
+          const { chromium } = require('playwright');
+          const BASE = process.env.BASE;
+          const LABEL = 'جریان ما، صفحهٔ اصلی';
+          const PROFILES = [
+            { name: 'Pixel 7, Chrome Android 130 (412x839 @2.625)', ctx: { viewport: { width: 412, height: 839 }, deviceScaleFactor: 2.625, isMobile: true, hasTouch: true, locale: 'fa-IR', userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' } },
+            { name: 'Galaxy S23, Chrome Android 130 (360x780 @3)', ctx: { viewport: { width: 360, height: 780 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale: 'fa-IR', userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' } },
+          ];
+          const results = [];
+
+          async function diagnose(page) {
+            return page.evaluate((label) => {
+              const a = [...document.querySelectorAll('header a')].find((x) => x.getAttribute('aria-label') === label);
+              if (!a) return { found: false };
+              const r = a.getBoundingClientRect();
+              const pts = [[.5, .5], [.1, .1], [.9, .1], [.1, .9], [.9, .9]].map(([fx, fy]) => {
+                const x = r.x + r.width * fx, y = r.y + r.height * fy;
+                const el = document.elementFromPoint(x, y);
+                return { x: Math.round(x), y: Math.round(y), hit: !!el && a.contains(el), top: el ? el.tagName.toLowerCase() + '.' + String(el.className).slice(0, 50) : null };
+              });
+              const chain = [];
+              for (let e = a; e && e !== document.documentElement; e = e.parentElement) { const s = getComputedStyle(e); chain.push(`${e.tagName.toLowerCase()}[pe=${s.pointerEvents},z=${s.zIndex},pos=${s.position}]`); }
+              return { found: true, href: a.getAttribute('href'), rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }, pts, chain, scrollY: Math.round(scrollY), innerWidth, scale: visualViewport.scale };
+            }, LABEL);
+          }
+
+          async function tapLogo(page, name, profile, expectHome = true) {
+            const d = await diagnose(page);
+            const start = page.url().replace(BASE, '') || '/';
+            if (!d.found) { results.push({ ok: false, name, profile, note: 'logo link not found', start }); return; }
+            const cx = d.rect.x + d.rect.w / 2, cy = d.rect.y + d.rect.h / 2;
+            const errors = []; const bad = [];
+            const onC = (m) => m.type() === 'error' && errors.push(m.text().slice(0, 120));
+            const onF = (r) => bad.push('FAILED ' + r.url().replace(BASE, '') + ' ' + (r.failure() && r.failure().errorText));
+            const onR = (r) => r.status() >= 400 && bad.push(r.status() + ' ' + r.url().replace(BASE, ''));
+            page.on('console', onC); page.on('requestfailed', onF); page.on('response', onR);
+            const t0 = Date.now();
+            await page.touchscreen.tap(cx, cy); // a real touch at the logo's centre, no actionability shortcuts
+            await page.waitForFunction(() => location.pathname === '/', null, { timeout: 8000 }).catch(() => {});
+            await page.waitForTimeout(400);
+            const path = new URL(page.url()).pathname;
+            const h1 = await page.evaluate(() => (document.querySelector('h1') || {}).textContent || '');
+            const scrollAfter = await page.evaluate(() => Math.round(scrollY));
+            page.off('console', onC); page.off('requestfailed', onF); page.off('response', onR);
+            const ok = expectHome ? path === '/' && /هنر/.test(h1) : true;
+            results.push({ ok, name, profile, start, after: path, ms: Date.now() - t0, h1: h1.slice(0, 30), scrollAfter, rect: d.rect, hits: d.pts.map((p) => p.hit ? 'yes' : 'NO(' + p.top + ')').join(','), chain: ok ? undefined : d.chain.join(' > '), errors: errors.length ? errors : undefined, bad: bad.length ? bad.slice(0, 6) : undefined });
+          }
+
+          (async () => {
+            const browser = await chromium.launch();
+            for (const p of PROFILES) {
+              const fresh = async () => { const ctx = await browser.newContext(p.ctx); const page = await ctx.newPage(); return { ctx, page }; };
+              const direct = async (name, path, prep) => { const { ctx, page } = await fresh(); await page.goto(BASE + path, { waitUntil: 'networkidle' }); if (prep) await prep(page); await tapLogo(page, name, p.name); await ctx.close(); };
+              await direct('S1 collection page, direct load', '/category/ceramics');
+              await direct('S2 product page, direct load', '/products/demo-blue-vase');
+              await direct('S3 cart page, direct load', '/cart');
+              await direct('S7 product page scrolled down 900px', '/products/demo-blue-vase', async (page) => { await page.evaluate(() => window.scrollTo(0, 900)); await page.waitForTimeout(500); });
+              await direct('S9 product page with the menu open', '/products/demo-blue-vase', async (page) => { await page.getByRole('button', { name: 'باز کردن منو' }).tap(); await page.waitForTimeout(300); });
+              // client-side navigation first (a soft navigation, as a shopper really arrives), then the logo
+              { const { ctx, page } = await fresh(); await page.goto(BASE + '/', { waitUntil: 'networkidle' }); await page.locator('#collections a[href^="/category/"]').first().tap(); await page.waitForURL(/\/category\//); await page.waitForTimeout(500); await tapLogo(page, 'S4 collection page, reached by tapping a collection', p.name); await ctx.close(); }
+              { const { ctx, page } = await fresh(); await page.goto(BASE + '/', { waitUntil: 'networkidle' }); await page.locator('#featured a[href^="/products/"]').first().tap(); await page.waitForURL(/\/products\//); await page.waitForTimeout(500); await tapLogo(page, 'S5 product page, reached by tapping a product', p.name); await ctx.close(); }
+              { const { ctx, page } = await fresh(); await page.goto(BASE + '/', { waitUntil: 'networkidle' }); await page.locator('header').getByRole('link', { name: /سبد خرید/ }).tap(); await page.waitForURL(/\/cart/); await page.waitForTimeout(500); await tapLogo(page, 'S6 cart page, reached by tapping the header cart', p.name); await ctx.close(); }
+              // informational: the logo on the home page itself, after scrolling down
+              { const { ctx, page } = await fresh(); await page.goto(BASE + '/', { waitUntil: 'networkidle' }); await page.evaluate(() => window.scrollTo(0, 1500)); await page.waitForTimeout(500); await tapLogo(page, 'S8 (info) home page scrolled 1500px, tap the logo', p.name, false); await ctx.close(); }
+            }
+            await browser.close();
+            console.log('\n================ RESULTS ================');
+            for (const r of results) console.log(JSON.stringify(r));
+            const failed = results.filter((r) => !r.ok);
+            console.log('\n' + (failed.length ? `FAILED: ${failed.length} of ${results.length}` : `ALL ${results.length} PASSED`));
+            process.exit(failed.length ? 1 : 0);
+          })().catch((e) => { console.error('PROBE CRASHED', e); process.exit(2); });
+          JS
+          NODE_PATH="$PWD/node_modules" node /tmp/probe.cjs
