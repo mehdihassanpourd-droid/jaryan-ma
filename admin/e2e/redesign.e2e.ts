@@ -388,8 +388,24 @@ describe("redesigned storefront on an Android phone (412x915)", () => {
   });
 });
 
+const isPhone = (width: number) => width < 768;
+
+describe("the mobile viewport", () => {
+  it("every storefront page ships the viewport tag, so a phone lays it out at its own width (not a 980px desktop layout)", async () => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    for (const path of ["/", "/category/ceramics", "/products/demo-blue-vase", "/cart", "/checkout", "/orders", "/404.html"]) {
+      await page.goto(`${url}${path}`, { waitUntil: "domcontentloaded" });
+      expect(await page.locator('meta[name="viewport"]').getAttribute("content"), path).toBe("width=device-width, initial-scale=1");
+      expect(await page.evaluate(() => window.innerWidth), `${path} is laid out at the phone's width`).toBe(412);
+      expect(await page.locator('meta[name="viewport"]').count(), `${path}: exactly one viewport tag`).toBe(1);
+    }
+    await ctx.close();
+  });
+});
+
 describe("other screen sizes", () => {
-  it.each([360, 412, 600, 768, 1024, 1280])("home and product fit at %ipx wide (tab bar only below 768px)", async (width) => {
+  it.each([360, 412, 600, 768, 980, 1024, 1280])("home and product fit at %ipx wide (tab bar and hamburger only below 768px)", async (width) => {
     const ctx = await phone({ viewport: { width, height: 900 }, isMobile: width < 768, hasTouch: width < 768 });
     const page = await ctx.newPage();
     for (const path of ["/", "/products/demo-mandala-sunburst"]) {
@@ -397,10 +413,20 @@ describe("other screen sizes", () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), `${path} at ${width}px`).toBeLessThanOrEqual(0);
       await pw(page.getByRole("heading", { level: 1 })).toBeVisible();
       const tabbar = page.getByRole("navigation", { name: "پیمایش سریع" });
-      if (width < 768) await pw(tabbar).toBeVisible();
-      else await pw(tabbar).toBeHidden();
+      // below 768px: tab bar + hamburger, no desktop navigation; from 768px (and in a phone's "desktop site" mode, 980px): the reverse
+      const menuButton = page.getByRole("button", { name: "باز کردن منو" });
+      const desktopNav = page.locator("header").getByRole("navigation", { name: "منوی اصلی" });
+      if (width < 768) {
+        await pw(tabbar).toBeVisible();
+        await pw(menuButton).toBeVisible();
+        await pw(desktopNav).toBeHidden();
+      } else {
+        await pw(tabbar).toBeHidden();
+        await pw(menuButton).toBeHidden();
+        await pw(desktopNav).toBeVisible();
+      }
+      if (isPhone(width)) expect(await page.evaluate(() => window.innerWidth), "a phone lays the page out at its own width").toBe(width);
     }
-    if (width >= 768) await pw(page.getByRole("navigation", { name: "منوی اصلی" })).toBeVisible();
     await ctx.close();
   });
 });
