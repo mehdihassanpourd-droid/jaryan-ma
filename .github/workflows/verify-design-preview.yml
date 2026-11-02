@@ -1,6 +1,5 @@
-# TEMPORARY, read-only: taps the logo of the LIVE PR #23 preview with real touch events on emulated Android phones, from a
-# collection page, a product page and the cart (direct and via in-app navigation) and prints what happened.
-# No secrets, no writes; only a public page is fetched. Delete this branch afterwards.
+# TEMPORARY, read-only: checks the LIVE production storefront after the merge of PR #23, on emulated Android phones (touch events) and a desktop.
+# Only GET requests to public pages; nothing is written. No secrets, no third-party actions. Delete this branch afterwards.
 name: Verify design preview (temporary)
 
 on:
@@ -11,15 +10,15 @@ permissions:
   contents: read
 
 jobs:
-  logo-tap:
-    name: Tap the logo on the live preview (Android emulation)
+  production:
+    name: Check the live production storefront (Android emulation)
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - name: Checkout the PR branch (only to get the pinned Playwright)
+      - name: Checkout main (only to get the pinned Playwright)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: claude/redesign-reference
+          ref: main
           persist-credentials: false
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -30,82 +29,106 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      - name: Which commit does the live preview serve?
-        run: curl -sS -L --max-time 30 "https://pr-23.jaryan-ma.pages.dev/build-info.json?v=$RANDOM"; echo
-      - name: Tap the logo
+      - name: Check the live site
         env:
-          BASE: https://pr-23.jaryan-ma.pages.dev
+          BASE: https://jaryan-ma.pages.dev
+          EXPECT: 29fabb3d441b5a85eebfc8d1837eb36e8fe96b79
         run: |
           cat > /tmp/probe.cjs <<'JS'
           const { chromium } = require('playwright');
           const BASE = process.env.BASE;
-          const LABEL = 'جریان ما، صفحهٔ اصلی';
-          const PROFILES = [
-            { name: 'Pixel 7, Chrome Android 130 (412x839 @2.625)', ctx: { viewport: { width: 412, height: 839 }, deviceScaleFactor: 2.625, isMobile: true, hasTouch: true, locale: 'fa-IR', userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' } },
-            { name: 'Galaxy S23, Chrome Android 130 (360x780 @3)', ctx: { viewport: { width: 360, height: 780 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale: 'fa-IR', userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' } },
-          ];
+          const EXPECT = process.env.EXPECT;
+          const LOGO = 'جریان ما، صفحهٔ اصلی';
           const results = [];
+          const hosts = new Set();
+          const rec = (ok, name, detail) => results.push({ ok: !!ok, name, ...(detail === undefined ? {} : { detail }) });
+          const PROFILES = [
+            { name: 'Pixel 7', ctx: { viewport: { width: 412, height: 839 }, deviceScaleFactor: 2.625, isMobile: true, hasTouch: true, locale: 'fa-IR', userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' } },
+            { name: 'Galaxy S23', ctx: { viewport: { width: 360, height: 780 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale: 'fa-IR', userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' } },
+          ];
 
-          async function diagnose(page) {
-            return page.evaluate((label) => {
-              const a = [...document.querySelectorAll('header a')].find((x) => x.getAttribute('aria-label') === label);
-              if (!a) return { found: false };
-              const r = a.getBoundingClientRect();
-              const pts = [[.5, .5], [.1, .1], [.9, .1], [.1, .9], [.9, .9]].map(([fx, fy]) => {
-                const x = r.x + r.width * fx, y = r.y + r.height * fy;
-                const el = document.elementFromPoint(x, y);
-                return { x: Math.round(x), y: Math.round(y), hit: !!el && a.contains(el), top: el ? el.tagName.toLowerCase() + '.' + String(el.className).slice(0, 50) : null };
-              });
-              const chain = [];
-              for (let e = a; e && e !== document.documentElement; e = e.parentElement) { const s = getComputedStyle(e); chain.push(`${e.tagName.toLowerCase()}[pe=${s.pointerEvents},z=${s.zIndex},pos=${s.position}]`); }
-              return { found: true, href: a.getAttribute('href'), rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }, pts, chain, scrollY: Math.round(scrollY), innerWidth, scale: visualViewport.scale };
-            }, LABEL);
-          }
-
-          async function tapLogo(page, name, profile, expectHome = true) {
-            const d = await diagnose(page);
-            const start = page.url().replace(BASE, '') || '/';
-            if (!d.found) { results.push({ ok: false, name, profile, note: 'logo link not found', start }); return; }
-            const cx = d.rect.x + d.rect.w / 2, cy = d.rect.y + d.rect.h / 2;
-            const errors = []; const bad = [];
-            const onC = (m) => m.type() === 'error' && errors.push(m.text().slice(0, 120));
-            const onF = (r) => bad.push('FAILED ' + r.url().replace(BASE, '') + ' ' + (r.failure() && r.failure().errorText));
-            const onR = (r) => r.status() >= 400 && bad.push(r.status() + ' ' + r.url().replace(BASE, ''));
-            page.on('console', onC); page.on('requestfailed', onF); page.on('response', onR);
-            const t0 = Date.now();
-            await page.touchscreen.tap(cx, cy); // a real touch at the logo's centre, no actionability shortcuts
+          async function tapLogoFrom(page, label, p) {
+            const box = await page.locator('header').getByRole('link', { name: LOGO }).boundingBox();
+            await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
             await page.waitForFunction(() => location.pathname === '/', null, { timeout: 8000 }).catch(() => {});
-            await page.waitForTimeout(400);
-            const path = new URL(page.url()).pathname;
-            const h1 = await page.evaluate(() => (document.querySelector('h1') || {}).textContent || '');
-            const scrollAfter = await page.evaluate(() => Math.round(scrollY));
-            page.off('console', onC); page.off('requestfailed', onF); page.off('response', onR);
-            const ok = expectHome ? path === '/' && /هنر/.test(h1) : true;
-            results.push({ ok, name, profile, start, after: path, ms: Date.now() - t0, h1: h1.slice(0, 30), scrollAfter, rect: d.rect, hits: d.pts.map((p) => p.hit ? 'yes' : 'NO(' + p.top + ')').join(','), chain: ok ? undefined : d.chain.join(' > '), errors: errors.length ? errors : undefined, bad: bad.length ? bad.slice(0, 6) : undefined });
+            await page.waitForTimeout(700);
+            const at = await page.evaluate(() => { const h = document.querySelector('header').getBoundingClientRect(); const hero = document.querySelector('section[aria-labelledby="hero-title"]'); return { path: location.pathname, scrollY: Math.round(scrollY), heroTop: hero ? Math.round(hero.getBoundingClientRect().top) : null, headerBottom: Math.round(h.bottom) }; });
+            rec(at.path === '/' && at.scrollY === 0 && at.heroTop !== null && at.heroTop >= at.headerBottom - 1, `[${p}] logo from ${label}: home, scroll 0, hero under the header`, at);
           }
 
           (async () => {
+            // ---- the deployment itself
+            for (const path of ['/', '/cart', '/checkout', '/orders', '/category/ceramics', '/products/demo-blue-vase', '/brand/jaryan-ma-mark-cream.png', '/icon.png', '/apple-icon.png', '/robots.txt', '/sitemap.xml']) {
+              const r = await fetch(BASE + path + '?v=' + Date.now(), { redirect: 'follow' });
+              rec(r.status === 200, `HTTP 200 ${path}`, `${r.status} ${r.headers.get('content-type')}`);
+            }
+            const bi = await (await fetch(BASE + '/build-info.json?v=' + Date.now())).json();
+            rec(bi.commit === EXPECT, 'production serves the merge commit of PR #23', `served ${String(bi.commit).slice(0, 12)}, expected ${EXPECT.slice(0, 12)}`);
+            const home = await (await fetch(BASE + '/?v=' + Date.now())).text();
+            rec(home.includes('<meta name="viewport" content="width=device-width, initial-scale=1"'), 'home has the mobile viewport tag');
+            rec(/brand\/jaryan-ma-mark-cream/.test(home) && home.includes('lang="fa"') && home.includes('dir="rtl"'), 'home HTML: official logo asset, lang=fa, dir=rtl');
+
             const browser = await chromium.launch();
             for (const p of PROFILES) {
-              const fresh = async () => { const ctx = await browser.newContext(p.ctx); const page = await ctx.newPage(); return { ctx, page }; };
-              const direct = async (name, path, prep) => { const { ctx, page } = await fresh(); await page.goto(BASE + path, { waitUntil: 'networkidle' }); if (prep) await prep(page); await tapLogo(page, name, p.name); await ctx.close(); };
-              await direct('S1 collection page, direct load', '/category/ceramics');
-              await direct('S2 product page, direct load', '/products/demo-blue-vase');
-              await direct('S3 cart page, direct load', '/cart');
-              await direct('S7 product page scrolled down 900px', '/products/demo-blue-vase', async (page) => { await page.evaluate(() => window.scrollTo(0, 900)); await page.waitForTimeout(500); });
-              await direct('S9 product page with the menu open', '/products/demo-blue-vase', async (page) => { await page.getByRole('button', { name: 'باز کردن منو' }).tap(); await page.waitForTimeout(300); });
-              // client-side navigation first (a soft navigation, as a shopper really arrives), then the logo
-              { const { ctx, page } = await fresh(); await page.goto(BASE + '/', { waitUntil: 'networkidle' }); await page.locator('#collections a[href^="/category/"]').first().tap(); await page.waitForURL(/\/category\//); await page.waitForTimeout(500); await tapLogo(page, 'S4 collection page, reached by tapping a collection', p.name); await ctx.close(); }
-              { const { ctx, page } = await fresh(); await page.goto(BASE + '/', { waitUntil: 'networkidle' }); await page.locator('#featured a[href^="/products/"]').first().tap(); await page.waitForURL(/\/products\//); await page.waitForTimeout(500); await tapLogo(page, 'S5 product page, reached by tapping a product', p.name); await ctx.close(); }
-              { const { ctx, page } = await fresh(); await page.goto(BASE + '/', { waitUntil: 'networkidle' }); await page.locator('header').getByRole('link', { name: /سبد خرید/ }).tap(); await page.waitForURL(/\/cart/); await page.waitForTimeout(500); await tapLogo(page, 'S6 cart page, reached by tapping the header cart', p.name); await ctx.close(); }
-              // informational: the logo on the home page itself, after scrolling down
-              { const { ctx, page } = await fresh(); await page.goto(BASE + '/', { waitUntil: 'networkidle' }); await page.evaluate(() => window.scrollTo(0, 1500)); await page.waitForTimeout(500); await tapLogo(page, 'S8 (info) home page scrolled 1500px, tap the logo', p.name, false); await ctx.close(); }
+              const fresh = async () => { const ctx = await browser.newContext(p.ctx); const page = await ctx.newPage(); const errs = []; page.on('console', (m) => m.type() === 'error' && errs.push(m.text().slice(0, 120))); page.on('pageerror', (e) => errs.push(String(e).slice(0, 120))); page.on('request', (r) => { try { hosts.add(new URL(r.url()).host); } catch {} }); return { ctx, page, errs }; };
+              // ---- homepage on a phone
+              { const { ctx, page, errs } = await fresh(); await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+                const f = await page.evaluate(() => { const q = (s) => document.querySelector(s); const vis = (e) => !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0; const hero = q('section[aria-labelledby="hero-title"]').getBoundingClientRect(); const burger = q('button[aria-controls="mobile-menu"]'); const deskNav = q('header nav[aria-label="منوی اصلی"]'); const tab = q('nav[aria-label="پیمایش سریع"]'); const cart = [...document.querySelectorAll('header a')].find((a) => /سبد خرید/.test(a.getAttribute('aria-label') || '')); const curved = [...document.querySelectorAll('body *')].filter((e) => !(e instanceof SVGElement) && !e.matches('input[type=radio],input[type=checkbox]') && ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius'].some((k) => parseFloat(getComputedStyle(e)[k]) > 0)).length; return { headerBg: getComputedStyle(q('header')).backgroundColor, logo: !!q('header img[src*="/brand/jaryan-ma-mark-cream"]'), burger: vis(burger), deskNavHidden: !vis(deskNav), tabBar: vis(tab), tabItems: tab ? tab.querySelectorAll('a').length : 0, cart: vis(cart), heroH: Math.round(hero.height), collectionsTop: Math.round(q('#collections').getBoundingClientRect().top), overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, h1: q('h1').textContent.replace(/\s+/g, ' ').trim(), footerLogo: !!q('footer img[src*="/brand/jaryan-ma-mark-cream"]'), curved, innerWidth }; });
+                rec(f.innerWidth === p.ctx.viewport.width && f.overflow <= 0, `[${p.name}] home laid out at the phone's width, no sideways scroll`, { innerWidth: f.innerWidth, overflow: f.overflow });
+                rec(f.headerBg === 'rgb(94, 21, 38)' && f.logo && f.footerLogo, `[${p.name}] home: burgundy header with the official logo; logo in the footer`, { headerBg: f.headerBg });
+                rec(f.burger && f.deskNavHidden && f.tabBar && f.tabItems >= 4 && f.cart, `[${p.name}] mobile navigation: hamburger, tab bar, cart button; desktop nav hidden`, { burger: f.burger, deskNavHidden: f.deskNavHidden, tabItems: f.tabItems, cart: f.cart });
+                rec(/هنر/.test(f.h1) && f.heroH <= 480 && f.collectionsTop < 700, `[${p.name}] short hero (${f.heroH}px), collections start at ${f.collectionsTop}px`, f.h1);
+                rec(f.curved === 0, `[${p.name}] no curved element on the home page`, f.curved);
+                rec(errs.length === 0, `[${p.name}] no console errors on home`, errs);
+                // menu
+                await page.getByRole('button', { name: 'باز کردن منو' }).tap();
+                const menuOk = await page.evaluate(() => { const m = document.querySelector('#mobile-menu'); return !!m && [...m.querySelectorAll('a')].length >= 6 && [...m.querySelectorAll('a')].every((a) => a.getBoundingClientRect().height >= 44); });
+                rec(menuOk, `[${p.name}] hamburger menu opens, links are at least 44px tall`);
+                await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+                rec(await page.locator('#mobile-menu').count() === 0, `[${p.name}] Escape closes the menu`);
+                // logo on the home page scrolls to the top
+                await page.evaluate(() => { document.scrollingElement.scrollTop = 1500; }); await page.waitForFunction(() => scrollY > 1400);
+                const lb = await page.locator('header').getByRole('link', { name: LOGO }).boundingBox();
+                await page.touchscreen.tap(lb.x + lb.width / 2, lb.y + lb.height / 2);
+                await page.waitForFunction(() => scrollY === 0, null, { timeout: 5000 }).then(() => rec(true, `[${p.name}] logo on the home page scrolls to the top`), () => rec(false, `[${p.name}] logo on the home page scrolls to the top`));
+                await ctx.close(); }
+              // ---- collections, product, cart, and the logo from each
+              { const { ctx, page, errs } = await fresh(); await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+                const tile = page.locator('#collections a[href^="/category/"]').first();
+                if (await tile.count() === 0) rec(false, `[${p.name}] collections: tiles found on the home page`);
+                else {
+                  await tile.tap(); await page.waitForURL(/\/category\//); await page.waitForTimeout(500);
+                  const c = await page.evaluate(() => ({ h1: document.querySelector('h1').textContent.trim(), nav: document.querySelectorAll('nav[aria-label="مجموعه‌ها"] a').length, current: !!document.querySelector('nav[aria-label="مجموعه‌ها"] a[aria-current="page"]'), products: document.querySelectorAll('article').length, imgsOk: [...document.querySelectorAll('article img')].every((i) => i.complete && i.naturalWidth > 0 || i.loading === 'lazy') }));
+                  rec(c.h1.length > 0 && c.nav >= 2 && c.current && c.products > 0, `[${p.name}] collection page: title, collection navigation, products listed`, c);
+                  await page.evaluate(() => { document.scrollingElement.scrollTop = 500; }); await page.waitForTimeout(500);
+                  await tapLogoFrom(page, 'a collection page (reached by tapping)', p.name);
+                }
+                await page.locator('#featured a[href^="/products/"]').first().tap(); await page.waitForURL(/\/products\//); await page.waitForTimeout(600);
+                await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 8000 }).catch(() => {});
+                const pr = await page.evaluate(() => ({ h1: document.querySelector('h1').textContent.trim(), facts: !!document.querySelector('[data-testid="product-facts"]'), price: /قیمت|تومان/.test(document.body.innerText), mainImg: (() => { const i = document.querySelector('main img'); return !!i && i.complete && i.naturalWidth > 0; })(), related: !!document.querySelector('[data-testid="related-products"]') }));
+                rec(pr.h1.length > 0 && pr.facts && pr.price && pr.mainImg, `[${p.name}] product page: title, large picture, price/availability, facts block`, pr);
+                await page.evaluate(() => { document.scrollingElement.scrollTop = 800; }); await page.waitForTimeout(500);
+                await tapLogoFrom(page, 'a product page (reached by tapping)', p.name);
+                await page.locator('header').getByRole('link', { name: /سبد خرید/ }).tap(); await page.waitForURL(/\/cart/); await page.waitForTimeout(500);
+                const ct = await page.evaluate(() => ({ h1: document.querySelector('h1').textContent.trim(), text: document.querySelector('main').innerText.slice(0, 160) }));
+                rec(/سبد خرید/.test(ct.h1), `[${p.name}] cart page opens from the header cart button`, ct);
+                await tapLogoFrom(page, 'the cart page', p.name);
+                rec(errs.length === 0, `[${p.name}] no console errors while navigating`, errs);
+                await ctx.close(); }
+              // direct loads (a shopper arriving from a link)
+              for (const [label, path] of [['a collection page (direct load)', '/category/ceramics'], ['a product page (direct load)', '/products/demo-blue-vase'], ['the cart (direct load)', '/cart']]) {
+                const { ctx, page } = await fresh(); await page.goto(BASE + path, { waitUntil: 'networkidle' }); await tapLogoFrom(page, label, p.name); await ctx.close(); }
             }
+            // ---- desktop sanity
+            { const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'fa-IR' }); const page = await ctx.newPage(); await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+              const d = await page.evaluate(() => { const vis = (e) => !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0; return { nav: vis(document.querySelector('header nav[aria-label="منوی اصلی"]')), burger: vis(document.querySelector('button[aria-controls="mobile-menu"]')), tab: vis(document.querySelector('nav[aria-label="پیمایش سریع"]')), overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }; });
+              rec(d.nav && !d.burger && !d.tab && d.overflow <= 0, 'desktop 1280px: horizontal navigation, no hamburger or tab bar, no sideways scroll', d); await ctx.close(); }
             await browser.close();
+            rec([...hosts].every((h) => h === new URL(BASE).host), 'the storefront loads nothing from another host', [...hosts]);
             console.log('\n================ RESULTS ================');
-            for (const r of results) console.log(JSON.stringify(r));
+            for (const r of results) console.log((r.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(r));
             const failed = results.filter((r) => !r.ok);
-            console.log('\n' + (failed.length ? `FAILED: ${failed.length} of ${results.length}` : `ALL ${results.length} PASSED`));
+            console.log('\n' + (failed.length ? `FAILED: ${failed.length} of ${results.length}` : `ALL ${results.length} CHECKS PASSED`));
             process.exit(failed.length ? 1 : 0);
           })().catch((e) => { console.error('PROBE CRASHED', e); process.exit(2); });
           JS
