@@ -1,5 +1,5 @@
-# TEMPORARY, read-only: fetches the live design-preview pages of PR #22 from a GitHub runner and prints what they answer.
-# No secrets, no third-party actions. Delete this branch after reading the log.
+# TEMPORARY, read-only: fetches the live PR #23 preview from a GitHub runner and prints exactly what the browser receives
+# (viewport tag, headers, CSS breakpoints, deployed commit). No secrets, no third-party actions. Delete this branch afterwards.
 name: Verify design preview (temporary)
 
 on:
@@ -11,49 +11,31 @@ permissions:
 
 jobs:
   verify:
-    name: Fetch live preview pages
+    name: Fetch the live preview
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Fetch
         run: |
-          base="https://pr-22.jaryan-ma.pages.dev"
-          prod="https://jaryan-ma.pages.dev"
-          fail=0
-          # check <url> <expected-status> <expected-text-or-empty>
-          check() {
-            local url="$1" want="$2" text="$3" tries=0 code="" hdr=""
-            while [ $tries -lt 6 ]; do
-              code=$(curl -sS -L --max-time 30 -D /tmp/h -o /tmp/b -w '%{http_code}' "$url" 2>/dev/null || echo 000)
-              [ "$code" = "$want" ] && break
-              tries=$((tries+1)); sleep 5
-            done
-            robots=$(grep -i '^x-robots-tag' /tmp/h | tail -n1 | tr -d '\r' | sed 's/^[^:]*: *//')
-            size=$(wc -c < /tmp/b | tr -d ' ')
-            if [ "$code" != "$want" ]; then echo "FAIL  HTTP $code (wanted $want)  $url"; fail=1; return; fi
-            if [ -n "$text" ] && ! grep -q -- "$text" /tmp/b; then echo "FAIL  HTTP $code but text '$text' missing  $url"; fail=1; return; fi
-            echo "OK    HTTP $code  ${size}B  x-robots-tag='${robots}'  $url"
-          }
-          echo "== Pages of the PR #22 preview ($base)"
-          check "$base/design-preview/"                                   200 "دو مفهوم طراحی برای بررسی"
-          check "$base/design-preview/concept-a/"                         200 "اینجا هنر"
-          check "$base/design-preview/concept-a/product?c=mandala&n=1"    200 "جریان ما"
-          check "$base/design-preview/concept-a/product?c=tote&n=2"       200 "جریان ما"
-          check "$base/design-preview/concept-a/product?c=pottery&n=1"    200 "جریان ما"
-          check "$base/design-preview/concept-b/"                         200 "اینجا هنر"
-          check "$base/design-preview/concept-b/product?c=mandala&n=1"    200 "جریان ما"
-          check "$base/design-preview/concept-b/product?c=tote&n=2"       200 "جریان ما"
-          check "$base/design-preview/concept-b/product?c=pottery&n=1"    200 "جریان ما"
-          echo "== Assets the pages need"
-          for f in concept-a/a.css concept-b/b.css assets/proto-ui.js assets/proto-data.js assets/icons.svg \
-                   assets/fonts/markazi-text-arabic-700-normal.woff2 assets/fonts/baloo-bhaijaan-2-arabic-800-normal.woff2 assets/fonts/vazirmatn-arabic-wght-normal.woff2 \
-                   assets/img/a-mandala-1.svg assets/img/b-pottery-1.svg assets/img/b-tote-2.svg assets/img/mark-a.svg; do
-            check "$base/design-preview/$f" 200 ""
+          base="https://pr-23.jaryan-ma.pages.dev"
+          for ua in "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"; do
+            echo "=================== UA: $ua"
+            curl -sS -L --max-time 30 -A "$ua" -D /tmp/h -o /tmp/b "$base/" -w 'HTTP %{http_code}, %{size_download} bytes\n'
+            echo "--- response headers"; tr -d '\r' < /tmp/h
+            echo "--- viewport / theme-color / charset / lang+dir"
+            grep -o '<meta name="viewport"[^>]*>' /tmp/b || echo "NO VIEWPORT META"
+            grep -o '<meta name="theme-color"[^>]*>' /tmp/b || true
+            grep -o '<meta charSet="[^"]*"' /tmp/b || grep -o '<meta charset="[^"]*"' /tmp/b || true
+            grep -o '<html[^>]*>' /tmp/b
+            echo "--- first 600 bytes of the page"; head -c 600 /tmp/b; echo
+            echo "--- sha256 of the HTML"; sha256sum /tmp/b
           done
-          echo "== The real storefront is unchanged and does not link to the previews"
-          check "$base/" 200 "اینجا هنر در جریان است"
-          if curl -sS -L --max-time 30 "$base/" | grep -q "design-preview"; then echo "FAIL  the storefront home links to design-preview"; fail=1; else echo "OK    the storefront home does not link to design-preview"; fi
-          echo "== Production address must NOT have the previews"
-          code=$(curl -sS -L --max-time 30 -o /dev/null -w '%{http_code}' "$prod/design-preview/concept-a/" || echo 000)
-          if [ "$code" = "404" ]; then echo "OK    production $prod/design-preview/concept-a/ -> HTTP 404 (not published there)"; else echo "FAIL  production answers HTTP $code for /design-preview/concept-a/"; fail=1; fi
-          exit $fail
+          echo "=================== CSS actually served"
+          for css in $(grep -o '/_next/static/[^"]*\.css' /tmp/b | sort -u); do
+            curl -sS -L --max-time 30 -o /tmp/c "$base$css" -w "%{http_code} ${css} %{size_download}B\n"
+            printf 'min-width:48rem rules: '; grep -o '@media (min-width:48rem)' /tmp/c | wc -l
+            printf 'min-width:40rem rules: '; grep -o '@media (min-width:40rem)' /tmp/c | wc -l
+            printf 'md:hidden / max-md hidden present: '; grep -c 'md\\:hidden\|max-md' /tmp/c || true
+          done
+          echo "=================== Deployed commit"
+          curl -sS -L --max-time 30 "$base/build-info.json" || echo "no build-info.json"; echo
