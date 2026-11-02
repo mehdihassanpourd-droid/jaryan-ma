@@ -24,14 +24,14 @@ const imageUrl = (key: string | null): string | null => (key && LIVE_CATALOG_BAS
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Container className="py-10 sm:py-14">
-      <h1 className="text-2xl font-bold text-bark-900 sm:text-3xl">{title}</h1>
+      <h1 className="border-t-4 border-bark-900 pt-3 text-4xl font-black leading-tight text-bark-900 sm:text-5xl">{title}</h1>
       <div className="mt-8 space-y-8">{children}</div>
     </Container>
   );
 }
 
 const Notice = ({ children, alert }: { children: React.ReactNode; alert?: boolean }) => (
-  <p role={alert ? "alert" : "status"} className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">{children}</p>
+  <p role={alert ? "alert" : "status"} className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-6 text-bark-700">{children}</p>
 );
 
 /** Signed-out / loading / unreachable handling shared by the order pages. Returns the ready content or the right message. */
@@ -109,16 +109,16 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
         <span className="text-sm text-bark-600">{dateFormat.format(new Date(order.placedAt))}</span>
       </div>
       {order.status === "pending" && (
-        <p role="note" className=" border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">این سفارش ثبت شده و در انتظار تأیید گالری است. {NO_PAYMENT_NOTE}</p>
+        <p role="note" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">این سفارش ثبت شده و در انتظار تأیید گالری است. {NO_PAYMENT_NOTE}</p>
       )}
-      {STATUS_NOTE[order.status] && <p role="note" className=" border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">{STATUS_NOTE[order.status]}</p>}
+      {STATUS_NOTE[order.status] && <p role="note" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">{STATUS_NOTE[order.status]}</p>}
       {(order.status === "rejected" || order.status === "cancelled") && (
-        <p role="note" className=" border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-800" data-testid="refusal-note">
+        <p role="note" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-4 text-sm leading-7 text-bark-800" data-testid="refusal-note">
           {order.status === "rejected" ? "گالری این سفارش را نپذیرفت." : refusal?.by === "customer" ? "شما این سفارش را لغو کردید." : "این سفارش لغو شد."}
           {refusal?.reason && <> دلیل: {refusal.reason}</>} کالاهای این سفارش دیگر برای شما نگه داشته نمی‌شود و هیچ مبلغی دریافت نشده بود.
         </p>
       )}
-      <ul className="divide-y divide-sand-200 border border-sand-200 bg-ivory-50" aria-label="اقلام سفارش">
+      <ul className="divide-y divide-sand-200 border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50" aria-label="اقلام سفارش">
         {order.items.map((item, i) => {
           const img = imageUrl(item.imageKey);
           return (
@@ -136,7 +136,7 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
           );
         })}
       </ul>
-      <dl className="space-y-2 border border-sand-200 bg-ivory-50 p-5 text-sm" data-testid="order-amounts">
+      <dl className="space-y-2 border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-5 text-sm" data-testid="order-amounts">
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-bark-700">جمع کالاها</dt>
           <dd className="text-bark-900" data-testid="order-subtotal">{formatToman(order.subtotalToman)}</dd>
@@ -153,8 +153,8 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
           <dd><strong className="text-xl text-bark-900" data-testid="order-total">{formatToman(order.totalToman)}</strong></dd>
         </div>
       </dl>
-      <section aria-labelledby="ship-title" className=" border border-sand-200 bg-ivory-50 p-5 text-sm leading-8 text-bark-800" data-testid="delivery-details">
-        <h2 id="ship-title" className="mb-2 text-base font-bold text-bark-900">{order.delivery.method === "pickup" ? "تحویل حضوری" : "نشانی تحویل"}</h2>
+      <section aria-labelledby="ship-title" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-5 text-sm leading-8 text-bark-800" data-testid="delivery-details">
+        <h2 id="ship-title" className="mb-2 text-lg font-black text-bark-900">{order.delivery.method === "pickup" ? "تحویل حضوری" : "نشانی تحویل"}</h2>
         {order.delivery.method && <p data-testid="delivery-method">روش ارسال: <strong>{SHIPPING_METHOD_LABEL[order.delivery.method]}</strong>{etaText(order.delivery.etaMinDays, order.delivery.etaMaxDays) && <span className="text-bark-600"> · {etaText(order.delivery.etaMinDays, order.delivery.etaMaxDays)}</span>}</p>}
         {order.delivery.note && <p className="text-bark-700">{order.delivery.note}</p>}
         <p>{s.recipientName}</p>
@@ -174,8 +174,8 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
           </div>
         )}
       </section>
-      <section aria-labelledby="history-title" className=" border border-sand-200 bg-ivory-50 p-5 text-sm leading-8 text-bark-800">
-        <h2 id="history-title" className="mb-2 text-base font-bold text-bark-900">روند سفارش</h2>
+      <section aria-labelledby="history-title" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-5 text-sm leading-8 text-bark-800">
+        <h2 id="history-title" className="mb-2 text-lg font-black text-bark-900">روند سفارش</h2>
         <ol className="space-y-2" data-testid="order-history">
           {order.history.map((h, i) => (
             <li key={i}>
@@ -187,7 +187,7 @@ function OrderBody({ order, onCancel, cancelling, cancelError }: { order: ApiOrd
         </ol>
       </section>
       {canCancel && (
-        <section aria-label="لغو سفارش" className=" border border-sand-200 bg-ivory-50 p-5">
+        <section aria-label="لغو سفارش" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-5">
           {!asking ? (
             <button type="button" onClick={() => setAsking(true)} className="inline-flex min-h-12 items-center border border-red-800/40 px-6 text-sm font-medium text-red-900 hover:bg-red-50" data-testid="cancel-order">لغو سفارش</button>
           ) : (
@@ -332,7 +332,7 @@ export function OrdersPageView() {
           <ul className="space-y-3" aria-label="فهرست سفارش‌ها" data-testid="orders-list">
             {state.items.map((o) => (
               <li key={o.number}>
-                <Link href={`/order?number=${o.number}`} className="flex flex-wrap items-center justify-between gap-3 border border-sand-200 bg-ivory-50 p-4 hover:bg-sand-100">
+                <Link href={`/order?number=${o.number}`} className="flex flex-wrap items-center justify-between gap-3 border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-4 hover:bg-sand-100">
                   <span>
                     <strong className="block text-bark-900">{formatOrderNumber(o.number)}</strong>
                     <span className="text-xs text-bark-600">{dateFormat.format(new Date(o.placedAt))} · {formatNumber(o.items.reduce((n, i) => n + i.quantity, 0))} کالا</span>

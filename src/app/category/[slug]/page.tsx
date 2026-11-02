@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { CollectionNav } from "@/components/home/CollectionNav";
+import { PRODUCT_GRID } from "@/components/product/wall";
 import { SeoProductCard } from "@/components/product/SeoProductCard";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Container } from "@/components/ui/Container";
@@ -9,7 +11,7 @@ import { site } from "@/lib/site";
 import { loadSeo } from "@/seo";
 import { JsonLd } from "@/seo/JsonLd";
 import { categoryBreadcrumbJsonLd, categoryCollectionJsonLd } from "@/seo/jsonld";
-import { decodeParam } from "@/seo/urls";
+import { categoryPath, decodeParam } from "@/seo/urls";
 
 export const dynamicParams = false;
 
@@ -56,12 +58,13 @@ export default async function CategoryPage({ params }: Props) {
       <JsonLd data={[categoryBreadcrumbJsonLd(meta.slug, seo), categoryCollectionJsonLd(meta.slug, seo)]} />
       <Container className="py-10 sm:py-14">
         <Breadcrumb items={[{ name: "خانه", href: "/" }, { name: meta.name }]} />
-        <div className="mt-8 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold text-bark-900 sm:text-3xl">{meta.name}</h1>
+        <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 border-t-4 border-bark-900 pt-3">
+          <h1 className="text-4xl font-black leading-tight text-bark-900 sm:text-5xl">{meta.name}</h1>
           {isDemo && <PlaceholderTag label="دسته نمونه" />}
         </div>
         <p className="mt-2 text-sm text-bark-600">{formatNumber(products.length)} اثر</p>
-        <ul className="mt-8 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 lg:grid-cols-4">
+        <CollectionNav items={[...seo.categories.values()].map((c) => ({ slug: c.slug, name: c.name, href: categoryPath(c.slug) }))} current={meta.slug} />
+        <ul className={`mt-8 ${PRODUCT_GRID}`}>
           {products.map(({ product, seo: productSeo }) => (
             <li key={product.slug}>
               <SeoProductCard product={product} seo={productSeo} />

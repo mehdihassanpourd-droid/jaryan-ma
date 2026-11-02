@@ -120,11 +120,11 @@ describe("redesigned storefront on an Android phone (412x915)", () => {
     await pw(page.getByRole("heading", { level: 1 })).toContainText("هنر");
     await pw(page.getByRole("heading", { level: 1 })).toContainText("در زندگی");
     await pw(page.getByRole("heading", { level: 1 })).toContainText("روزمره");
-    // very large type: the heading is a poster headline, not a section title
-    expect(await page.getByRole("heading", { level: 1 }).evaluate((h) => parseFloat(getComputedStyle(h).fontSize))).toBeGreaterThanOrEqual(56);
+    // large type: the heading is a poster headline, not a section title (still very large on a wide screen, see the width tests)
+    expect(await page.getByRole("heading", { level: 1 }).evaluate((h) => parseFloat(getComputedStyle(h).fontSize))).toBeGreaterThanOrEqual(40);
     // the confirmed slogan stays visible above the heading
     await pw(page.getByText("اینجا هنر در جریان است").first()).toBeVisible();
-    const order = await page.evaluate(() => ["collections", "featured", "story", "artists", "feel-title", "trust", "contact"].map((id) => ({ id, top: (document.getElementById(id) ?? document.querySelector(`[aria-labelledby="${id}"]`))?.getBoundingClientRect().top ?? -1 })));
+    const order = await page.evaluate(() => ["collections", "featured", "scope", "story", "artists", "feel-title", "trust", "contact"].map((id) => ({ id, top: (document.getElementById(id) ?? document.querySelector(`[aria-labelledby="${id}"]`))?.getBoundingClientRect().top ?? -1 })));
     expect(order.every((o) => o.top >= 0), JSON.stringify(order)).toBe(true);
     expect(order.map((o) => o.top)).toEqual([...order.map((o) => o.top)].sort((a, b) => a - b));
     // categories and products come from the data: one link each, to a real page
@@ -245,6 +245,82 @@ describe("redesigned storefront on an Android phone (412x915)", () => {
     expect(cls, "layout shift").toBeLessThan(0.1);
     await ctx.close();
   });
+  it("home: a short hero, so the collections start within the first screen of a phone", async () => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    await page.goto(`${url}/`, { waitUntil: "networkidle" });
+    const hero = await page.locator('section[aria-labelledby="hero-title"]').boundingBox();
+    expect(hero!.height, "hero height on a 915px-tall phone").toBeLessThanOrEqual(480);
+    const collections = await page.locator("#collections").boundingBox();
+    expect(collections!.y, "the collections heading is visible without scrolling").toBeLessThan(700);
+    // two ways in from the hero
+    await pw(page.getByRole("link", { name: "دیدن آثار" })).toBeVisible();
+    await pw(page.getByRole("link", { name: "مجموعه‌ها", exact: true }).first()).toBeVisible();
+    await ctx.close();
+  });
+
+  it("header: official logo, a visible cart button, 48px touch targets and an accessible menu", async () => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    await page.goto(`${url}/`, { waitUntil: "networkidle" });
+    const header = page.locator("header");
+    const box = async (loc: ReturnType<Page["locator"]>) => (await loc.boundingBox())!;
+    const logo = await box(header.locator('img[src*="/brand/jaryan-ma-mark"]'));
+    expect(logo.height, "the logo stays recognisable").toBeGreaterThanOrEqual(56);
+    const cart = header.getByRole("link", { name: "سبد خرید" });
+    await pw(cart).toBeVisible();
+    const cartBox = await box(cart);
+    const menu = header.getByRole("button", { name: "باز کردن منو" });
+    const menuBox = await box(menu);
+    for (const [what, b] of [["cart", cartBox], ["menu", menuBox]] as const) {
+      expect(b.width, `${what} touch width`).toBeGreaterThanOrEqual(44);
+      expect(b.height, `${what} touch height`).toBeGreaterThanOrEqual(44);
+    }
+    expect((await box(header)).height, "the header leaves the page room").toBeLessThanOrEqual(84);
+    // the menu: expanded state, 48px links, Escape returns focus, a tap outside closes it
+    await menu.tap();
+    await pw(page.getByRole("button", { name: "بستن منو" })).toHaveAttribute("aria-expanded", "true");
+    const links = page.locator("#mobile-menu").getByRole("link");
+    for (const heightOf of await links.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))) expect(heightOf).toBeGreaterThanOrEqual(44);
+    await page.keyboard.press("Escape");
+    await pw(page.locator("#mobile-menu")).toBeHidden();
+    await pw(page.getByRole("button", { name: "باز کردن منو" })).toBeFocused();
+    await page.getByRole("button", { name: "باز کردن منو" }).tap();
+    await page.mouse.click(200, 600);
+    await pw(page.locator("#mobile-menu")).toBeHidden();
+    await ctx.close();
+  });
+
+  it("product discovery: consistent cards in one grid, large pictures, readable names and prices, clear collection navigation", async () => {
+    const ctx = await phone();
+    const page = await ctx.newPage();
+    await page.goto(`${url}/`, { waitUntil: "networkidle" });
+    const cards = await page.locator("#featured article").evaluateAll((els) =>
+      els.map((e) => {
+        const pic = e.querySelector("img")!.parentElement!.parentElement!.getBoundingClientRect();
+        const name = getComputedStyle(e.querySelector("h3")!);
+        return { ratio: pic.width / pic.height, w: pic.width, name: parseFloat(name.fontSize), nameWeight: parseInt(name.fontWeight, 10), price: (e.textContent ?? "").length > 0 };
+      }),
+    );
+    expect(cards).toHaveLength(6);
+    for (const c of cards) {
+      expect(c.ratio, "every picture is 4:5").toBeCloseTo(0.8, 1);
+      expect(c.name, "readable name").toBeGreaterThanOrEqual(17);
+      expect(c.nameWeight).toBeGreaterThanOrEqual(800);
+    }
+    expect(Math.min(...cards.map((c) => c.w)), "pictures are large even in the half-width cards").toBeGreaterThan(150);
+    expect(Math.max(...cards.map((c) => c.w)), "the lead card of each trio takes the full width").toBeGreaterThan(300);
+    // the category page: every collection is one tap away, the current one is marked, targets are 48px
+    await page.goto(`${url}/category/ceramics`, { waitUntil: "networkidle" });
+    const nav = page.getByRole("navigation", { name: "مجموعه‌ها" });
+    await pw(nav.getByRole("link")).toHaveCount(4); // all + the three collections
+    await pw(nav.getByRole("link", { name: "سفال و سرامیک" })).toHaveAttribute("aria-current", "page");
+    for (const h of await nav.getByRole("link").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))) expect(h).toBeGreaterThanOrEqual(48);
+    await nav.getByRole("link", { name: "کیف پارچه‌ای نقاشی‌دست" }).tap();
+    await page.waitForURL(/\/category\/tote-bags/);
+    await ctx.close();
+  });
+
   it("official logo: the real mark in header and footer, no square around it, original proportions, readable on a phone", async () => {
     const ctx = await phone();
     const page = await ctx.newPage();

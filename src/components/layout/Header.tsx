@@ -3,7 +3,6 @@ import { ButtonLink } from "@/components/ui/Button";
 import { Container } from "@/components/ui/Container";
 import { InstagramIcon } from "@/components/ui/InstagramIcon";
 import { CartLink } from "@/components/shop/CartLink";
-import { LIVE_CATALOG_BASE } from "@/lib/live-config";
 import { navLinks, site } from "@/lib/site";
 import { MobileNav } from "./MobileNav";
 import { Logo } from "./Logo";
@@ -15,9 +14,9 @@ import { Logo } from "./Logo";
 export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-ivory-50/25 bg-burgundy-600 text-ivory-50">
-      <Container className="relative flex h-[6rem] items-center justify-between gap-4 md:h-28 md:gap-4 lg:gap-8">
+      <Container className="relative flex h-[4.75rem] items-center justify-between gap-4 md:h-24 md:gap-4 lg:gap-8">
         <Link href="/" aria-label={`${site.name}، صفحهٔ اصلی`} className="order-2 md:order-1">
-          <Logo height={80} eager className="h-[4.25rem] w-auto md:h-[5rem]" />
+          <Logo height={80} eager className="h-14 w-auto md:h-[4.5rem]" />
         </Link>
         <nav aria-label="منوی اصلی" className="order-2 hidden md:block">
           <ul className="flex items-center gap-4 text-sm lg:gap-7 font-bold text-ivory-100">
@@ -30,26 +29,14 @@ export function Header() {
             ))}
           </ul>
         </nav>
-        <div className="order-1 flex min-w-11 items-center justify-start gap-2 md:order-3">
+        <div className="order-1 flex min-w-12 items-center justify-start gap-2 md:order-3">
           <ButtonLink href={site.instagramUrl} target="_blank" rel="noopener noreferrer" variant="onDark" className="max-md:hidden">
             <InstagramIcon className="h-4 w-4" />
             <span dir="ltr">@{site.instagramHandle}</span>
           </ButtonLink>
-          {LIVE_CATALOG_BASE ? (
-            <CartLink />
-          ) : (
-            <a
-              href={site.instagramUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="اینستاگرام جریان ما"
-              className="flex h-11 w-11 items-center justify-center text-ivory-50 hover:bg-ivory-50/15 md:hidden"
-            >
-              <InstagramIcon className="h-6 w-6" />
-            </a>
-          )}
+          <CartLink />
         </div>
-        <div className="order-3 flex min-w-11 justify-end md:hidden">
+        <div className="order-3 flex min-w-12 justify-end md:hidden">
           <MobileNav />
         </div>
       </Container>

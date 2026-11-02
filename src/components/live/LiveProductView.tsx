@@ -89,7 +89,7 @@ function ProductDetails({ product }: { product: PublicProduct }) {
           {product.description.trim() && <p className="mt-6 max-w-prose whitespace-pre-line leading-8 text-bark-700">{product.description.trim()}</p>}
           {product.variants.length > 0 && (
             <section aria-labelledby="variants-title" className="mt-8">
-              <h2 id="variants-title" className="mb-3 text-base font-bold text-bark-900">گزینه‌ها</h2>
+              <h2 id="variants-title" className="mb-3 text-lg font-black text-bark-900">گزینه‌ها</h2>
               <ul className="divide-y divide-sand-200 overflow-hidden border border-sand-200 bg-ivory-50">
                 {product.variants.map((v) => (
                   <li key={v.sku} className="text-sm">

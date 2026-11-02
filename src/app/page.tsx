@@ -27,7 +27,6 @@ export default async function HomePage() {
     <>
       <JsonLd data={siteJsonLd(origin, site.name, site.instagramUrl)} />
       <Hero />
-      <FocusAreas />
       {/* The sample categories and products give way to the real catalogue (read live in the browser) once one is connected. */}
       {LIVE_CATALOG_BASE ? (
         <LiveShop />
@@ -37,6 +36,7 @@ export default async function HomePage() {
           <FeaturedProducts />
         </>
       )}
+      <FocusAreas />
       <StoryBand />
       <ArtistsBand />
       <FeelBand />

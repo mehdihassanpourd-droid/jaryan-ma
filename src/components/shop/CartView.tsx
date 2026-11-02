@@ -22,12 +22,12 @@ export function CartView() {
   const { products, retry } = useCartProducts(cart.lines.map((l) => l.slug));
   const freeShipping = useFreeShippingPolicy();
 
-  if (!LIVE_CATALOG_BASE) return <Shell><p className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">سبد خرید فقط برای فروشگاه متصل به فهرست محصولات کار می‌کند.</p></Shell>;
+  if (!LIVE_CATALOG_BASE) return <Shell><p className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-6 text-bark-700">سبد خرید فقط برای فروشگاه متصل به فهرست محصولات کار می‌کند.</p></Shell>;
   if (!cart.hydrated) return <Shell><p role="status" className="text-bark-600">در حال بارگذاری سبد خرید…</p></Shell>;
   if (cart.lines.length === 0) {
     return (
       <Shell>
-        <p role="status" className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">سبد خرید شما خالی است.</p>
+        <p role="status" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-6 text-bark-700">سبد خرید شما خالی است.</p>
         <p className="mt-6"><ButtonLink href="/#featured">دیدن آثار</ButtonLink></p>
       </Shell>
     );
@@ -36,7 +36,7 @@ export function CartView() {
   if (products.state === "error") {
     return (
       <Shell>
-        <div role="alert" className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">
+        <div role="alert" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-6 text-bark-700">
           <p>در حال حاضر بررسی قیمت و موجودی ممکن نیست؛ سبد شما حفظ شده است.</p>
           <button type="button" onClick={retry} className="mt-4 inline-flex min-h-11 items-center border border-bark-500/40 px-5 text-sm text-bark-700 hover:bg-sand-100">تلاش دوباره</button>
         </div>
@@ -50,7 +50,7 @@ export function CartView() {
 
   return (
     <Shell>
-      <ul className="divide-y divide-sand-200 border border-sand-200 bg-ivory-50" aria-label="کالاهای سبد خرید" data-testid="cart-lines">
+      <ul className="divide-y divide-sand-200 border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50" aria-label="کالاهای سبد خرید" data-testid="cart-lines">
         {priced.map((p) => (
           <CartLineRow key={lineKey(p.line)} priced={p} onQuantity={(q) => cart.setQuantity(lineKey(p.line), q)} onRemove={() => cart.remove(lineKey(p.line))} />
         ))}
@@ -79,7 +79,7 @@ export function CartView() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <Container className="py-10 sm:py-14">
-      <h1 className="text-2xl font-bold text-bark-900 sm:text-3xl">سبد خرید</h1>
+      <h1 className="border-t-4 border-bark-900 pt-3 text-4xl font-black leading-tight text-bark-900 sm:text-5xl">سبد خرید</h1>
       <div className="mt-8">{children}</div>
     </Container>
   );

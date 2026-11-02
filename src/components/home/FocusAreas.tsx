@@ -7,12 +7,12 @@ import { focusAreas } from "@/lib/site";
  */
 export function FocusAreas() {
   return (
-    <section id="scope" aria-labelledby="scope-title" className="scroll-mt-20 pt-20 sm:pt-32">
+    <section id="scope" aria-labelledby="scope-title" className="mt-16 scroll-mt-20 bg-ivory-200 pb-12 pt-4 sm:mt-32 sm:pb-24">
       <Container>
         <div className="border-t-4 border-bark-900 pt-3">
-          <p aria-hidden="true" className="text-sm font-black text-burgundy-600">۰۱</p>
-          <div className="mt-1 grid gap-8 sm:grid-cols-12 sm:gap-6">
-            <h2 id="scope-title" className="text-balance text-4xl font-black leading-[1.25] text-bark-900 sm:col-span-6 sm:text-6xl">
+          <p aria-hidden="true" className="text-sm font-black text-burgundy-600">۰۳</p>
+          <div className="mt-1 grid gap-6 sm:grid-cols-12 sm:gap-6">
+            <h2 id="scope-title" className="text-balance text-3xl font-black leading-[1.3] text-bark-900 sm:col-span-6 sm:text-6xl">
               دکوراسیون خانه و هنرهای دست‌ساز، گزینش‌شده
             </h2>
             <ol className="sm:col-span-5 sm:col-start-8">

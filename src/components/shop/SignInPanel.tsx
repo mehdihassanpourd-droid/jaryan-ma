@@ -69,8 +69,8 @@ export function SignInPanel({ onSignedIn, onUnavailable }: { onSignedIn: (custom
   }
 
   return (
-    <section aria-labelledby="signin-title" className=" border border-sand-200 bg-ivory-50 p-5 sm:p-6" data-testid="signin">
-      <h2 id="signin-title" className="text-lg font-bold text-bark-900">ورود با کد پیامکی</h2>
+    <section aria-labelledby="signin-title" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-5 sm:p-6" data-testid="signin">
+      <h2 id="signin-title" className="text-xl font-black text-bark-900">ورود با کد پیامکی</h2>
       <p className="mt-1 text-sm leading-7 text-bark-600">برای ثبت سفارش و دیدن سابقهٔ سفارش‌ها، شمارهٔ موبایل خود را تأیید کنید. رمز عبور لازم نیست.</p>
       {step === "phone" ? (
         <form onSubmit={sendCode} className="mt-4 space-y-4" noValidate>

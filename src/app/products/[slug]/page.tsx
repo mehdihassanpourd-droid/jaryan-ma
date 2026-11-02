@@ -125,7 +125,7 @@ export default async function ProductPage({ params }: Props) {
             )}
             {product.variants.length > 0 && (
               <section aria-labelledby="variants-title" className="mt-8">
-                <h2 id="variants-title" className="mb-3 text-base font-bold text-bark-900">
+                <h2 id="variants-title" className="mb-3 text-lg font-black text-bark-900">
                   گزینه‌ها
                 </h2>
                 <ul className="divide-y divide-sand-200 overflow-hidden border border-sand-200 bg-ivory-50">

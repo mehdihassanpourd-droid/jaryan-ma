@@ -6,10 +6,10 @@ import { Logo } from "./Logo";
 export function Footer() {
   return (
     <footer className="mt-24 bg-burgundy-600 pb-24 text-ivory-100 md:mt-40 md:pb-0">
-      <Container className="grid gap-12 py-16 md:grid-cols-12 md:gap-8 md:py-24">
+      <Container className="grid gap-8 py-10 md:grid-cols-12 md:gap-8 md:py-24">
         <div className="md:col-span-5">
-          <Logo height={168} className="h-[8.5rem] w-auto md:h-[10.5rem]" />
-          <p className="mt-6 text-xl font-black text-ivory-50">{site.name}</p>
+          <Logo height={168} className="h-24 w-auto md:h-[10.5rem]" />
+          <p className="mt-4 text-xl font-black text-ivory-50">{site.name}</p>
           <p className="mt-1 text-ivory-200">{site.slogan}</p>
         </div>
         <nav aria-label="پیوندهای پایین صفحه" className="md:col-span-4 md:col-start-7">

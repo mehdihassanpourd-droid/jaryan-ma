@@ -35,14 +35,14 @@ export function ProductTile({ href, name, media, categoryName, price, sample = f
           {extra}
         </div>
       </div>
-      <div className="mt-3 border-t-2 border-bark-900 pt-2">
+      <div className="mt-3 flex flex-1 flex-col border-t-2 border-bark-900 pt-2">
         {categoryName && <p className="text-xs font-bold text-burgundy-700">{categoryName}</p>}
         <h3 className="text-lg font-black leading-8 text-bark-900 group-hover:text-burgundy-700">
           <Link href={href} className="outline-none after:absolute after:inset-0 after:content-['']">
             {name}
           </Link>
         </h3>
-        <div className="pt-0.5">{price}</div>
+        <div className="mt-auto pt-1">{price}</div>
       </div>
     </article>
   );

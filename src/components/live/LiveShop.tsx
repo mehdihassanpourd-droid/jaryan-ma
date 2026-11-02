@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CategoryMosaic, CategoryTile } from "@/components/home/CategoryTile";
 import { ProductTile } from "@/components/product/ProductTile";
-import { WALL_SLOTS } from "@/components/product/wall";
+import { PRODUCT_GRID } from "@/components/product/wall";
 import { Badge } from "@/components/ui/Badge";
 import { Container } from "@/components/ui/Container";
 import { Price } from "@/components/ui/Price";
@@ -27,7 +27,7 @@ export function LiveShop() {
   const frame = (children: React.ReactNode) => (
     <section id="featured" aria-labelledby="featured-title" className="scroll-mt-20 pt-14 sm:pt-20">
       <Container>
-        <SectionHeader id="featured-title" title="آثار" index="۰۳" />
+        <SectionHeader id="featured-title" title="آثار" index="۰۲" />
         {children}
       </Container>
     </section>
@@ -50,7 +50,7 @@ export function LiveShop() {
       {categories.length > 0 && (
         <section id="collections" aria-labelledby="collections-title" className="scroll-mt-20 pt-14 sm:pt-20">
           <Container>
-            <SectionHeader id="collections-title" title="مجموعه‌ها" index="۰۲" href="#featured" />
+            <SectionHeader id="collections-title" title="مجموعه‌ها" index="۰۱" href="#featured" />
             <CategoryMosaic>
               {categories.map((c, i) => {
                 const cover = cards.find((card) => card.categorySlugs.includes(c.slug))?.cover;
@@ -89,7 +89,7 @@ export function LiveShop() {
                     type="button"
                     onClick={() => choose(c.slug)}
                     aria-pressed={active === c.slug}
-                    className={`min-h-11 border px-4 text-sm font-medium transition-colors ${active === c.slug ? "border-bark-900 bg-bark-900 text-ivory-50" : "border-bark-900/25 bg-ivory-50 text-bark-900 hover:border-bark-900"}`}
+                    className={`min-h-12 border-2 px-4 text-sm font-black transition-colors ${active === c.slug ? "border-burgundy-600 bg-burgundy-600 text-ivory-50" : "border-bark-900 bg-ivory-50 text-bark-900 hover:bg-bark-900 hover:text-ivory-50"}`}
                   >
                     {c.name}
                   </button>
@@ -98,12 +98,12 @@ export function LiveShop() {
             </ul>
           )}
           <p className="mt-4 text-sm text-bark-600" aria-live="polite">{formatNumber(visible.length)} اثر</p>
-          <ul className="mt-8 grid grid-cols-12 items-end gap-x-4 gap-y-14 sm:gap-y-20">
-            {visible.map((p, i) => {
+          <ul className={`mt-8 ${PRODUCT_GRID}`}>
+            {visible.map((p) => {
               const cover = p.cover ? safeImageUrl(p.cover.url) : null;
               const price = p.priceFromToman ?? p.priceToman;
               return (
-                <li key={p.slug} className={WALL_SLOTS[i % WALL_SLOTS.length]}>
+                <li key={p.slug}>
                   <ProductTile
                     href={liveProductHref(p.slug)}
                     name={p.name}

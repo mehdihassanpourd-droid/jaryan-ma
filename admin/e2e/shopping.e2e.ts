@@ -114,6 +114,7 @@ describe("customer shopping journey, start to finish, on a phone", () => {
     await pw(page.getByTestId("live-products").getByRole("link", { name: "کوسن بافته" })).toBeVisible({ timeout: 15_000 });
     await pw(page.getByTestId("live-products").getByRole("link", { name: "محصول پیش‌نویس" })).toHaveCount(0); // a draft never shows
     await pw(page.getByTestId("cart-count")).toHaveCount(0);
+    await shot(page, "shop-home-live");
 
     // product with variants: the sold-out size cannot be chosen; pick the middle size, two of them
     await page.goto(`${withOrders.url}/product?slug=${cushion.slug}`);
@@ -210,12 +211,15 @@ describe("customer shopping journey, start to finish, on a phone", () => {
     // signed out: the form is not even shown; the only way in is the SMS code
     await pw(page.getByTestId("shipping-form")).toHaveCount(0);
     await pw(page.getByRole("heading", { name: "ورود با کد پیامکی" })).toBeVisible();
+    await shot(page, "shop-login");
 
     await page.getByLabel(/شمارهٔ موبایل/).fill("123");
     await page.getByRole("button", { name: "دریافت کد" }).tap();
     await pw(page.getByRole("alert").first()).toContainText("شمارهٔ موبایل معتبر نیست");
     await page.getByLabel(/شمارهٔ موبایل/).fill("۰۹۱۲۱۲۳۴۵۶۷"); // Persian digits are fine
     await page.getByRole("button", { name: "دریافت کد" }).tap();
+    await pw(page.getByLabel(/کد تأیید/)).toBeVisible();
+    await shot(page, "shop-otp");
     await page.getByLabel(/کد تأیید/).fill("000000");
     await page.getByRole("button", { name: "تأیید و ورود" }).tap();
     await pw(page.getByRole("alert").first()).toContainText("کد نادرست یا منقضی");
@@ -288,6 +292,7 @@ describe("customer shopping journey, start to finish, on a phone", () => {
     const list = page.getByTestId("orders-list");
     await pw(list.getByRole("link")).toHaveCount(1);
     await pw(list).toContainText("JM-100001");
+    await shot(page, "shop-orders");
     await pw(list).toContainText("در انتظار تأیید");
     await pw(list).toContainText("۱٬۳۰۰٬۰۰۰ تومان");
     await noSideScroll(page, "order history");

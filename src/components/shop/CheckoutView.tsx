@@ -113,16 +113,16 @@ export function CheckoutView() {
 
   const shell = (children: React.ReactNode) => (
     <Container className="py-10 sm:py-14">
-      <h1 className="text-2xl font-bold text-bark-900 sm:text-3xl">تکمیل سفارش</h1>
+      <h1 className="border-t-4 border-bark-900 pt-3 text-4xl font-black leading-tight text-bark-900 sm:text-5xl">تکمیل سفارش</h1>
       <div className="mt-8 space-y-8">{children}</div>
     </Container>
   );
 
-  if (!LIVE_CATALOG_BASE) return shell(<p className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">ثبت سفارش فقط برای فروشگاه متصل به فهرست محصولات کار می‌کند.</p>);
+  if (!LIVE_CATALOG_BASE) return shell(<p className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-6 text-bark-700">ثبت سفارش فقط برای فروشگاه متصل به فهرست محصولات کار می‌کند.</p>);
   if (!cart.hydrated) return shell(<p role="status" className="text-bark-600">در حال بارگذاری…</p>);
   if (cart.lines.length === 0) {
     return shell(
-      <div className=" border border-sand-300 bg-ivory-50 p-6">
+      <div className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-6">
         <p role="status" className="text-bark-700">سبد خرید شما خالی است.</p>
         <p className="mt-4"><Link href="/#featured" className="text-burgundy-600 underline">دیدن آثار</Link></p>
       </div>,
@@ -131,7 +131,7 @@ export function CheckoutView() {
   if (products.state === "loading") return shell(<p role="status" className="text-bark-600">در حال بررسی قیمت و موجودی…</p>);
   if (products.state === "error") {
     return shell(
-      <div role="alert" className=" border border-sand-300 bg-ivory-50 p-6 text-bark-700">
+      <div role="alert" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-6 text-bark-700">
         <p>در حال حاضر بررسی قیمت و موجودی ممکن نیست؛ سبد شما حفظ شده است.</p>
         <button type="button" onClick={refreshProducts} className={`${secondary} mt-4`}>تلاش دوباره</button>
       </div>,
@@ -142,7 +142,7 @@ export function CheckoutView() {
   const orderable = priced.filter((p): p is Extract<PricedLine, { ok: true }> => p.ok);
   if (orderable.length === 0) {
     return shell(
-      <div className=" border border-sand-300 bg-ivory-50 p-6">
+      <div className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-6">
         {/* If this page just tried to place an order that the server refused, say why: otherwise the explanation would vanish with the form. */}
         {failure && (
           <div role="alert" data-testid="checkout-failure" className="mb-4 bg-red-50 p-4 text-sm leading-7 text-red-900">
@@ -255,7 +255,7 @@ export function CheckoutView() {
   return shell(
     <>
       {real ? (
-        <p role="note" className=" border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">
+        <p role="note" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">
           سفارش شما با وضعیت «در انتظار تأیید» ثبت می‌شود. {NO_PAYMENT_NOTE}
         </p>
       ) : (
@@ -264,9 +264,9 @@ export function CheckoutView() {
         </div>
       )}
 
-      <section aria-labelledby="summary-title" className=" border border-sand-200 bg-ivory-50 p-5 sm:p-6">
+      <section aria-labelledby="summary-title" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-5 sm:p-6">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 id="summary-title" className="text-lg font-bold text-bark-900">خلاصهٔ سفارش</h2>
+          <h2 id="summary-title" className="text-xl font-black text-bark-900">خلاصهٔ سفارش</h2>
           <Link href="/cart" className="text-sm text-burgundy-600 underline">ویرایش سبد</Link>
         </div>
         <ul className="mt-4 divide-y divide-sand-200" data-testid="summary-lines">
@@ -311,14 +311,14 @@ export function CheckoutView() {
 
       {real && customer.state.status === "loading" && <p role="status" className="text-bark-600">در حال بررسی ورود…</p>}
       {real && customer.state.status === "unreachable" && (
-        <div role="alert" className=" border border-sand-300 bg-ivory-50 p-5 text-bark-700">
+        <div role="alert" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-5 text-bark-700">
           <p>در حال حاضر به سامانهٔ ثبت سفارش دسترسی نداریم. سفارشی ثبت نمی‌شود؛ می‌توانید متن سفارش را بسازید و از راه اینستاگرام بفرستید.</p>
           <button type="button" onClick={customer.retry} className={`${secondary} mt-4`}>تلاش دوباره</button>
         </div>
       )}
       {real && customer.state.status === "signedOut" && <SignInPanel onSignedIn={customer.signedIn} onUnavailable={() => setSmsDown(true)} />}
       {real && smsDown && customer.state.status === "signedOut" && (
-        <p role="note" className=" border border-sand-300 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">ورود با پیامک در حال حاضر ممکن نیست، پس ثبت سفارش در سایت هم ممکن نیست. می‌توانید متن سفارش را بسازید و از راه اینستاگرام بفرستید.</p>
+        <p role="note" className=" border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-4 text-sm leading-7 text-bark-700">ورود با پیامک در حال حاضر ممکن نیست، پس ثبت سفارش در سایت هم ممکن نیست. می‌توانید متن سفارش را بسازید و از راه اینستاگرام بفرستید.</p>
       )}
       {signedIn && customer.state.status === "signedIn" && (
         <p className="flex flex-wrap items-center justify-between gap-3 text-sm text-bark-700">
@@ -328,8 +328,8 @@ export function CheckoutView() {
       )}
 
       {showForm && (
-        <form onSubmit={placeOrder} noValidate className="space-y-5 border border-sand-200 bg-ivory-50 p-5 sm:p-6" aria-labelledby="details-title" data-testid="shipping-form">
-          <h2 id="details-title" className="text-lg font-bold text-bark-900">اطلاعات تماس و نشانی</h2>
+        <form onSubmit={placeOrder} noValidate className="space-y-5 border border-bark-900/20 border-t-4 border-t-bark-900 bg-ivory-50 p-5 sm:p-6" aria-labelledby="details-title" data-testid="shipping-form">
+          <h2 id="details-title" className="text-xl font-black text-bark-900">اطلاعات تماس و نشانی</h2>
           <Field label="نام و نام خانوادگی گیرنده" required error={errors.recipientName}>
             {(p) => <input {...p} type="text" autoComplete="name" {...fieldProps("recipientName")} />}
           </Field>
@@ -337,7 +337,7 @@ export function CheckoutView() {
             {(p) => <input {...p} type="tel" inputMode="tel" autoComplete="tel" dir="ltr" placeholder="09123456789" {...fieldProps("recipientPhone")} className={`${p.className} text-start`} />}
           </Field>
           {method === "pickup" ? (
-            <p role="note" className=" border border-sand-300 bg-white p-4 text-sm leading-7 text-bark-700" data-testid="pickup-note">
+            <p role="note" className=" border border-bark-900/40 bg-white p-4 text-sm leading-7 text-bark-700" data-testid="pickup-note">
               برای تحویل حضوری نشانی لازم نیست؛ فقط نام و شمارهٔ کسی که سفارش را تحویل می‌گیرد.
             </p>
           ) : (
@@ -399,9 +399,9 @@ export function CheckoutView() {
 
       {orderText && (
         <section aria-labelledby="text-title" className="space-y-4 border-2 border-dashed border-burgundy-600 bg-ivory-50 p-5 sm:p-6" data-testid="order-text">
-          <h2 id="text-title" className="text-lg font-bold text-bark-900">پیش‌نمایش سفارش (ثبت نشده)</h2>
+          <h2 id="text-title" className="text-xl font-black text-bark-900">پیش‌نمایش سفارش (ثبت نشده)</h2>
           <p className="text-sm leading-7 text-bark-700"><strong>این یک سفارش ثبت‌شده نیست.</strong> متن زیر را کپی کنید و در پیام مستقیم اینستاگرام برای گالری بفرستید. سفارش وقتی معتبر است که گالری آن را تأیید کند. سبد شما دست‌نخورده می‌ماند.</p>
-          <textarea readOnly rows={Math.min(14, orderText.split("\n").length + 1)} value={orderText} aria-label="متن سفارش" className="block w-full border border-sand-300 bg-white p-4 text-sm leading-7 text-bark-900" />
+          <textarea readOnly rows={Math.min(14, orderText.split("\n").length + 1)} value={orderText} aria-label="متن سفارش" className="block w-full border border-bark-900/40 bg-white p-4 text-sm leading-7 text-bark-900" />
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={() => void copyText()} className={secondary}>{copied ? "کپی شد" : "کپی متن سفارش"}</button>
             <a href={site.instagramUrl} target="_blank" rel="noopener noreferrer" className={primary}>باز کردن اینستاگرام گالری</a>
