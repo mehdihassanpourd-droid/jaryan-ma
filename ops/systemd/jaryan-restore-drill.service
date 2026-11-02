@@ -1,0 +1,32 @@
+# Weekly restore drill: verify the newest backup, restore it into a throw-away database on a SCRATCH PostgreSQL server,
+# compare it with the manifest, drop it. EXAMPLE TEMPLATE.
+#
+# SAFETY: the drill never restores onto the production database. scripts/maintenance/restore-drill.sh refuses (exit 64) when
+# RESTORE_TEST_ADMIN_URL points at the same server as DATABASE_URL (loopback names count as the same machine), and the
+# restore itself only ever creates and drops a database named jm_restore_test_<random>. Use a SEPARATE server for the scratch
+# side (another VPS, or a second PostgreSQL instance on another port with its own data directory).
+[Unit]
+Description=Jaryan Ma restore drill (scratch server only)
+After=network.target
+
+[Service]
+Type=oneshot
+User=jaryan
+Group=jaryan
+WorkingDirectory=/opt/jaryan-ma
+# Same file as the other units (needs DATABASE_URL only so the result can be recorded and the production server can be recognised) ...
+EnvironmentFile=/etc/jaryan-ma/ops.env
+# ... plus the scratch server (CREATEDB role on the SCRATCH server only), mode 0600 jaryan. Loaded last, so it wins.
+EnvironmentFile=/etc/jaryan-ma/restore-drill.env
+ExecStart=/opt/jaryan-ma/scripts/maintenance/restore-drill.sh
+UMask=0077
+TimeoutStartSec=2h
+Nice=15
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+# The drill only READS the backup directory and writes a temporary decrypted copy next to the backup, so it needs write access to it.
+ReadWritePaths=/var/backups/jaryan
+RestrictSUIDSGID=yes

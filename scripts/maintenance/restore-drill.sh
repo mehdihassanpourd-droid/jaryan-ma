@@ -14,7 +14,18 @@ die() { echo "restore-drill: $*" >&2; exit 64; }
 [ -n "${BACKUP_DIR:-}" ] || die "BACKUP_DIR is required"
 [ -d "$BACKUP_DIR" ] || die "BACKUP_DIR does not exist"
 
-host_of() { printf '%s' "$1" | sed -E 's#^[a-z]+://([^@/]*@)?([^:/?]+)(:([0-9]+))?.*#\2:\4#'; }
+# host:port of a connection URL; every loopback spelling is one machine, and the default port is 5432
+host_of() {
+  local rest host port
+  rest="${1#*://}"; rest="${rest#*@}"; rest="${rest%%/*}"; rest="${rest%%\?*}"
+  case "$rest" in
+    \[*\]*) host="${rest%%]*}]"; port="${rest#*]}"; port="${port#:}" ;;
+    *) host="${rest%%:*}"; port="${rest#*:}"; [ "$port" = "$rest" ] && port="" ;;
+  esac
+  host="$(printf '%s' "$host" | tr 'A-Z' 'a-z')"
+  case "$host" in localhost|127.*|"[::1]"|::1|0.0.0.0|"") host="loopback" ;; esac
+  printf '%s:%s' "$host" "${port:-5432}"
+}
 if [ -n "${DATABASE_URL:-}" ] && [ "$(host_of "$RESTORE_TEST_ADMIN_URL")" = "$(host_of "$DATABASE_URL")" ] && [ "${ALLOW_SAME_SERVER:-}" != "yes" ]; then
   die "the scratch server is the production server; use a separate one (or set ALLOW_SAME_SERVER=yes to accept the extra load, the restore still goes into a new throw-away database)"
 fi

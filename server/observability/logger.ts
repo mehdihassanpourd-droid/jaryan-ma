@@ -70,7 +70,7 @@ export function createLogger(options: LoggerOptions = {}): Logger {
 export const REQUEST_ID_HEADER = "x-request-id";
 const SAFE_REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
-/** Reuses a well-formed id from a trusted proxy (so one id follows a request across nginx and the app); otherwise a fresh one. */
+/** Reuses a well-formed id (only called for ids from a trusted proxy, see `trustIncomingId`); otherwise a fresh one. */
 export function resolveRequestId(incoming: string | null | undefined, generate: () => string = randomUUID): string {
   return incoming && SAFE_REQUEST_ID.test(incoming) ? incoming : generate();
 }
@@ -81,6 +81,12 @@ export interface ObserveOptions {
   quietPaths?: readonly string[];
   now?: () => number;
   generateId?: () => string;
+  /**
+   * Reuse a well-formed `x-request-id` sent by the caller. Enable ONLY behind a reverse proxy you control that overwrites the
+   * header on every request (nginx: `proxy_set_header X-Request-Id $request_id;`). Default false: ids are generated here, so an
+   * untrusted client can never choose the id that appears in your logs.
+   */
+  trustIncomingId?: boolean;
 }
 
 /**
@@ -92,7 +98,7 @@ export function observeRequests(handle: (request: Request) => Promise<Response>,
   const quiet = new Set(options.quietPaths ?? ["/healthz", "/readyz", "/health"]);
   const clock = options.now ?? Date.now;
   return async (request) => {
-    const requestId = resolveRequestId(request.headers.get(REQUEST_ID_HEADER), options.generateId);
+    const requestId = resolveRequestId(options.trustIncomingId ? request.headers.get(REQUEST_ID_HEADER) : null, options.generateId);
     const started = clock();
     let path = "/";
     try {

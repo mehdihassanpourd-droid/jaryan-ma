@@ -273,10 +273,14 @@ describe("maintenance over HTTP", () => {
     const owner = await app.session("owner");
     for (const role of ["viewer", "editor", "support"] as const) {
       const who = await app.session(role);
-      for (const path of ["/maintenance/health", "/maintenance/incidents", "/maintenance/backups", "/maintenance/errors", "/maintenance/log", "/maintenance/backup-status"]) {
+      for (const path of ["/maintenance/health", "/maintenance/incidents", "/maintenance/backups", "/maintenance/errors", "/maintenance/log", "/maintenance/backup-status", "/maintenance/reconciliation"]) {
         expect((await call(app, { path: `/api/v1${path}`, as: who })).status, `${role} ${path}`).toBe(403);
+        expect((await call(app, { path: `/api/v1${path}`, as: null })).status, `anonymous ${path}`).toBe(401);
       }
     }
+    const recon = await call(app, { path: "/api/v1/maintenance/reconciliation", as: owner });
+    expect(recon.status).toBe(200);
+    expect(recon.body).toMatchObject({ readOnly: true, scan: { mode: "recent", partial: false } });
     expect((await call(app, { path: "/api/v1/maintenance/health", as: owner })).body.status).toBe("degraded"); // backup never tested
   });
 

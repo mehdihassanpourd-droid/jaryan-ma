@@ -22,6 +22,12 @@ export interface BackupManifest {
   takenAt: string;
   /** Row count of every table in the public schema at the exact snapshot the dump was taken from. */
   tables: Record<string, number>;
+  /**
+   * Optional content fingerprint per table (order-independent sum of a 64-bit hash of every row's text form, computed in the
+   * same snapshot as the dump). A restore test compares it, which catches changed values that keep the same row count.
+   * Absent in manifests written before this existed (the restore test then compares row counts only).
+   */
+  contentChecksums?: Record<string, string>;
   /** Names of finished Prisma migrations at that snapshot. */
   migrations: string[];
   dumpSha256: string;
@@ -102,15 +108,19 @@ export async function sha256File(path: string): Promise<string> {
 
 // ---- backup ------------------------------------------------------------------------------------------
 
-async function snapshotFacts(client: Client): Promise<{ tables: Record<string, number>; migrations: string[] }> {
+async function snapshotFacts(client: Client, withChecksums: boolean): Promise<{ tables: Record<string, number>; checksums?: Record<string, string>; migrations: string[] }> {
   const names = (await client.query<{ table_name: string }>(`SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE' ORDER BY 1`)).rows.map((r) => r.table_name);
   const tables: Record<string, number> = {};
+  const checksums: Record<string, string> = {};
   for (const name of names) {
     // identifiers come from the catalog, quoted defensively
-    tables[name] = Number((await client.query<{ n: string }>(`SELECT count(*) AS n FROM "${name.replace(/"/g, '""')}"`)).rows[0]?.n ?? 0);
+    const quoted = `"${name.replace(/"/g, '""')}"`;
+    tables[name] = Number((await client.query<{ n: string }>(`SELECT count(*) AS n FROM ${quoted}`)).rows[0]?.n ?? 0);
+    // constant memory, independent of row order; the values themselves never leave the database
+    if (withChecksums) checksums[name] = (await client.query<{ c: string }>(`SELECT coalesce(sum(hashtextextended(t::text, 0)::numeric), 0)::text AS c FROM ${quoted} t`)).rows[0]?.c ?? "0";
   }
   const migrations = tables._prisma_migrations !== undefined ? (await client.query<{ migration_name: string }>(`SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL ORDER BY 1`)).rows.map((r) => r.migration_name) : [];
-  return { tables, migrations };
+  return { tables, ...(withChecksums ? { checksums } : {}), migrations };
 }
 
 export interface BackupResult {
@@ -128,6 +138,8 @@ export interface BackupOptions {
   /** 32-byte key (base64). Required unless `allowUnencrypted`. */
   encryptionKey?: string;
   allowUnencrypted?: boolean;
+  /** Record a per-table content fingerprint in the manifest (default true; costs one extra scan of every table). */
+  contentChecksums?: boolean;
   now?: Date;
 }
 
@@ -152,7 +164,7 @@ export async function takeBackup(options: BackupOptions): Promise<BackupResult> 
     if (!snapshot) throw new Error("snapshot_unavailable");
     const dump = await run("pg_dump", ["--format=custom", "--no-owner", "--no-privileges", `--snapshot=${snapshot}`, `--file=${rawFile}`], pgEnv(options.databaseUrl));
     if (dump.code !== 0) throw new Error(`pg_dump_failed: ${dump.stderr.trim().split("\n").pop() ?? ""}`);
-    facts = await snapshotFacts(client);
+    facts = await snapshotFacts(client, options.contentChecksums !== false);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -169,7 +181,7 @@ export async function takeBackup(options: BackupOptions): Promise<BackupResult> 
     await rm(rawFile, { force: true }); // the plaintext dump never stays on disk
   }
   const sha256 = await sha256File(file);
-  const manifest: BackupManifest = { version: MANIFEST_VERSION, takenAt: takenAt.toISOString(), tables: facts.tables, migrations: facts.migrations, dumpSha256: sha256, encrypted: key !== null };
+  const manifest: BackupManifest = { version: MANIFEST_VERSION, takenAt: takenAt.toISOString(), tables: facts.tables, ...(facts.checksums ? { contentChecksums: facts.checksums } : {}), migrations: facts.migrations, dumpSha256: sha256, encrypted: key !== null };
   const manifestFile = `${base}.manifest.json`;
   const handle = await open(manifestFile, "w", 0o600);
   await handle.writeFile(JSON.stringify(manifest, null, 2));
@@ -199,6 +211,8 @@ export interface RestoreTestOptions {
   /** Connection with CREATEDB on a SCRATCH server (never the production database). */
   scratchAdminUrl: string;
   encryptionKey?: string;
+  /** Prefix of the throw-away database name (default `jm_restore_test_`); lowercase letters, digits, underscore. Lets parallel test runs tell their own databases apart. */
+  databasePrefix?: string;
 }
 
 export interface RestoreTestResult {
@@ -226,7 +240,9 @@ export async function restoreTest(options: RestoreTestOptions): Promise<RestoreT
     dumpFile = decrypted;
   }
 
-  const dbName = `jm_restore_test_${randomBytes(5).toString("hex")}`;
+  const prefix = options.databasePrefix ?? "jm_restore_test_";
+  if (!/^[a-z][a-z0-9_]{0,30}$/.test(prefix)) throw new Error("restore_test_prefix_invalid");
+  const dbName = `${prefix}${randomBytes(5).toString("hex")}`;
   const admin = new Client({ connectionString: options.scratchAdminUrl });
   await admin.connect();
   try {
@@ -239,7 +255,7 @@ export async function restoreTest(options: RestoreTestOptions): Promise<RestoreT
     const scratch = new Client({ connectionString: scratchUrl.toString() });
     await scratch.connect();
     try {
-      const restored = await snapshotFacts(scratch);
+      const restored = await snapshotFacts(scratch, manifest.contentChecksums !== undefined);
       const problems: string[] = [];
       for (const [table, expected] of Object.entries(manifest.tables)) {
         const actual = restored.tables[table];
@@ -247,11 +263,14 @@ export async function restoreTest(options: RestoreTestOptions): Promise<RestoreT
         else if (actual !== expected) problems.push(`table ${table}: expected ${expected} rows, restored ${actual}`);
       }
       for (const table of Object.keys(restored.tables)) if (manifest.tables[table] === undefined) problems.push(`unexpected table ${table}`);
+      if (manifest.contentChecksums) {
+        for (const [table, expected] of Object.entries(manifest.contentChecksums)) if (restored.checksums?.[table] !== expected) problems.push(`table ${table}: content differs from the backup (same row count, different data)`);
+      }
       if (JSON.stringify(restored.migrations) !== JSON.stringify(manifest.migrations)) problems.push("migration history differs from the manifest");
       const totalRows = Object.values(restored.tables).reduce((a, b) => a + b, 0);
       notes.push(`restored ${Object.keys(restored.tables).length} tables, ${totalRows} rows`);
       if (problems.length > 0) return { ok: false, notes: [...notes, ...problems] };
-      return { ok: true, notes: [...notes, "all table row counts and the migration history match the manifest"] };
+      return { ok: true, notes: [...notes, manifest.contentChecksums ? "all table row counts, table contents and the migration history match the manifest" : "all table row counts and the migration history match the manifest (older manifest: no content fingerprints)"] };
     } finally {
       await scratch.end();
     }

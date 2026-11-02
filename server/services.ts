@@ -85,7 +85,7 @@ export function createPlatformServices(o: PlatformOptions) {
   const orderAdmin = new OrderAdminService(o.db, shipmentNotifier.enabled);
   const maintenance = new MaintenanceService(
     maintenanceStore,
-    { ...o.probes, reconciliation: (now) => buildReconciliationReport(o.db, { now }), overdueDeletions: async () => (await accountStore.listDueDeletions(new Date(clock().getTime() - 24 * 3600_000), 1000)).length },
+    { ...o.probes, reconciliation: (now, scan) => buildReconciliationReport(o.db, { now, ...scan }), overdueDeletions: async () => (await accountStore.listDueDeletions(new Date(clock().getTime() - 24 * 3600_000), 1000)).length },
     { ...DEFAULT_MAINTENANCE_SETTINGS, ...o.maintenance },
     clock,
     o.alerts,

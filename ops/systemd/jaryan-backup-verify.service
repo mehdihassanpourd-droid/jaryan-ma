@@ -1,0 +1,24 @@
+# Offline verification of the newest backup (checksum, age, decryption, dump structure). No database connection is made by the check itself.
+# It does NOT prove the backup can be restored; only the restore drill does. EXAMPLE TEMPLATE.
+[Unit]
+Description=Jaryan Ma backup verification (offline)
+After=jaryan-backup.service
+
+[Service]
+Type=oneshot
+User=jaryan
+Group=jaryan
+WorkingDirectory=/opt/jaryan-ma
+EnvironmentFile=/etc/jaryan-ma/ops.env
+ExecStart=/usr/bin/env npm run --silent ops -- backup-verify
+UMask=0077
+TimeoutStartSec=30min
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+# EDIT: same directory as BACKUP_DIR. The temporary decrypted copy is created here and removed again.
+ReadWritePaths=/var/backups/jaryan
+RestrictSUIDSGID=yes

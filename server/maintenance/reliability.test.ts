@@ -98,6 +98,69 @@ describe("reconciliation report on a real database", () => {
   });
 });
 
+describe("reconciliation scan limits and paging", () => {
+  async function manyOrders(count: number) {
+    const { db } = testDb;
+    const vendorId = await ensureDefaultVendor(db);
+    const customer = await db.customer.create({ data: { phone: "+989129999999", status: "active", termsAcceptedAt: now, termsVersion: "1", phoneVerifiedAt: now } });
+    const product = await db.product.create({ data: { vendorId, slug: "p", name: "p", status: "published", fulfillment: "stocked", priceToman: 10n, inventory: 100 } });
+    for (let i = 0; i < count; i++) {
+      await db.order.create({
+        data: {
+          customerId: customer.id, status: "pending", subtotalToman: 10n, shippingFeeToman: 0n, totalToman: i === 0 ? 11n : 10n, shipping: {}, placedAt: new Date(now.getTime() - 60_000),
+          items: { create: [{ productId: product.id, vendorId, titleSnapshot: "p", unitPriceToman: 10n, quantity: 1, reservedQuantity: 1 }] },
+          statusHistory: { create: { toStatus: "pending", actorType: "system" } },
+        },
+      });
+    }
+  }
+
+  it("a recent scan stops at its limit and reports PARTIAL with how far it got", async () => {
+    await manyOrders(7);
+    const r = await buildReconciliationReport(testDb.db, { now, orderLimit: 3, pageSize: 2 });
+    expect(r.scan).toMatchObject({ mode: "recent", ordersScanned: 3, orderLimit: 3, partial: true, oldestOrderNumberScanned: 5 });
+    expect(r.scan.note).toContain("PARTIAL");
+    expect(r.findings.some((f) => f.code === "order_total_mismatch")).toBe(false); // the damaged order (number 1) is outside the window...
+    const complete = await buildReconciliationReport(testDb.db, { now, orderLimit: 7, pageSize: 2 });
+    expect(complete.scan).toMatchObject({ ordersScanned: 7, partial: false }); // ...and is found once the window covers it
+    expect(complete.findings.map((f) => f.code)).toContain("order_total_mismatch");
+  });
+
+  it("a full scan pages through everything, matches the single-window result, and pauses between pages", async () => {
+    await manyOrders(7);
+    const pauses: number[] = [];
+    const full = await buildReconciliationReport(testDb.db, { now, mode: "full", pageSize: 2, pauseMs: 25, sleep: async (ms) => void pauses.push(ms) });
+    expect(full.scan).toMatchObject({ mode: "full", ordersScanned: 7, partial: false, orderLimit: null, oldestOrderNumberScanned: 1 });
+    expect(full.scan.pagesRead).toBeGreaterThanOrEqual(4);
+    expect(pauses.length).toBeGreaterThanOrEqual(3);
+    expect(pauses.every((ms) => ms === 25)).toBe(true);
+    const single = await buildReconciliationReport(testDb.db, { now, mode: "full", pageSize: 500 });
+    expect({ ...full, scan: null }).toEqual({ ...single, scan: null });
+  });
+
+  it("the page cap is a hard stop and is reported as partial, never as clean", async () => {
+    await manyOrders(7);
+    const r = await buildReconciliationReport(testDb.db, { now, mode: "full", pageSize: 2, maxPages: 2 });
+    expect(r.scan).toMatchObject({ ordersScanned: 4, partial: true });
+  });
+
+  it("an exact fit is not reported as partial", async () => {
+    await manyOrders(4);
+    expect((await buildReconciliationReport(testDb.db, { now, orderLimit: 4, pageSize: 2 })).scan.partial).toBe(false);
+  });
+
+  it("reads products in pages and flags a partial stock scan", async () => {
+    const { db } = testDb;
+    const vendorId = await ensureDefaultVendor(db);
+    for (let i = 0; i < 5; i++) await db.product.create({ data: { vendorId, slug: `s${i}`, name: "s", status: "published", fulfillment: "stocked", priceToman: 1n, inventory: i } });
+    const all = await buildReconciliationReport(testDb.db, { now, pageSize: 2 });
+    expect(all.scan).toMatchObject({ stockRowsScanned: 5, stockPartial: false });
+    const capped = await buildReconciliationReport(testDb.db, { now, pageSize: 2, maxPages: 1 });
+    expect(capped.scan).toMatchObject({ stockRowsScanned: 2, stockPartial: true });
+    expect(capped.scan.note).toContain("not every product was read");
+  });
+});
+
 describe("readiness", () => {
   it("is ready only when the database answers; reveals no error text", async () => {
     const svc = new MaintenanceService(store, probes(), undefined, () => now);

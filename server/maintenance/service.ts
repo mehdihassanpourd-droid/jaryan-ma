@@ -32,7 +32,7 @@ export interface HealthProbes {
   /** Customer accounts waiting for erasure past their deadline (a stuck job). */
   overdueDeletions?(): Promise<number>;
   /** Read-only order/stock comparison (never changes data). */
-  reconciliation?(now: Date): Promise<ReconReport>;
+  reconciliation?(now: Date, scan?: { mode?: "recent" | "full"; pageSize?: number; maxPages?: number; pauseMs?: number }): Promise<ReconReport>;
 }
 
 export interface MaintenanceSettings {
@@ -91,11 +91,11 @@ export class MaintenanceService {
   // ---- health ----------------------------------------------------------------------------------
 
   /** Read-only order and inventory reconciliation for the owner/maintainers. Records only that it ran, with counts. */
-  async reconciliationFor(op: Operator): Promise<ReconReport> {
+  async reconciliationFor(op: Operator, scan: { mode?: "recent" | "full"; pageSize?: number; maxPages?: number; pauseMs?: number } = {}): Promise<ReconReport> {
     this.require(op, "maintenance:read");
     if (!this.probes.reconciliation) throw new MaintenanceError("not_found");
-    const report = await this.probes.reconciliation(this.clock());
-    await this.store.log({ actor: op.email, action: "reconciliation.run", target: null, outcome: report.counts.error === 0 ? "success" : "failure", detail: report.counts }, this.clock());
+    const report = await this.probes.reconciliation(this.clock(), scan);
+    await this.store.log({ actor: op.email, action: "reconciliation.run", target: null, outcome: report.counts.error === 0 ? "success" : "failure", detail: { ...report.counts, mode: report.scan.mode, partial: report.scan.partial } }, this.clock());
     return report;
   }
 

@@ -18,7 +18,7 @@ async function main() {
   }
 
   const runtime = await createRuntime(config);
-  const server = createServer(createNodeHandler(observeRequests(runtime.handle, { log }), { trustProxy: config.trustProxy, maxBodyBytes: 6 * 1024 * 1024, media: runtime.media, adminUi: runtime.adminUi }));
+  const server = createServer(createNodeHandler(observeRequests(runtime.handle, { log, trustIncomingId: config.trustProxy }), { trustProxy: config.trustProxy, maxBodyBytes: 6 * 1024 * 1024, media: runtime.media, adminUi: runtime.adminUi }));
   server.requestTimeout = 60_000;
   server.headersTimeout = 20_000;
   server.keepAliveTimeout = 5_000;

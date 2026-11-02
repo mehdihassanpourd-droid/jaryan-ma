@@ -1,0 +1,30 @@
+# Daily encrypted database backup. EXAMPLE TEMPLATE: copy to /etc/systemd/system/ and edit the marked paths.
+# Installation, users and permissions: docs/maintenance/SYSTEMD-FA.md
+[Unit]
+Description=Jaryan Ma database backup (encrypted pg_dump)
+After=postgresql.service network.target
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+# EDIT: user that owns the application and the backup directory (no login shell, not root)
+User=jaryan
+Group=jaryan
+# EDIT: where the application is installed
+WorkingDirectory=/opt/jaryan-ma
+# EDIT: environment file, mode 0640 root:jaryan. Holds DATABASE_URL, BACKUP_DIR, BACKUP_ENCRYPTION_KEY, BACKUP_KEEP_DAYS ...
+EnvironmentFile=/etc/jaryan-ma/ops.env
+ExecStart=/usr/bin/env npm run --silent ops -- backup
+UMask=0077
+TimeoutStartSec=1h
+Nice=10
+IOSchedulingClass=idle
+# Hardening: the unit can read the application and write only the backup directory (EDIT the path to match BACKUP_DIR)
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/backups/jaryan
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes

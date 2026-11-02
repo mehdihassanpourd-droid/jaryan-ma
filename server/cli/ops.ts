@@ -16,7 +16,9 @@ import type { Operator } from "../maintenance/service";
  *   npm run ops -- backup                       pg_dump -> encrypted file + manifest; records it as TAKEN (not verified)
  *   npm run ops -- restore-test [--file F]      restores the newest (or given) backup into a scratch database and verifies it
  *   npm run ops -- backup-verify [--file F]     offline check of the newest (or given) backup: checksum, decryption, dump structure (no database; does NOT make it "operational")
- *   npm run ops -- reconcile [--out FILE]       READ-ONLY order/stock reconciliation report (JSON); exit 1 on errors, 2 on warnings
+ *   npm run ops -- reconcile [--full] [--out FILE] [--page-size N --max-pages N --pause-ms N]
+ *                                              READ-ONLY order/stock reconciliation report (JSON). Default: newest 5000 orders, and the report says when it is PARTIAL;
+ *                                              --full pages through every order. Exit 1 on errors, 2 on warnings
  *   npm run ops -- backup-status                what is actually proven (never "ok" without a successful restore test)
  *   npm run ops -- log-action --action A --outcome success|failure [--target T] [--actor U]
  *   npm run ops -- run-deletions | purge | faq-seed
@@ -98,7 +100,7 @@ async function main() {
         await mkdir(dir, { recursive: true, mode: 0o700 });
         const started = new Date();
         try {
-          const result = await takeBackup({ databaseUrl: config.databaseUrl ?? "", directory: dir, encryptionKey: process.env.BACKUP_ENCRYPTION_KEY, now: started });
+          const result = await takeBackup({ databaseUrl: config.databaseUrl ?? "", directory: dir, encryptionKey: process.env.BACKUP_ENCRYPTION_KEY, now: started, contentChecksums: process.env.BACKUP_CONTENT_CHECKSUMS !== "off" });
           const row = await maintenance.recordBackup(OWNER, { kind: "database", takenAt: started, sizeBytes: result.sizeBytes, location: result.file, sha256: result.sha256, encrypted: result.encrypted });
           await maintenance.logAction("ops-cli", "backup.taken", `backup:${row.id}`, "success", { sizeBytes: result.sizeBytes, encrypted: result.encrypted });
           const removed = await pruneBackups(dir, Number(process.env.BACKUP_KEEP_DAYS ?? 30));
@@ -121,7 +123,7 @@ async function main() {
         const manifest = JSON.parse(await readFile(manifestFile, "utf8")) as BackupManifest;
         if (manifest.encrypted) parseBackupKey(process.env.BACKUP_ENCRYPTION_KEY);
         const record = (await maintenance.listBackups(OWNER, "database")).find((b) => b.sha256 === manifest.dumpSha256);
-        const result = await restoreTest({ file, manifestFile, scratchAdminUrl: scratch, encryptionKey: process.env.BACKUP_ENCRYPTION_KEY });
+        const result = await restoreTest({ file, manifestFile, scratchAdminUrl: scratch, encryptionKey: process.env.BACKUP_ENCRYPTION_KEY, databasePrefix: process.env.RESTORE_TEST_DB_PREFIX });
         for (const note of result.notes) console.log(`  ${note}`);
         if (record) await maintenance.recordRestoreTest(OWNER, record.id, result.ok, result.notes.join("; "));
         else console.log("  (this file is not in the backup register, so the result was not recorded)");
@@ -140,15 +142,16 @@ async function main() {
         break;
       }
       case "reconcile": {
-        const report = await maintenance.reconciliationFor(OWNER);
+        const num = (name: string) => (option(args, name) === undefined ? undefined : Number(option(args, name)));
+        const report = await maintenance.reconciliationFor(OWNER, { mode: args.includes("--full") ? "full" : "recent", pageSize: num("page-size"), maxPages: num("max-pages"), pauseMs: num("pause-ms") });
         const text = JSON.stringify(report, null, 2);
         const out = option(args, "out");
         if (out) {
           await mkdir(dirname(out), { recursive: true });
           await writeFile(out, text, { mode: 0o600 });
-          console.log(`Report written to ${out}: ${report.counts.error} error(s), ${report.counts.warn} warning(s), ${report.counts.info} note(s). Nothing was changed.`);
+          console.log(`Report written to ${out}: ${report.counts.error} error(s), ${report.counts.warn} warning(s), ${report.counts.info} note(s). ${report.scan.note} Nothing was changed.`);
         } else console.log(text);
-        exit = report.counts.error > 0 ? 1 : report.counts.warn > 0 ? 2 : 0;
+        exit = report.counts.error > 0 ? 1 : report.counts.warn > 0 || report.scan.partial || report.scan.stockPartial ? 2 : 0; // a partial scan is never reported as clean
         break;
       }
       case "backup-status": {

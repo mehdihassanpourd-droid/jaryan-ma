@@ -6,10 +6,10 @@ name: Database
 on:
   push:
     branches: [main]
-    paths: ["server/**", "prisma/**", "src/domain/**", "package-lock.json", ".github/workflows/database.yml"]
+    paths: ["server/**", "prisma/**", "src/domain/**", "scripts/maintenance/**", "ops/**", "package-lock.json", ".github/workflows/database.yml"]
   pull_request:
     branches: [main]
-    paths: ["server/**", "prisma/**", "src/domain/**", "package-lock.json", ".github/workflows/database.yml"]
+    paths: ["server/**", "prisma/**", "src/domain/**", "scripts/maintenance/**", "ops/**", "package-lock.json", ".github/workflows/database.yml"]
 
 permissions:
   contents: read

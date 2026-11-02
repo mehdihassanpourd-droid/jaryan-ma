@@ -78,11 +78,15 @@ describe("observeRequests", () => {
     expect(c.lines.join("")).not.toMatch(/SECRET|09121234567/);
   });
 
-  it("propagates a valid incoming id", async () => {
+  it("reuses a valid incoming id only when the proxy is trusted; otherwise a client cannot choose the id in the logs", async () => {
     const c = capture();
-    const handle = observeRequests(async () => new Response("{}"), { log: c.log });
-    const res = await handle(request("/api/v1/x", { [REQUEST_ID_HEADER]: "from-proxy-0001" }));
-    expect(res.headers.get(REQUEST_ID_HEADER)).toBe("from-proxy-0001");
+    const trusted = observeRequests(async () => new Response("{}"), { log: c.log, trustIncomingId: true });
+    expect((await trusted(request("/api/v1/x", { [REQUEST_ID_HEADER]: "from-proxy-0001" }))).headers.get(REQUEST_ID_HEADER)).toBe("from-proxy-0001");
+    expect((await trusted(request("/api/v1/x", { [REQUEST_ID_HEADER]: "bad id with spaces" }))).headers.get(REQUEST_ID_HEADER)).not.toContain(" ");
+    const untrusted = observeRequests(async () => new Response("{}"), { log: c.log, generateId: () => "server-made-id-1" });
+    const res = await untrusted(request("/api/v1/x", { [REQUEST_ID_HEADER]: "client-chosen-01" }));
+    expect(res.headers.get(REQUEST_ID_HEADER)).toBe("server-made-id-1");
+    expect(c.lines.join("")).not.toContain("client-chosen-01");
   });
 
   it("keeps polled health endpoints quiet unless they fail", async () => {

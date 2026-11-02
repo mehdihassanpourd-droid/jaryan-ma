@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reconcile, type ReconOrder, type ReconStock } from "./reconciliation";
+import { MAX_FINDINGS, ReconAccumulator, reconcile, scanNote, type ReconOrder, type ReconStock } from "./reconciliation";
 
 const now = new Date("2026-03-10T12:00:00Z");
 const order = (over: Partial<ReconOrder> = {}): ReconOrder => ({
@@ -67,5 +67,40 @@ describe("reconciliation", () => {
     const items = [{ productId: "p1", sku: "A", quantity: 2, unitPrice: 1n, reservedQuantity: 2 }, { productId: "p1", sku: "B", quantity: 1, unitPrice: 1n, reservedQuantity: 1 }];
     const r = reconcile([order({ items, subtotal: 3n, shippingFee: 0n, total: 3n })], [stock({ sku: "A", inventory: 4 }), stock({ sku: "B", inventory: 9 })], { now });
     expect(r.stock).toEqual([{ productId: "p1", sku: "A", inventory: 4, reservedByOpenOrders: 2 }, { productId: "p1", sku: "B", inventory: 9, reservedByOpenOrders: 1 }]);
+  });
+
+  it("states what was scanned: complete by default for in-memory data, partial when told so", () => {
+    const full = reconcile([order()], [stock()], { now });
+    expect(full.scan).toMatchObject({ mode: "full", ordersScanned: 1, partial: false, orderLimit: null, oldestOrderNumberScanned: 100001 });
+    expect(full.scan.note).toContain("Full scan");
+    const recent = reconcile([order({ number: 7 }), order({ number: 9 })], [stock()], { now, orderLimit: 2, partial: true });
+    expect(recent.scan).toMatchObject({ mode: "recent", orderLimit: 2, partial: true, oldestOrderNumberScanned: 7 });
+    expect(recent.scan.note).toContain("PARTIAL");
+    expect(recent.scan.note).toContain("older orders were NOT checked");
+    expect(recent.scan.note).toContain("--full");
+  });
+
+  it("describes a partial stock scan", () => {
+    const note = scanNote({ mode: "full", ordersScanned: 1, orderLimit: null, partial: false, oldestOrderNumberScanned: 1, stockRowsScanned: 1, stockPartial: true, pagesRead: 2 });
+    expect(note).toContain("not every product was read");
+  });
+
+  it("page-by-page accumulation gives exactly the same result as one pass", () => {
+    const orders = Array.from({ length: 10 }, (_, i) => order({ number: 200 - i, total: i % 3 === 0 ? 1n : 350_000n, lastHistoryStatus: i % 4 === 0 ? null : "pending" }));
+    const once = reconcile(orders, [stock()], { now });
+    const acc = new ReconAccumulator({ now });
+    for (let i = 0; i < orders.length; i += 3) acc.addOrders(orders.slice(i, i + 3));
+    acc.addStock([stock()]);
+    const paged = acc.finish(once.scan);
+    expect(paged).toEqual(once);
+  });
+
+  it("caps the listed findings but keeps the true counts and says so", () => {
+    const many = Array.from({ length: MAX_FINDINGS + 50 }, (_, i) => order({ number: i + 1, total: 1n }));
+    const r = reconcile(many, [stock()], { now });
+    expect(r.findings).toHaveLength(MAX_FINDINGS);
+    expect(r.counts.error).toBeGreaterThanOrEqual(MAX_FINDINGS + 50);
+    expect(r.findingsTruncated).toBe(true);
+    expect(reconcile([order()], [stock()], { now }).findingsTruncated).toBe(false);
   });
 });

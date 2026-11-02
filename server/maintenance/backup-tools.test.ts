@@ -109,6 +109,8 @@ describe.skipIf(!external || !haveTools)("backup and restore test against a real
     const result = await restoreTest({ file: backup.file, manifestFile: backup.manifestFile, scratchAdminUrl: external as string, encryptionKey: key });
     expect(result).toMatchObject({ ok: true });
     expect(result.notes.join(" ")).toContain("match the manifest");
+    expect(result.notes.join(" ")).toContain("table contents");
+    expect(Object.keys(backup.manifest.contentChecksums ?? {})).toEqual(Object.keys(backup.manifest.tables));
     const left = await admin.query(`SELECT datname FROM pg_database WHERE datname LIKE 'jm_restore_test_%'`);
     expect(left.rows).toEqual([]); // scratch database dropped
   }, 120_000);
@@ -143,6 +145,25 @@ describe.skipIf(!external || !haveTools)("backup and restore test against a real
     expect(corrupted).toMatchObject({ ok: false });
     expect(corrupted.notes.join(" ")).toContain("checksum");
     expect((await admin.query(`SELECT datname FROM pg_database WHERE datname LIKE 'jm_restore_test_%'`)).rows).toEqual([]);
+  }, 120_000);
+
+  it("detects changed data that keeps the same row count (content fingerprints), and still accepts an older manifest without them", async () => {
+    const backup = await takeBackup({ databaseUrl: sourceUrl, directory: dir, encryptionKey: key });
+    const manifest = JSON.parse(await readFile(backup.manifestFile, "utf8"));
+    manifest.contentChecksums.Vendor = "123";
+    const tampered = join(dir, "content.manifest.json");
+    await writeFile(tampered, JSON.stringify(manifest));
+    const bad = await restoreTest({ file: backup.file, manifestFile: tampered, scratchAdminUrl: external as string, encryptionKey: key });
+    expect(bad.ok).toBe(false);
+    expect(bad.notes.join(" ")).toContain("table Vendor: content differs");
+    delete manifest.contentChecksums;
+    const legacy = join(dir, "legacy.manifest.json");
+    await writeFile(legacy, JSON.stringify(manifest));
+    const old = await restoreTest({ file: backup.file, manifestFile: legacy, scratchAdminUrl: external as string, encryptionKey: key });
+    expect(old.ok).toBe(true);
+    expect(old.notes.join(" ")).toContain("older manifest");
+    const off = await takeBackup({ databaseUrl: sourceUrl, directory: dir, encryptionKey: key, contentChecksums: false });
+    expect(off.manifest.contentChecksums).toBeUndefined();
   }, 120_000);
 
   it("refuses to back up without an encryption key unless explicitly allowed", async () => {
