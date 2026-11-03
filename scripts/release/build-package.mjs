@@ -87,6 +87,7 @@ export async function main(argv = process.argv.slice(2)) {
 
   // 1. builds ------------------------------------------------------------------------------------------------
   if (!opts.reuseBuild) {
+    run("npm", ["run", "db:generate"]); // a fresh checkout has no generated Prisma client yet, and the server bundle imports it
     run("npm", ["run", "api:build", "--", "--metafile=dist/server-meta.json"]);
     run("npm", ["run", "admin:build"]);
     // The storefront's public addresses are fixed at build time (NEXT_PUBLIC_*): the package is built for one set of domains.
