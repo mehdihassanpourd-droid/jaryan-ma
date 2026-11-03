@@ -1,0 +1,51 @@
+# Tests the stand-alone connectivity probe package (ops/connectivity-probe) with a real nginx, openssl, curl and a real
+# Chromium on a clean Ubuntu runner. The probe is never deployed from here and uses no secret.
+name: Connectivity probe
+
+on:
+  push:
+    branches: [main]
+    paths: ["ops/connectivity-probe/**", ".github/workflows/connectivity-probe.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["ops/connectivity-probe/**", ".github/workflows/connectivity-probe.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connectivity-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Probe package tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install nginx
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends nginx
+          sudo systemctl stop nginx || true
+          nginx -v
+
+      - name: Install the test browser
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+
+      - name: Run the probe tests
+        working-directory: ops/connectivity-probe
+        run: node --test --test-concurrency=1 "test/*.test.mjs"
