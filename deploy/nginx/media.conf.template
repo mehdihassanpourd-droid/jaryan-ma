@@ -1,0 +1,25 @@
+# Public media host in front of an S3-compatible server (MinIO or similar) that listens on localhost only.
+#
+# Only two prefixes are public, read-only: /images/* and /catalog/*. Everything else is a plain 404: the bucket root and
+# listings, every other prefix (backups, private files), the S3 server's admin API (/minio/...), its web console (a different
+# port that is never proxied), query strings (?acl, ?versions, ?list-type...), non-GET methods, and path tricks (.., %2e, %2f).
+# The upstream's own error pages (XML that names the bucket) and identifying headers never reach the client.
+server {
+  @LISTEN@
+  server_name @MEDIA_DOMAIN@;
+  @TLS@
+  include @CONF_DIR@/jaryan-security-headers.conf;
+  limit_req zone=jm_media burst=100 nodelay;
+  limit_conn jm_conn 40;
+
+  if ($request_method !~ ^(GET|HEAD|OPTIONS)$) { return 405; }
+  # encoded or relative path tricks never reach the object store
+  if ($request_uri ~* "(\.\.|%2e|%2f|%5c|%00)") { return 404; }
+
+  location = /images  { return 404; }
+  location = /catalog { return 404; }
+  location ^~ /images/  { include @CONF_DIR@/jaryan-s3-public.conf; }
+  location ^~ /catalog/ { include @CONF_DIR@/jaryan-s3-public.conf; }
+  location = /__not_found { internal; default_type text/plain; return 404 "not found\n"; }
+  location / { return 404; }
+}

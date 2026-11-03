@@ -22,7 +22,7 @@
     "pretest": "npm run db:generate",
     "db:migrate:deploy": "prisma migrate deploy",
     "api:dev": "node scripts/admin/ensure-build.mjs && tsx server/main.ts",
-    "api:build": "esbuild server/main.ts server/cli/admin.ts server/cli/ops.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outbase=server --outdir=dist/server --out-extension:.js=.mjs --log-level=warning",
+    "api:build": "esbuild server/main.ts server/cli/admin.ts server/cli/ops.ts server/cli/migrate.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outbase=server --outdir=dist/server --out-extension:.js=.mjs --log-level=warning",
     "api:start": "node dist/server/main.mjs",
     "admin": "tsx server/cli/admin.ts",
     "admin:prod": "node dist/server/cli/admin.mjs",

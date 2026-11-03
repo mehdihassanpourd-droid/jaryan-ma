@@ -1,5 +1,7 @@
 # Self-hosting the admin system (Iran or anywhere)
 
+> **Production installs use the offline release package: see [../deploy/OFFLINE-DEPLOY-FA.md](../deploy/OFFLINE-DEPLOY-FA.md).** It needs no GitHub, npm or Prisma CLI on the server. The steps below (git clone, `npm ci`, `prisma migrate deploy`) are the manual development-style alternative and need internet access.
+
 Reference instructions for running the admin API on one Linux server. The configuration files below are **references, untested in CI**; adapt them to your hosting provider. Nothing here creates any cloud resource or spends money by itself.
 
 Requirements: Linux (Ubuntu LTS assumed), Node.js 22 LTS, PostgreSQL ≥ 14 (16 recommended), a reverse proxy with TLS (nginx shown), an S3-compatible store (MinIO or a provider).

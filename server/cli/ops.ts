@@ -11,6 +11,7 @@ import type { Operator } from "../maintenance/service";
 /**
  * Operations CLI (run on the server by whoever operates it; there is no HTTP surface for these).
  *
+ *   npm run ops -- config-check                 validate the environment only (no database); exit 1 and the reasons when invalid
  *   npm run ops -- health                       full health report; exit 1 when down, 2 when degraded
  *   npm run ops -- security-check               configuration review; exit 1 on any failure
  *   npm run ops -- backup                       pg_dump -> encrypted file + manifest; records it as TAKEN (not verified)
@@ -19,6 +20,7 @@ import type { Operator } from "../maintenance/service";
  *   npm run ops -- reconcile [--full] [--out FILE] [--page-size N --max-pages N --pause-ms N]
  *                                              READ-ONLY order/stock reconciliation report (JSON). Default: newest 5000 orders, and the report says when it is PARTIAL;
  *                                              --full pages through every order. Exit 1 on errors, 2 on warnings
+ *   npm run ops -- media-setup [--check]        create the media bucket and apply the least-privilege public-read policy (images/, catalog/ only); --check only verifies
  *   npm run ops -- backup-status                what is actually proven (never "ok" without a successful restore test)
  *   npm run ops -- log-action --action A --outcome success|failure [--target T] [--actor U]
  *   npm run ops -- run-deletions | purge | faq-seed
@@ -52,6 +54,11 @@ async function main() {
       process.exit(1);
     }
     throw error;
+  }
+  if (command === "config-check") {
+    // Used by the installer before anything is changed: the environment file is complete and valid for production (no database needed).
+    console.log(`configuration valid (${config.production ? "production" : "development"} mode)`);
+    process.exit(0);
   }
   const database = await openDatabase(config, () => undefined);
   const { db } = database;
@@ -154,6 +161,20 @@ async function main() {
         exit = report.counts.error > 0 ? 1 : report.counts.warn > 0 || report.scan.partial || report.scan.stockPartial ? 2 : 0; // a partial scan is never reported as clean
         break;
       }
+      case "media-setup": {
+        if (config.storage.driver !== "s3" || !config.storage.s3) throw new Error("media-setup needs STORAGE_DRIVER=s3");
+        const { configureMediaBucket, createS3Client, mediaBucketPolicyIsExact } = await import("../storage/s3");
+        const client = createS3Client(config.storage.s3);
+        if (args.includes("--check")) {
+          const exact = await mediaBucketPolicyIsExact(client, config.storage.s3.bucket);
+          console.log(exact ? "media bucket policy is exactly the least-privilege one (anonymous read of images/ and catalog/ only)" : "media bucket policy differs from the expected one (run `ops media-setup`)");
+          exit = exact ? 0 : 1;
+        } else {
+          const result = await configureMediaBucket(client, config.storage.s3.bucket);
+          console.log(`${result.created ? "bucket created; " : ""}public-read policy applied to images/ and catalog/ only`);
+        }
+        break;
+      }
       case "backup-status": {
         const status = await maintenance.backupStatus();
         console.log(JSON.stringify(status, null, 2));
@@ -177,7 +198,7 @@ async function main() {
         console.log(`Added ${await services.support.seedDefaultFaq()} FAQ draft(s).`);
         break;
       default:
-        console.error("Commands: health, security-check, backup, backup-verify, restore-test, reconcile, backup-status, log-action, run-deletions, purge, faq-seed");
+        console.error("Commands: config-check, health, security-check, backup, backup-verify, restore-test, reconcile, backup-status, media-setup, log-action, run-deletions, purge, faq-seed");
         exit = 64;
     }
   } finally {

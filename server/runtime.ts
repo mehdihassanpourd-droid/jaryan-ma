@@ -12,6 +12,7 @@ import { createPlatformServices } from "./services";
 import { ConsoleSmsProvider, DisabledSmsProvider, HttpSmsProvider, type SmsProvider } from "./sms/provider";
 import type { CheckResult } from "../src/domain/maintenance/health";
 import type { SecurityFacts } from "../src/domain/maintenance/security-checks";
+import { classifySchema, planMigrations, type AppliedRow } from "./db/migrate";
 import { readMigrations } from "./db/migrations";
 import { AuthService, DEFAULT_AUTH_SETTINGS } from "./auth/auth-service";
 import { ScryptHasher } from "./auth/password";
@@ -126,21 +127,33 @@ export function securityFacts(config: Config, embedded: boolean): SecurityFacts 
 
 /** Every migration file is recorded as finished in Prisma's history table. */
 export async function checkMigrations(db: Db, production: boolean): Promise<CheckResult> {
-  let rows: Array<{ migration_name: string; finished_at: Date | null; rolled_back_at: Date | null }>;
+  let rows: AppliedRow[];
   try {
-    rows = await db.$queryRaw`SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations`;
+    rows = await db.$queryRaw<AppliedRow[]>`SELECT migration_name, checksum, finished_at, rolled_back_at FROM _prisma_migrations`;
   } catch {
     return production
-      ? { name: "migrations", status: "fail", message: "migration history table not found: run `prisma migrate deploy`" }
+      ? { name: "migrations", status: "fail", message: "migration history table not found: run `jaryan-migrate deploy`" }
       : { name: "migrations", status: "ok", message: "development database (migration history not tracked)" };
   }
   if (rows.some((r) => r.finished_at === null && r.rolled_back_at === null)) return { name: "migrations", status: "fail", message: "a migration started but did not finish" };
+  let files: ReturnType<typeof readMigrations>;
   try {
-    const applied = new Set(rows.filter((r) => r.finished_at !== null).map((r) => r.migration_name));
-    const missing = readMigrations().filter((m) => !applied.has(m.name));
-    if (missing.length > 0) return { name: "migrations", status: "fail", message: `${missing.length} migration(s) not applied` };
+    files = readMigrations();
   } catch {
     // migration files are not shipped next to the bundle: the history check above is all we can do
+    return { name: "migrations", status: "ok", message: "all migrations applied" };
+  }
+  const status = planMigrations(files, rows);
+  const state = classifySchema(status);
+  if (state === "missing") return { name: "migrations", status: "fail", message: `${status.pending.length} migration(s) not applied` };
+  // The numbers only: migration names stay out of every public or alerting text (they are in `jaryan-migrate check`).
+  if (state === "failed") return { name: "migrations", status: "warn", message: `${status.modified.length} applied migration(s) differ from this release's files` };
+  if (state === "newer_unknown") {
+    return {
+      name: "migrations",
+      status: "warn",
+      message: `schema ahead of this release: ${status.unknownToRelease.length} applied migration(s) are unknown to it (not necessarily incompatible, but automatic rollback is blocked until compatibility is verified; see ROLLBACK-FA.md)`,
+    };
   }
   return { name: "migrations", status: "ok", message: "all migrations applied" };
 }

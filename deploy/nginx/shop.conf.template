@@ -1,0 +1,18 @@
+# Static storefront (Next.js export) served from disk. No upstream, nothing dynamic.
+server {
+  @LISTEN@
+  server_name @SHOP_DOMAIN@;
+  root @WEB_ROOT@/current;
+  index index.html;
+  @TLS@
+  limit_req zone=jm_shop burst=60 nodelay;
+  if ($request_method !~ ^(GET|HEAD)$) { return 405; }
+
+  location ^~ /_next/static/ { add_header Cache-Control "public, max-age=31536000, immutable" always; include @CONF_DIR@/jaryan-shop-headers.conf; try_files $uri =404; }
+  # never serve dot files, source maps or anything that is not part of the export
+  location ~ /\. { return 404; }
+  location / { add_header Cache-Control "no-cache" always; include @CONF_DIR@/jaryan-shop-headers.conf; try_files $uri $uri.html $uri/index.html =404; }
+  # (add_header is NOT inherited into a location that has its own add_header, so every location includes the header file)
+  error_page 404 /404.html;
+  location = /404.html { internal; include @CONF_DIR@/jaryan-shop-headers.conf; }
+}

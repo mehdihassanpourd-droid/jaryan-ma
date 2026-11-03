@@ -13,12 +13,13 @@ After=network.target
 Type=oneshot
 User=jaryan
 Group=jaryan
-WorkingDirectory=/opt/jaryan-ma
+WorkingDirectory=/opt/jaryan-ma/current
 # Same file as the other units (needs DATABASE_URL only so the result can be recorded and the production server can be recognised) ...
 EnvironmentFile=/etc/jaryan-ma/ops.env
 # ... plus the scratch server (CREATEDB role on the SCRATCH server only), mode 0600 jaryan. Loaded last, so it wins.
 EnvironmentFile=/etc/jaryan-ma/restore-drill.env
-ExecStart=/opt/jaryan-ma/scripts/maintenance/restore-drill.sh
+ExecStart=/opt/jaryan-ma/current/scripts/maintenance/restore-drill.sh
+Environment=JARYAN_OPS=/opt/jaryan-ma/current/bin/jaryan-ops
 UMask=0077
 TimeoutStartSec=2h
 Nice=15

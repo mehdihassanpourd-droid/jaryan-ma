@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Starts the API server of the INSTALLED release (this is what the systemd unit runs).
+set -euo pipefail
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"   # works through symlinks such as /usr/local/bin/jaryan-ops
+ROOT="$(cd "$(dirname "$SELF")/.." && pwd -P)"
+NODE="$ROOT/runtime/node"; [ -x "$NODE" ] || NODE="$(command -v node)"
+cd "$ROOT/app"
+exec "$NODE" dist/server/main.mjs

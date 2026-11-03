@@ -160,3 +160,6 @@ Everything under `/api/v1/maintenance/*` (health detail, reconciliation, backup 
 
 ### Alerting
 `server/alerts/alerts.ts`: `AlertPublisher.notify({priority P0–P3, key, title, message})` → `AlertManager` → sinks. Built in: `console` (default), `file` (JSON lines), optional `webhook` (off unless `ALERT_WEBHOOK_URL`; https or private address; 5 s timeout; no redirects). Per-sink minimum priority, 15-minute de-duplication per key, `resolved` after `firing`, redaction before delivery, and a failing sink never breaks the caller. The 5-minute health cycle raises P0/P1/P2 (incident severity critical/major/minor) when it opens an incident and `resolved` when it closes it. A new channel (e-mail, messenger, monitoring system) is one class implementing `AlertSink`. Configuration: see `.env.example`.
+
+### Offline installs (Phase 2A)
+Production servers are installed from the offline release package (`docs/deploy/OFFLINE-DEPLOY-FA.md`): `jaryan-ops`/`jaryan-admin`/`jaryan-migrate` replace `npm run ops|admin`, and migrations are applied with `jaryan-migrate deploy` (no Prisma CLI; compatible bookkeeping). `ops config-check` validates the environment without a database; `ops media-setup [--check]` creates the media bucket and applies/verifies the least-privilege public-read policy.

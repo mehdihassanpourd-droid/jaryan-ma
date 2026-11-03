@@ -206,3 +206,40 @@ describe("alerts from the health cycle", () => {
     await expect(svc.healthCycle()).resolves.toMatchObject({ status: "down" });
   });
 });
+
+describe("a database that is ahead of the running release", () => {
+  const aheadCheck = { name: "migrations", status: "warn" as const, message: "schema ahead of this release: 1 applied migration(s) are unknown to it (not necessarily incompatible, ...)" };
+
+  it("makes the service degraded (explicit), keeps it ready, and tells the public nothing but pass/fail", async () => {
+    const svc = new MaintenanceService(store, { ...probes(), migrations: async () => aheadCheck }, undefined, () => now);
+    const report = await svc.runHealth();
+    expect(report.status).toBe("degraded");
+    expect(report.checks.find((c) => c.name === "migrations")).toMatchObject({ status: "warn" });
+    const ready = await svc.runReadiness();
+    expect(ready.ready).toBe(true);
+    expect(ready.checks).toEqual([{ name: "database", status: "ok" }, { name: "migrations", status: "ok" }]);
+    expect(JSON.stringify(ready)).not.toMatch(/ahead|unknown|20\d{12}/);
+  });
+
+  it("raises a P1 alert (without migration names), repeats it only after the de-duplication window, and resolves it", async () => {
+    const got: DeliveredAlert[] = [];
+    const sink: AlertSink = { name: "rec", deliver: async (a) => void got.push(a) };
+    let migrations = aheadCheck;
+    let t = now.getTime();
+    const manager = new AlertManager([sink], { now: () => new Date(t), dedupeMs: 15 * 60_000 });
+    const svc = new MaintenanceService(store, { ...probes(), migrations: async () => migrations }, undefined, () => new Date(t), manager);
+    await svc.healthCycle();
+    await svc.healthCycle();
+    expect(got).toHaveLength(1);
+    expect(got[0]).toMatchObject({ priority: "P1", key: "schema.ahead", state: "firing" });
+    expect(JSON.stringify(got)).not.toMatch(/20\d{12}_/);
+    t += 16 * 60_000;
+    await svc.healthCycle();
+    expect(got).toHaveLength(2); // still ahead: reminded again
+    migrations = { name: "migrations", status: "ok", message: "all migrations applied" } as never;
+    await svc.healthCycle();
+    expect(got.map((a) => a.state)).toEqual(["firing", "firing", "resolved"]);
+    // an ahead-schema alone never opens an outage incident
+    expect((await store.listIncidents({ open: true }, 5)).length).toBe(0);
+  });
+});

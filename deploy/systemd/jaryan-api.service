@@ -1,0 +1,32 @@
+# The API server (also serves the admin PWA). EXAMPLE TEMPLATE: install.sh copies it to /etc/systemd/system/ when run as root.
+[Unit]
+Description=Jaryan Ma API server
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=jaryan
+Group=jaryan
+WorkingDirectory=/opt/jaryan-ma/current/app
+EnvironmentFile=/etc/jaryan-ma/api.env
+ExecStart=/opt/jaryan-ma/current/bin/jaryan-api
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# the alert file (ALERT_FILE) lives in /var/log/jaryan
+ReadWritePaths=/var/log/jaryan
+# Graceful, bounded resources: this process should never need more than this on a 4 GB machine
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target
