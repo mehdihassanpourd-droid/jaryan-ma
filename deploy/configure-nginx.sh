@@ -3,7 +3,7 @@
 # unless --reload is given, and it refuses to leave a configuration that `nginx -t` rejects.
 #
 #   configure-nginx.sh --shop shop.example.ir --api api.example.ir --admin admin.example.ir --media media.example.ir \
-#       [--out /etc/nginx/conf.d] [--tls-dir /etc/ssl/jaryan] [--no-tls] [--api-upstream 127.0.0.1:3001] \
+#       [--out /etc/nginx/conf.d] [--tls-dir /etc/ssl/jaryan] [--no-tls] [--https-port 443] [--http-port 80] [--api-upstream 127.0.0.1:3001] \
 #       [--s3-upstream 127.0.0.1:9000] [--bucket jaryan-media] [--web-root /var/www/jaryan-ma] [--readyz-allow 127.0.0.1] [--reload]
 #
 # With TLS (default) it expects <tls-dir>/<domain>/fullchain.pem and privkey.pem for each host (any CA; see OFFLINE-DEPLOY-FA.md).
@@ -11,12 +11,12 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)"
 T="$HERE/nginx"
-SHOP="" API="" ADMIN="" MEDIA="" OUT="/etc/nginx/conf.d" TLSDIR="/etc/ssl/jaryan" TLS=1 API_UP="127.0.0.1:3001" S3_UP="127.0.0.1:9000" BUCKET="jaryan-media" WEB="/var/www/jaryan-ma" READYZ="127.0.0.1" RELOAD=0 LISTEN_PORT=""
+SHOP="" API="" ADMIN="" MEDIA="" OUT="/etc/nginx/conf.d" TLSDIR="/etc/ssl/jaryan" TLS=1 API_UP="127.0.0.1:3001" S3_UP="127.0.0.1:9000" BUCKET="jaryan-media" WEB="/var/www/jaryan-ma" READYZ="127.0.0.1" RELOAD=0 LISTEN_PORT="" HTTPS_PORT=443 HTTP_PORT=80
 die() { echo "ERROR: $*" >&2; exit 64; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --shop) SHOP="$2"; shift 2 ;; --api) API="$2"; shift 2 ;; --admin) ADMIN="$2"; shift 2 ;; --media) MEDIA="$2"; shift 2 ;;
-    --out) OUT="$2"; shift 2 ;; --tls-dir) TLSDIR="$2"; shift 2 ;; --no-tls) TLS=0; shift ;; --listen-port) LISTEN_PORT="$2"; shift 2 ;;
+    --out) OUT="$2"; shift 2 ;; --tls-dir) TLSDIR="$2"; shift 2 ;; --no-tls) TLS=0; shift ;; --listen-port) LISTEN_PORT="$2"; shift 2 ;; --https-port) HTTPS_PORT="$2"; shift 2 ;; --http-port) HTTP_PORT="$2"; shift 2 ;;
     --api-upstream) API_UP="$2"; shift 2 ;; --s3-upstream) S3_UP="$2"; shift 2 ;; --bucket) BUCKET="$2"; shift 2 ;;
     --web-root) WEB="$2"; shift 2 ;; --readyz-allow) READYZ="$2"; shift 2 ;; --reload) RELOAD=1; shift ;;
     *) die "unknown option $1" ;;
@@ -36,7 +36,7 @@ mkdir -p "$OUT"
 render() {  # template -> file
   local src="$1" dst="$2" domain="$3" listen tls hsts
   if [ "$TLS" = 1 ]; then
-    listen='listen 443 ssl http2;'
+    listen="listen $HTTPS_PORT ssl http2;"
     tls="ssl_certificate $TLSDIR/$domain/fullchain.pem; ssl_certificate_key $TLSDIR/$domain/privkey.pem; ssl_protocols TLSv1.2 TLSv1.3; ssl_session_timeout 1d; ssl_session_cache shared:jm_ssl:10m; ssl_prefer_server_ciphers off;"
     hsts='add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;'
   else
@@ -61,7 +61,7 @@ if [ "$TLS" = 1 ]; then
   # plain-HTTP hosts only redirect (and answer ACME HTTP-01 challenges if an offline-capable ACME client is used)
   cat > "$OUT/jaryan-redirect.conf" <<CONF
 server {
-  listen 80;
+  listen $HTTP_PORT;
   server_name $SHOP $API $ADMIN $MEDIA;
   location /.well-known/acme-challenge/ { root /var/www/acme; }
   location / { return 301 https://\$host\$request_uri; }

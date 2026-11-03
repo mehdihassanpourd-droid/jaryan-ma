@@ -220,10 +220,10 @@ describe.skipIf(!haveNginx)("nginx in front of the app and the object store (rea
         const gen = spawnSync("openssl", ["req", "-x509", "-nodes", "-newkey", "rsa:2048", "-subj", `/CN=${domain}`, "-days", "1", "-keyout", join(tlsDir, domain, "privkey.pem"), "-out", join(tlsDir, domain, "fullchain.pem")], { encoding: "utf8" });
         expect(gen.status, gen.stderr).toBe(0);
       }
-      const r = spawnSync("bash", [join(ROOT, "deploy/configure-nginx.sh"), "--shop", SHOP, "--api", API, "--admin", ADMIN, "--media", MEDIA, "--out", out, "--tls-dir", tlsDir, "--web-root", join(dir, "www")], { encoding: "utf8" });
+      const r = spawnSync("bash", [join(ROOT, "deploy/configure-nginx.sh"), "--shop", SHOP, "--api", API, "--admin", ADMIN, "--media", MEDIA, "--out", out, "--tls-dir", tlsDir, "--https-port", "18443", "--http-port", "18080", "--web-root", join(dir, "www")], { encoding: "utf8" });
       expect(r.status, r.stderr).toBe(0);
       const media = readFileSync(join(out, "jaryan-media.conf"), "utf8");
-      expect(media).toContain("listen 443 ssl");
+      expect(media).toContain("listen 18443 ssl");
       expect(readFileSync(join(out, "jaryan-security-headers.conf"), "utf8")).toContain("Strict-Transport-Security");
       expect(readFileSync(join(out, "jaryan-redirect.conf"), "utf8")).toContain("return 301 https://$host$request_uri");
       writeFileSync(join(dir, "nginx-tls.conf"), `worker_processes 1;\npid ${dir}/nginx-tls.pid;\nerror_log ${dir}/error-tls.log warn;\nevents { worker_connections 64; }\nhttp {\n  access_log off;\n  client_body_temp_path ${dir}/tmp/body; proxy_temp_path ${dir}/tmp/proxy; fastcgi_temp_path ${dir}/tmp/fcgi; uwsgi_temp_path ${dir}/tmp/uwsgi; scgi_temp_path ${dir}/tmp/scgi;\n  include ${out}/jaryan-common.conf;\n  include ${out}/jaryan-shop.conf;\n  include ${out}/jaryan-api.conf;\n  include ${out}/jaryan-admin.conf;\n  include ${out}/jaryan-media.conf;\n  include ${out}/jaryan-redirect.conf;\n}\n`);
