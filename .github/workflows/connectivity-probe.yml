@@ -5,10 +5,10 @@ name: Connectivity probe
 on:
   push:
     branches: [main]
-    paths: ["ops/connectivity-probe/**", ".github/workflows/connectivity-probe.yml"]
+    paths: ["ops/connectivity-probe/**", ".github/workflows/connectivity-probe.yml", ".github/workflows/probe-*.yml"]
   pull_request:
     branches: [main]
-    paths: ["ops/connectivity-probe/**", ".github/workflows/connectivity-probe.yml"]
+    paths: ["ops/connectivity-probe/**", ".github/workflows/connectivity-probe.yml", ".github/workflows/probe-*.yml"]
 
 permissions:
   contents: read

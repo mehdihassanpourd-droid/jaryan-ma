@@ -1,0 +1,107 @@
+# Manual controls for the ArvanCloud connectivity-probe trial (docs: ops/connectivity-probe/docs/AUTOMATION-FA.md).
+# Started ONLY by a person pressing "Run workflow" (also possible from a phone). It is never triggered by a pull request, so no
+# secret is ever exposed to a branch from elsewhere. Inputs are passed as environment variables, never pasted into a shell.
+#   dry-run  read-only check of the API and of the plan/image names; creates and deletes nothing, costs nothing
+#   deploy   creates ONE server, installs the probe, gets the HTTPS certificate, self-checks; needs the confirmation phrase
+#   collect  fetches the results log from the running server and summarises it
+#   destroy  deletes everything named jm-probe-* (retries, then re-lists to check; reports honestly if anything remains)
+name: Probe trial
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "dry-run | deploy | collect | destroy"
+        type: choice
+        options: [dry-run, deploy, collect, destroy]
+        default: dry-run
+      region:
+        description: "ArvanCloud region code (the dry-run lists them)"
+        type: string
+        default: ""
+      domain:
+        description: "Your domain WITHOUT the probe. prefix (deploy)"
+        type: string
+        default: ""
+      cert_mode:
+        description: "letsencrypt (valid HTTPS) or selfsigned (for a rehearsal only; not a valid test)"
+        type: choice
+        options: [letsencrypt, selfsigned]
+        default: letsencrypt
+      dns:
+        description: "arvan = create the DNS records through the API; none = they already point at the server"
+        type: choice
+        options: [none, arvan]
+        default: none
+      hourly_rate_irr:
+        description: "Price per hour in IRR (owner reported 13860)"
+        type: string
+        default: "13860"
+      extra_irr_per_hour:
+        description: "Extra hourly cost (public IP, traffic) if known"
+        type: string
+        default: "0"
+      max_hours:
+        description: "Hard time limit in hours (1-168)"
+        type: string
+        default: "48"
+      confirm:
+        description: "Type I-APPROVE-SPEND to allow a deploy"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-trial
+  cancel-in-progress: false
+
+jobs:
+  trial:
+    name: Probe trial - ${{ inputs.action }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ARVAN_API_KEY: ${{ secrets.ARVAN_API_KEY }}
+      PROBE_ACTION: ${{ inputs.action }}
+      PROBE_REGION: ${{ inputs.region }}
+      PROBE_DOMAIN: ${{ inputs.domain }}
+      PROBE_CERT_MODE: ${{ inputs.cert_mode }}
+      PROBE_DNS: ${{ inputs.dns }}
+      PROBE_HOURLY_RATE_IRR: ${{ inputs.hourly_rate_irr }}
+      PROBE_EXTRA_IRR_PER_HOUR: ${{ inputs.extra_irr_per_hour }}
+      PROBE_MAX_HOURS: ${{ inputs.max_hours }}
+      PROBE_CONFIRM: ${{ inputs.confirm }}
+      PROBE_OUT_DIR: probe-out
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Run the action
+        run: node ops/connectivity-probe/automation/cli.mjs
+
+      # If the deploy step crashed or was cancelled after a server may have been created, remove it at once. The scheduled
+      # sweeper (probe-cleanup.yml) is the independent second line.
+      - name: Safety sweep after a failed or cancelled deploy
+        if: ${{ (failure() || cancelled()) && inputs.action == 'deploy' }}
+        env:
+          PROBE_ACTION: destroy
+          PROBE_OUT_DIR: probe-out/safety
+        run: node ops/connectivity-probe/automation/cli.mjs
+
+      - name: Keep the report (it never contains keys or addresses of visitors)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: probe-${{ inputs.action }}-report
+          path: probe-out
+          retention-days: 14
+          if-no-files-found: ignore

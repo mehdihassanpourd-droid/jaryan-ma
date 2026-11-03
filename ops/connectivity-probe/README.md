@@ -13,6 +13,7 @@
 ```
 nginx/probe.conf.template   پیکربندی (پاسخ‌های ثابت؛ بدون proxy_pass؛ محدودیت نرخ/اندازه؛ لاگ بدون IP خام)
 scripts/render.sh           ساخت پیکربندی از الگو       scripts/self-check.sh   بررسی سرور در حال اجرا
+automation/                 استقرار/پاکسازی خودکار (API ساختگی برای آزمون)
 scripts/summarize.mjs       خلاصه و حکم                 scripts/make-assets.mjs ساخت تصویر/فهرست نمونهٔ قطعی
 web/                        صفحهٔ آزمون (بدون وابستگی خارجی)
 criteria.json               آستانه‌های Go/No-Go          templates/results-template.csv  برگهٔ دستی
@@ -31,6 +32,7 @@ docs/                       مستندات فارسی (فهرست پایین)
 | `docs/GO-NO-GO-FA.md` | معیارهای تصمیم |
 | `docs/PRIVACY-FA.md` | لاگ‌ها، حریم خصوصی، ردپاهای اجتناب‌ناپذیر |
 | `docs/ARVANCLOUD-FA.md` | ارزیابی ابر آروان (تأییدشده/فرض) |
+| `docs/AUTOMATION-FA.md` | استقرار خودکار روی آروان با GitHub Actions: SSH بدون ذخیرهٔ کلید، پاکسازی مستقل، سقف هزینه، تأییدهای لازم |
 
 ## اجرای آزمون‌ها
 ```bash

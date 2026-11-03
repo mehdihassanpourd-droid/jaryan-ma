@@ -1,0 +1,73 @@
+# Independent clean-up of the connectivity-probe trial. It does not depend on the run that created anything: every 3 hours it
+# lists the resources named jm-probe-*, deletes those past their expiry (the expiry is written into the name), retries, lists
+# again, and if anything cannot be confirmed gone it opens or updates a GitHub issue so the owner is notified.
+# Without the ARVAN_API_KEY secret it does nothing and succeeds. GitHub may delay or skip scheduled runs, and disables them
+# after 60 days without repository activity in a public repository; this is a safety net, not a guarantee.
+name: Probe cleanup
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      region:
+        description: "ArvanCloud region code"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: probe-cleanup
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Sweep expired probe resources
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ARVAN_API_KEY: ${{ secrets.ARVAN_API_KEY }}
+      PROBE_ACTION: sweep
+      PROBE_REGION: ${{ inputs.region }}
+      PROBE_OUT_DIR: probe-out
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Sweep
+        id: sweep
+        run: node ops/connectivity-probe/automation/cli.mjs
+
+      - name: Tell the owner when the clean-up could not be confirmed
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="هشدار: پاکسازی سرور آزمایشی تأیید نشد"
+          body="پاکسازی خودکار نتوانست تأیید کند که همهٔ منابع آزمایشی (نام‌هایی که با jm-probe- شروع می‌شوند) حذف شده‌اند. ممکن است هزینه ادامه پیدا کند. لطفاً در پنل ابر آروان هر سرور، IP، دیسک یا اسنپ‌شات با این پیشوند را حذف کنید. جزئیات: $RUN_URL"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
+
+      - name: Keep the report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: probe-sweep-report
+          path: probe-out
+          retention-days: 7
+          if-no-files-found: ignore
