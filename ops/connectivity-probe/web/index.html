@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>آزمون اتصال جریان ما</title>
+<link rel="stylesheet" href="/probe.css">
+</head>
+<body>
+<main>
+  <h1>آزمون اتصال «جریان ما»</h1>
+  <p class="lead">این صفحه فقط می‌سنجد که از شبکهٔ شما فروشگاه و سفارش‌گذاری قابل دسترس است یا نه. <strong>هیچ سفارش واقعی ثبت نمی‌شود، هیچ پرداختی انجام نمی‌شود و هیچ اطلاعات شخصی نمی‌خواهد.</strong></p>
+
+  <section class="card" aria-labelledby="meta-title">
+    <h2 id="meta-title">۱. وضعیت شما</h2>
+    <label>اپراتور یا اینترنت
+      <select id="operator">
+        <option value="">انتخاب کنید</option>
+        <option value="mci">همراه اول</option>
+        <option value="irancell">ایرانسل</option>
+        <option value="rightel">رایتل</option>
+        <option value="fixed">اینترنت ثابت / وای‌فای خانه یا محل کار</option>
+        <option value="abroad">خارج از ایران</option>
+        <option value="other">دیگر</option>
+      </select>
+    </label>
+    <label>نوع اتصال
+      <select id="network">
+        <option value="">انتخاب کنید</option>
+        <option value="mobile">داده همراه</option>
+        <option value="wifi">وای‌فای</option>
+      </select>
+    </label>
+    <label>VPN
+      <select id="vpn">
+        <option value="">انتخاب کنید</option>
+        <option value="off">خاموش</option>
+        <option value="on">روشن</option>
+      </select>
+    </label>
+    <label>نام برنامهٔ VPN (اگر روشن است؛ مثلاً همان نامی که در برنامه می‌بینید)
+      <input id="vpnName" type="text" maxlength="40" autocomplete="off">
+    </label>
+    <label>شهر (اختیاری)
+      <input id="city" type="text" maxlength="30" autocomplete="off">
+    </label>
+    <label>کد آزمونگر (فقط حرف و عدد، مثلاً T3؛ نام واقعی ننویسید)
+      <input id="tester" type="text" maxlength="12" autocomplete="off" pattern="[A-Za-z0-9]*">
+    </label>
+    <p class="muted">برنامه‌ای که این صفحه را باز کرده: <strong id="browserName">…</strong></p>
+  </section>
+
+  <section class="card" aria-labelledby="run-title">
+    <h2 id="run-title">۲. اجرای آزمون</h2>
+    <button id="start" type="button" class="primary">شروع آزمون</button>
+    <p id="status" class="muted" role="status" aria-live="polite"></p>
+    <ol id="steps" class="steps"></ol>
+  </section>
+
+  <section id="resultCard" class="card" hidden aria-labelledby="result-title">
+    <h2 id="result-title">۳. نتیجه</h2>
+    <p id="verdict" class="verdict" role="status"></p>
+    <p id="summary"></p>
+    <div class="actions">
+      <button id="send" type="button">ارسال نتیجه به سرور آزمون</button>
+      <button id="download" type="button">ذخیرهٔ فایل نتیجه (JSON)</button>
+      <button id="copy" type="button">کپی نتیجه</button>
+      <button id="share" type="button" hidden>اشتراک‌گذاری</button>
+    </div>
+    <p id="sendStatus" class="muted" role="status"></p>
+    <label>متن نتیجه (برای ارسال دستی در پیام‌رسان)
+      <textarea id="json" rows="6" readonly dir="ltr"></textarea>
+    </label>
+  </section>
+
+  <p class="muted small">این صفحه فقط برای آزمون است و پس از پایان آزمون برداشته می‌شود. آدرس شبکهٔ شما در گزارش‌ها نگهداری نمی‌شود (فقط نوع آن: IPv4 یا IPv6).</p>
+</main>
+<script src="/probe.js"></script>
+</body>
+</html>

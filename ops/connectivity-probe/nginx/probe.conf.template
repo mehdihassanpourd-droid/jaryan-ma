@@ -1,0 +1,296 @@
+# Jaryan Ma connectivity probe: nginx configuration TEMPLATE (rendered by scripts/render.sh).
+#
+# Pure nginx: static files and fixed answers. There is NO application, NO database, NO proxy_pass / fastcgi / upstream, so the
+# server cannot be used as an open proxy and holds no customer data. It simulates the shape of a shop (storefront, product image,
+# catalogue, API on a second host name, cookie session, cart/order POSTs, a payment redirect round trip) so that a tester's phone can
+# show whether each step is reachable from a given network and VPN.
+#
+# Three host names under one domain (placeholders are replaced by render.sh):
+#   probe.@DOMAIN@       the "storefront": test page, image, catalogue
+#   probe-api.@DOMAIN@   the "API": CORS, cookie session, cart, order, result report
+#   probe-pay.@DOMAIN@   the "payment gateway": redirect only
+#
+# PRIVACY: the access log never contains the raw client address (it is masked below), the query string, cookies, user agent or
+# referer. Details and the infrastructure logs that cannot be avoided: docs/PRIVACY-FA.md
+
+# ---- http{} context part ------------------------------------------------------------------------------------------------------
+
+server_tokens off;
+
+# The client address is MASKED before it can be logged: IPv4 keeps the first three numbers (a.b.c.0), IPv6 keeps the first three
+# groups (x:y:z::). `$remote_addr` itself is used only by this map and by the rate limiters (which live in memory only).
+map $remote_addr $jm_ip_masked {
+    ~^(?<v4>\d+\.\d+\.\d+)\.\d+$                                      "$v4.0";
+    "~^(?<v6>[0-9a-fA-F]{1,4}:[0-9a-fA-F]{1,4}:[0-9a-fA-F]{1,4}):"        "$v6::";
+    default                                                         "masked";
+}
+
+# "ipv4" or "ipv6": lets the test page report the address family WITHOUT ever sending the address to the page or the log.
+map $remote_addr $jm_ip_family {
+    ~:       "ipv6";
+    default  "ipv4";
+}
+
+# a POST without a body has an empty $content_length: report 0 so the answer is always valid JSON
+map $content_length $jm_len {
+    ""       0;
+    default  $content_length;
+}
+
+map $request_method $jm_cors_methods { OPTIONS "GET, POST, OPTIONS"; default ""; }
+map $request_method $jm_cors_headers { OPTIONS "Content-Type"; default ""; }
+map $request_method $jm_cors_maxage  { OPTIONS "600"; default ""; }
+
+# only a well-formed result (base64url, 20-7000 characters) may reach the report log; everything else is refused AND not logged there
+map "$request_method:$arg_r" $jm_report_ok {
+    "~^GET:[A-Za-z0-9_-]{20,7000}$"  1;
+    default                      0;
+}
+
+log_format jm_access '$time_iso8601 $jm_ip_masked $server_name "$request_method $uri" $status $request_time $body_bytes_sent $ssl_protocol';
+# the report log holds only what the test page sent (a base64url JSON document); no address, no user agent
+log_format jm_report '$time_iso8601 $arg_r';
+
+limit_req_zone  $binary_remote_addr zone=jm_page:2m   rate=20r/s;
+limit_req_zone  $binary_remote_addr zone=jm_api:2m    rate=15r/s;
+limit_req_zone  $binary_remote_addr zone=jm_report:2m rate=1r/s;
+limit_conn_zone $binary_remote_addr zone=jm_conn:2m;
+limit_req_status  429;
+limit_conn_status 429;
+
+# Unknown host names (including requests by IP address) get nothing: no response over HTTP, no handshake over TLS.
+server {
+    listen @HTTP_PORT@ default_server;
+    @LISTEN6_HTTP_DEFAULT@
+    access_log off;
+    return 444;
+}
+server {
+    listen @HTTPS_PORT@ ssl default_server;
+    @LISTEN6_HTTPS_DEFAULT@
+    ssl_reject_handshake on;
+    access_log off;
+}
+
+# ---- plain HTTP: redirect to HTTPS (and the ACME HTTP-01 challenge, if you use Let's Encrypt) ----------------------------------
+server {
+    listen @HTTP_PORT@;
+    @LISTEN6_HTTP@
+    server_name probe.@DOMAIN@ probe-api.@DOMAIN@ probe-pay.@DOMAIN@;
+    access_log @LOG_DIR@/jm-probe-access.log jm_access;
+    limit_req zone=jm_page burst=20 nodelay;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root @ACME_ROOT@;
+        default_type text/plain;
+    }
+    location / {
+        return 301 https://$host@PORT_SUFFIX@$request_uri;
+    }
+}
+
+# NOTE (nginx behaviour, covered by the "limits" tests): "return" runs BEFORE limit_req, so a location that answers with "return" is never
+# rate limited. Every fixed answer therefore goes through "try_files /__jm_none @name" (content phase, after the limit) and a named location.
+
+# TLS: modern protocols only (TLS 1.2 and 1.3), no session tickets, and NO OCSP stapling (stapling would make the server call the CA).
+
+# ---- probe.@DOMAIN@ : the "storefront" ----------------------------------------------------------------------------------------------
+server {
+    listen @HTTPS_PORT@ ssl;
+    @LISTEN6_HTTPS@
+    server_name probe.@DOMAIN@;
+
+    ssl_certificate     @CERT_DIR@/fullchain.pem;
+    ssl_certificate_key @CERT_DIR@/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_tickets off;
+    ssl_session_cache   shared:jm_ssl:2m;
+    ssl_session_timeout 10m;
+
+    access_log @LOG_DIR@/jm-probe-access.log jm_access;
+    root @WEB_ROOT@;
+    index index.html;
+
+    add_header Strict-Transport-Security "max-age=300" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://probe-api.@DOMAIN@@PORT_SUFFIX@; form-action 'none'; base-uri 'none'; frame-ancestors 'none'" always;
+    add_header Cache-Control "no-store" always;
+
+    limit_req  zone=jm_page burst=40 nodelay;
+    limit_conn jm_conn 20;
+    client_max_body_size 1k;
+    client_header_buffer_size 1k;
+    large_client_header_buffers 2 8k;
+    lingering_close always;
+    lingering_time 5s;
+    lingering_timeout 3s;
+    keepalive_timeout 30s;
+
+    if ($request_method !~ ^(GET|HEAD)$) { return 405; }
+
+    # the address family only (never the address): "ipv4" or "ipv6"
+    location = /probe/ip {
+        try_files /__jm_none @jm_ip;
+    }
+    location @jm_ip {
+        default_type application/json;
+        return 200 '{"family":"$jm_ip_family"}';
+    }
+    # payment round trip, step 1: send the browser to the "gateway" host (fixed target: no open redirect)
+    location = /pay/start {
+        try_files /__jm_none @jm_paystart;
+    }
+    location @jm_paystart {
+        return 302 https://probe-pay.@DOMAIN@@PORT_SUFFIX@/gateway;
+    }
+    # static files only; dot files and everything else are 404
+    location ~ /\. { return 404; }
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+
+# ---- probe-api.@DOMAIN@ : the "API" ------------------------------------------------------------------------------------------------
+server {
+    listen @HTTPS_PORT@ ssl;
+    @LISTEN6_HTTPS@
+    server_name probe-api.@DOMAIN@;
+
+    ssl_certificate     @CERT_DIR@/fullchain.pem;
+    ssl_certificate_key @CERT_DIR@/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_tickets off;
+    ssl_session_cache   shared:jm_ssl:2m;
+    ssl_session_timeout 10m;
+
+    access_log @LOG_DIR@/jm-probe-access.log jm_access;
+    default_type application/json;
+
+    add_header Strict-Transport-Security "max-age=300" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Cache-Control "no-store" always;
+    # CORS: exactly ONE allowed origin (the "storefront" host), never "*" and never a reflected Origin
+    add_header Access-Control-Allow-Origin "https://probe.@DOMAIN@@PORT_SUFFIX@" always;
+    add_header Access-Control-Allow-Credentials "true" always;
+    add_header Vary "Origin" always;
+
+    limit_req  zone=jm_api burst=40 nodelay;
+    limit_conn jm_conn 20;
+    # simulated order payloads may be large (600 KB is used by the test page); nothing is stored
+    client_max_body_size 1m;
+    client_body_buffer_size 128k;
+    client_header_buffer_size 1k;
+    large_client_header_buffers 2 8k;
+    lingering_close always;
+    lingering_time 5s;
+    lingering_timeout 3s;
+    keepalive_timeout 30s;
+
+    # CORS preflight: answered before any location is chosen; the three headers below exist only on OPTIONS (an empty value is not sent)
+    add_header Access-Control-Allow-Methods $jm_cors_methods always;
+    add_header Access-Control-Allow-Headers $jm_cors_headers always;
+    add_header Access-Control-Max-Age       $jm_cors_maxage always;
+    if ($request_method = OPTIONS) { return 204; }
+
+    location = /api/ping {
+        if ($request_method !~ ^(GET|HEAD)$) { return 405; }
+        try_files /__jm_none @jm_ping;
+    }
+    location @jm_ping {
+        return 200 '{"ok":true,"t":"$msec"}';
+    }
+    # catalogue served from a file (same bytes as the storefront's)
+    location = /api/catalog {
+        if ($request_method !~ ^(GET|HEAD)$) { return 405; }
+        alias @WEB_ROOT@/data/catalog.json;
+    }
+    # cookie session round trip: login sets a random id (nginx's own $request_id); me reads it back
+    location = /api/login {
+        if ($request_method != POST) { return 405; }
+        try_files /__jm_none @jm_login;
+    }
+    location @jm_login {
+        add_header Set-Cookie "jm_probe_sid=$request_id; Path=/; Max-Age=900; Secure; HttpOnly; SameSite=Lax" always;
+        add_header Access-Control-Allow-Origin "https://probe.@DOMAIN@@PORT_SUFFIX@" always;
+        add_header Access-Control-Allow-Credentials "true" always;
+        add_header Cache-Control "no-store" always;
+        return 200 '{"ok":true,"sid":"$request_id"}';
+    }
+    location = /api/me {
+        if ($request_method !~ ^(GET|HEAD)$) { return 405; }
+        try_files /__jm_none @jm_me;
+    }
+    location @jm_me {
+        # only a value of exactly the shape login issues is echoed back (32 hex characters); anything else counts as "no session"
+        if ($cookie_jm_probe_sid !~ "^[0-9a-f]{32}$") { return 200 '{"ok":true,"sid":null}'; }
+        return 200 '{"ok":true,"sid":"$cookie_jm_probe_sid"}';
+    }
+    # simulated cart and order: the body is accepted and DISCARDED (not stored, not logged); the answer is fixed and fake
+    location = /api/cart {
+        if ($request_method != POST) { return 405; }
+        try_files /__jm_none @jm_cart;
+    }
+    location @jm_cart {
+        return 200 '{"ok":true,"simulated":true,"received":$jm_len}';
+    }
+    location = /api/order {
+        if ($request_method != POST) { return 405; }
+        try_files /__jm_none @jm_order;
+    }
+    location @jm_order {
+        return 200 '{"ok":true,"simulated":true,"orderNumber":"PROBE-$request_id","received":$jm_len}';
+    }
+    # optional result collection: the test page sends its result as ONE base64url query value; it is logged to the report log
+    # (and nowhere else). The value is validated, so nothing else can be injected into the log.
+    location = /api/report {
+        if ($request_method !~ ^(GET)$) { return 405; }
+        if ($arg_r !~ "^[A-Za-z0-9_-]{20,7000}$") { return 400; }
+        limit_req zone=jm_report burst=5 nodelay;
+        try_files /__jm_none @jm_report;
+    }
+    location @jm_report {
+        access_log @LOG_DIR@/jm-probe-access.log jm_access;
+        access_log @LOG_DIR@/jm-probe-report.log jm_report if=$jm_report_ok;
+        add_header Access-Control-Allow-Origin "https://probe.@DOMAIN@@PORT_SUFFIX@" always;
+        add_header Cache-Control "no-store" always;
+        return 204;
+    }
+    location / { return 404; }
+}
+
+# ---- probe-pay.@DOMAIN@ : the "payment gateway" (redirect only) --------------------------------------------------------------------
+server {
+    listen @HTTPS_PORT@ ssl;
+    @LISTEN6_HTTPS@
+    server_name probe-pay.@DOMAIN@;
+
+    ssl_certificate     @CERT_DIR@/fullchain.pem;
+    ssl_certificate_key @CERT_DIR@/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_tickets off;
+    ssl_session_cache   shared:jm_ssl:2m;
+    ssl_session_timeout 10m;
+
+    access_log @LOG_DIR@/jm-probe-access.log jm_access;
+    add_header Strict-Transport-Security "max-age=300" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Cache-Control "no-store" always;
+    limit_req  zone=jm_page burst=10 nodelay;
+    limit_conn jm_conn 20;
+    client_max_body_size 1k;
+
+    if ($request_method !~ ^(GET|HEAD)$) { return 405; }
+
+    # step 2 of the round trip: the "gateway" sends the browser back to the storefront (fixed target)
+    location = /gateway {
+        try_files /__jm_none @jm_gateway;
+    }
+    location @jm_gateway {
+        return 302 https://probe.@DOMAIN@@PORT_SUFFIX@/?pay=returned;
+    }
+    location / { return 404; }
+}
