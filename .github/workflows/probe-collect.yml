@@ -1,0 +1,54 @@
+# Daily collection of the results log from the running probe server (if there is one), summarised with the Go/No-Go criteria.
+# The SSH key is NOT stored anywhere: it is derived again from the ARVAN_API_KEY secret on every run, and the server's host key is
+# pinned the same way. Without the secret, or with no probe server, it does nothing and succeeds.
+name: Probe collect
+
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+    inputs:
+      region:
+        description: "ArvanCloud region code"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: Collect probe results
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      ARVAN_API_KEY: ${{ secrets.ARVAN_API_KEY }}
+      PROBE_ACTION: collect
+      PROBE_REGION: ${{ inputs.region }}
+      PROBE_OUT_DIR: probe-out
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Collect
+        run: node ops/connectivity-probe/automation/cli.mjs
+
+      - name: Keep the results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: probe-results-${{ github.run_id }}
+          path: probe-out
+          retention-days: 30
+          if-no-files-found: ignore
