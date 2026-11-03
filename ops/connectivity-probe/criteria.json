@@ -1,0 +1,12 @@
+{
+  "_note": "Proposed thresholds. They are decisions for the owner, not measured facts; change them here and re-run summarize.mjs.",
+  "minRunsDirect": 30,
+  "minOperatorsDirect": 3,
+  "requireMobileOperator": true,
+  "directPassRateGo": 0.95,
+  "directPassRateNoGo": 0.8,
+  "paymentRoundTripRateGo": 0.95,
+  "vpnPassRateOk": 0.8,
+  "orderStepP95MsMax": 8000,
+  "minDaysForFollowUp": 7
+}

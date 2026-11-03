@@ -7,5 +7,7 @@ export default defineConfig([
   ...nextTs,
   // The admin app is a plain React SPA served by the API server, not a Next.js page: next/image does not apply.
   { files: ["admin/**/*.{ts,tsx}"], rules: { "@next/next/no-img-element": "off" } },
-  globalIgnores([".next/**", "out/**", "build/**", "dist/**", ".data/**", "next-env.d.ts", "src/generated/**"]),
+  globalIgnores([".next/**", "out/**", "build/**", "dist/**", ".data/**", "next-env.d.ts", "src/generated/**",
+    // stand-alone tester page of the connectivity probe: plain ES2017 browser script, not part of the application
+    "ops/connectivity-probe/web/**"]),
 ]);
