@@ -481,7 +481,7 @@ describe("store reliability tooling stays read-only, local and redacted (Phase 1
 
     it("the restore-drill unit can only run the guarded script against the scratch server", () => {
       const text = read("ops/systemd/jaryan-restore-drill.service");
-      expect(text).toContain("ExecStart=/opt/jaryan-ma/scripts/maintenance/restore-drill.sh");
+      expect(text).toContain("ExecStart=/opt/jaryan-ma/current/scripts/maintenance/restore-drill.sh");
       expect(text).toContain("EnvironmentFile=/etc/jaryan-ma/restore-drill.env");
       expect(text).not.toContain("ALLOW_SAME_SERVER");
       expect(read("ops/systemd/restore-drill.env.example")).toContain("RESTORE_TEST_ADMIN_URL=");
@@ -500,5 +500,85 @@ describe("store reliability tooling stays read-only, local and redacted (Phase 1
       expect(read("docs/maintenance/SYSTEMD-FA.md")).toContain("0700");
       expect(read("docs/maintenance/INCIDENT-RESPONSE-FA.md")).toContain("TRUST_PROXY=true");
     });
+  });
+});
+
+describe("offline deployment package (Phase 2A)", () => {
+  const sh = (file: string) => read(file);
+
+  it("the installer never reaches for the network, npm, git or the Prisma CLI", () => {
+    for (const file of ["deploy/install.sh", "deploy/rollback.sh", "deploy/verify.sh", "deploy/lib.sh", "deploy/configure-nginx.sh", ...readdirSync(join(ROOT, "deploy/bin")).map((f) => `deploy/bin/${f}`)]) {
+      const code = sh(file).split("\n").filter((l) => !l.trim().startsWith("#")).join("\n");
+      expect(code, file).not.toMatch(/\b(npm|npx|yarn|pnpm|git|wget|apt-get|apt|pip|prisma)\b\s/);
+      expect(code, file).not.toMatch(/curl[^\n]*https?:\/\/(?!\$|"\$|\\\$|127\.0\.0\.1|localhost)/);
+    }
+  });
+
+  it("only talks to the local application with curl (health checks)", () => {
+    const uses = [...sh("deploy/lib.sh").matchAll(/curl [^\n]*/g)].map((m) => m[0]);
+    expect(uses.length).toBeGreaterThan(0);
+    for (const u of uses) expect(u).toContain('"$1"');
+  });
+
+  it("verifies before it changes anything: archive checksum, file checksums, environment, dry-run, backup, then migrate", () => {
+    const install = sh("deploy/install.sh");
+    const order = ["ARCHIVE CHECKSUM MISMATCH", "FILE CHECKSUM MISMATCH", "config-check", "deploy --dry-run", "ops.mjs backup", "migrate.mjs deploy ) \\", "point_to_release \"$VERSION\"", "wait_ready"];
+    let at = -1;
+    for (const marker of order) {
+      const i = install.indexOf(marker, at + 1);
+      expect(i, marker).toBeGreaterThan(at);
+      at = i;
+    }
+    expect(install).toContain("rolling the application back");
+    expect(install).not.toMatch(/prisma migrate|migrate reset|DROP DATABASE|DROP TABLE/i);
+  });
+
+  it("rollback changes only the application: it checks the target's checksums and never touches the database", () => {
+    const rollback = sh("deploy/rollback.sh");
+    expect(rollback).toContain("sha256sum --check");
+    expect(rollback).not.toMatch(/migrate|psql|pg_restore|DROP|TRUNCATE/i);
+  });
+
+  it("the migrator never reverses, drops or resets", () => {
+    const code = read("server/db/migrate.ts").split("\n").filter((l) => !l.trim().startsWith("*") && !l.trim().startsWith("//")).join("\n");
+    expect(code).not.toMatch(/DROP (TABLE|SCHEMA|DATABASE)|TRUNCATE|DELETE FROM/i);
+  });
+
+  it("the release workflow is a manual/PR build whose rehearsal needs no network and which deploys nothing", () => {
+    const wf = read(".github/workflows/release-package.yml");
+    expect(wf).toContain("rehearse-offline-install.sh");
+    expect(wf).toContain("workflow_dispatch");
+    expect(wf).not.toMatch(/wrangler|cloudflare|ssh |scp |rsync|secrets\./i);
+    expect(read("scripts/release/rehearse-offline-install.sh")).toContain("unshare --net");
+  });
+
+  it("the nginx templates expose only the two public media prefixes and never proxy the object store console or admin API", () => {
+    const media = (read("deploy/nginx/media.conf.template") + read("deploy/nginx/s3-public.conf")).split("\n").filter((l) => !l.trim().startsWith("#")).join("\n");
+    expect(media).toMatch(/\^~ \/images\//);
+    expect(media).toMatch(/\^~ \/catalog\//);
+    expect(media).toContain("proxy_pass_request_headers off");
+    expect(media).not.toMatch(/9001|minio\/|console/i);
+    expect(media).toMatch(/location \/ \{ return 404; \}/);
+    expect(read("deploy/configure-nginx.sh")).toContain("upstreams must be loopback or private addresses");
+  });
+
+  it("the service and object-store units run unprivileged, hardened and bound to loopback", () => {
+    const api = read("deploy/systemd/jaryan-api.service");
+    expect(api).toMatch(/^User=jaryan$/m);
+    for (const h of ["NoNewPrivileges=yes", "ProtectSystem=strict", "PrivateTmp=yes"]) expect(api).toContain(h);
+    const minio = read("deploy/systemd/jaryan-minio.service");
+    expect(minio).toContain("--address 127.0.0.1:9000");
+    expect(minio).toContain("--console-address 127.0.0.1:9001");
+    expect(read("deploy/env/minio.env.example")).toContain("MINIO_BROWSER=off");
+    expect(read("deploy/env/api.env.example")).toContain("HOST=127.0.0.1");
+    expect(read("deploy/env/api.env.example")).toContain("S3_ENDPOINT=http://127.0.0.1:9000");
+  });
+
+  it("no real secret is shipped in the templates", () => {
+    for (const file of ["deploy/env/api.env.example", "deploy/env/minio.env.example"]) {
+      const lines = read(file).split("\n").filter((l) => /^(DATABASE_URL|S3_SECRET_ACCESS_KEY|S3_ACCESS_KEY_ID|APP_ENCRYPTION_KEY|BACKUP_ENCRYPTION_KEY|MINIO_ROOT_PASSWORD|MINIO_ROOT_USER)=/.test(l));
+      expect(lines.length, file).toBeGreaterThan(0);
+      for (const l of lines) expect(l, l).toMatch(/CHANGE-ME/);
+    }
   });
 });

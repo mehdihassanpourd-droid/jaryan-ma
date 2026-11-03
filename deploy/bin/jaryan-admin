@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Runs the administrator CLI (create the first owner, reset a password or TOTP) of the INSTALLED release with its own Node (no npm needed).  Usage: jaryan-admin create --email you@example.ir --role owner
+set -euo pipefail
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"   # works through symlinks such as /usr/local/bin/jaryan-ops
+ROOT="$(cd "$(dirname "$SELF")/.." && pwd -P)"
+# Settings come from the server's environment file unless the caller already provided them (readable by group "jaryan" only).
+if [ -z "${DATABASE_URL:-}" ]; then
+  ENVF="${JM_ENV_FILE:-${JM_PREFIX:-}/etc/jaryan-ma/api.env}"
+  if [ -r "$ENVF" ]; then . "$ROOT/deploy/lib.sh"; load_env "$ENVF"; fi
+fi
+NODE="$ROOT/runtime/node"; [ -x "$NODE" ] || NODE="$(command -v node)"
+exec "$NODE" "$ROOT/app/dist/server/cli/admin.mjs" "$@"

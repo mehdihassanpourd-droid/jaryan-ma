@@ -82,3 +82,40 @@ describe("S3Storage", () => {
     expect(sent).toEqual([]);
   });
 });
+
+import { configureMediaBucket, mediaBucketPolicyIsExact, publicMediaPolicy, type MediaSetupSender } from "./s3";
+
+describe("public media bucket policy", () => {
+  it("allows anonymous GetObject on images/ and catalog/ only: no listing, no writes, nothing else", () => {
+    const policy = publicMediaPolicy("jaryan-media") as { Statement: Array<{ Effect: string; Action: string[]; Resource: string[]; Principal: unknown }> };
+    expect(policy.Statement).toHaveLength(1);
+    const [statement] = policy.Statement;
+    expect(statement?.Effect).toBe("Allow");
+    expect(statement?.Action).toEqual(["s3:GetObject"]);
+    expect(statement?.Resource).toEqual(["arn:aws:s3:::jaryan-media/images/*", "arn:aws:s3:::jaryan-media/catalog/*"]);
+    expect(JSON.stringify(policy)).not.toMatch(/ListBucket|PutObject|DeleteObject|"arn:aws:s3:::jaryan-media"|s3:\*/);
+  });
+
+  it("creates a missing bucket, applies the policy, and verifies it exactly", async () => {
+    const calls: string[] = [];
+    let stored: string | undefined;
+    let exists = false;
+    const client: MediaSetupSender = {
+      send: async (command) => {
+        const name = command.constructor.name;
+        calls.push(name);
+        if (name === "HeadBucketCommand" && !exists) throw new Error("NotFound");
+        if (name === "CreateBucketCommand") exists = true;
+        if (name === "PutBucketPolicyCommand") stored = (command as unknown as { input: { Policy: string } }).input.Policy;
+        if (name === "GetBucketPolicyCommand") return { Policy: stored };
+        return {};
+      },
+    };
+    expect(await mediaBucketPolicyIsExact(client, "jaryan-media")).toBe(false);
+    expect(await configureMediaBucket(client, "jaryan-media")).toEqual({ created: true });
+    expect(await configureMediaBucket(client, "jaryan-media")).toEqual({ created: false });
+    expect(await mediaBucketPolicyIsExact(client, "jaryan-media")).toBe(true);
+    stored = JSON.stringify({ Version: "2012-10-17", Statement: [{ Effect: "Allow", Principal: "*", Action: ["s3:GetObject", "s3:ListBucket"], Resource: ["arn:aws:s3:::jaryan-media/*"] }] });
+    expect(await mediaBucketPolicyIsExact(client, "jaryan-media")).toBe(false); // a wider policy is detected
+  });
+});

@@ -1,0 +1,27 @@
+# S3-compatible object store for product images and catalogue snapshots (MinIO or another S3 server). EXAMPLE TEMPLATE, NOT
+# TESTED in this repository's CI (no object-store binary is bundled: supply one you have verified, see OFFLINE-DEPLOY-FA.md §3).
+#
+# It listens on LOCALHOST ONLY and its web console is switched off; the only public path to it is nginx (media.conf), which
+# allows nothing but GET of /images/* and /catalog/*.
+[Unit]
+Description=Jaryan Ma object store (localhost only)
+After=network.target
+
+[Service]
+User=minio
+Group=minio
+EnvironmentFile=/etc/jaryan-ma/minio.env
+# EDIT: where the verified binary is installed and where the data lives (0700 minio:minio)
+ExecStart=/usr/local/bin/minio server /var/lib/jaryan-minio --address 127.0.0.1:9000 --console-address 127.0.0.1:9001
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/jaryan-minio
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

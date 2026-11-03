@@ -1,0 +1,19 @@
+# Admin host: the admin PWA (/admin/) and the administrator API. The customer/public endpoints are NOT reachable here.
+server {
+  @LISTEN@
+  server_name @ADMIN_DOMAIN@;
+  @TLS@
+  include @CONF_DIR@/jaryan-security-headers.conf;
+  absolute_redirect off;
+  limit_req zone=jm_api burst=40 nodelay;
+  limit_conn jm_conn 40;
+
+  location = /api/v1/auth/login { limit_req zone=jm_login burst=5 nodelay; include @CONF_DIR@/jaryan-proxy-api.conf; }
+  location ^~ /api/v1/customer/ { return 404; }
+  location ^~ /api/v1/public/   { return 404; }
+  location ^~ /api/v1/          { include @CONF_DIR@/jaryan-proxy-api.conf; }
+  location ^~ /admin/           { include @CONF_DIR@/jaryan-proxy-api.conf; }
+  location = /healthz           { include @CONF_DIR@/jaryan-proxy-api.conf; }
+  location = / { return 302 /admin/; }
+  location / { return 404; }
+}

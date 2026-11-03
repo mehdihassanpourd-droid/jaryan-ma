@@ -1,0 +1,108 @@
+# Builds the OFFLINE production release package (docs/deploy/OFFLINE-DEPLOY-FA.md) and rehearses installing it on a machine with
+# no network at all. Nothing is deployed anywhere: the package is only a downloadable workflow artifact.
+#
+#   * pull requests that touch the deployment tooling: build with example domains + full rehearsal (install, upgrade, failed
+#     upgrade with automatic rollback, manual rollback, restore drill) in a network-less sandbox
+#   * manual run ("Run workflow" in the Actions tab, also from a phone): build the real package for your domains and keep it
+#     as an artifact for 30 days
+name: Release package
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ["deploy/**", "scripts/release/**", "scripts/maintenance/**", "ops/**", "server/db/migrat*", "server/cli/**", "server/deploy/**", "prisma/migrations/**", ".github/workflows/release-package.yml"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, e.g. 2026.11.1"
+        required: true
+        type: string
+      site_url:
+        description: "Public storefront address, e.g. https://shop.example.ir"
+        required: true
+        type: string
+      api_url:
+        description: "Public API address, e.g. https://api.example.ir"
+        required: true
+        type: string
+      catalog_url:
+        description: "Public media address, e.g. https://media.example.ir"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Build and rehearse the offline package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      VERSION: ${{ inputs.version || format('ci-{0}', github.run_number) }}
+      SITE_URL: ${{ inputs.site_url || 'https://shop.jaryan.test' }}
+      API_URL: ${{ inputs.api_url || 'https://api.jaryan.test' }}
+      CATALOG_URL: ${{ inputs.catalog_url || 'https://media.jaryan.test' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies (build time only: the package itself needs no network)
+        run: npm ci
+
+      - name: Build the package
+        run: node scripts/release/build-package.mjs --version "$VERSION" --site-url "$SITE_URL" --api-url "$API_URL" --catalog-url "$CATALOG_URL" --out release
+        env:
+          JM_XZ_LEVEL: ${{ github.event_name == 'pull_request' && '-1' || '-9e' }}
+
+      - name: Build a second package (for the upgrade rehearsal)
+        if: github.event_name == 'pull_request'
+        run: node scripts/release/build-package.mjs --version "${VERSION}-b" --site-url "$SITE_URL" --api-url "$API_URL" --catalog-url "$CATALOG_URL" --out release --reuse-build
+        env:
+          JM_XZ_LEVEL: "-1"
+
+      - name: Package size and checksum
+        run: |
+          ls -l release/*.tar.xz
+          cat release/*.sha256
+
+      # PostgreSQL 16 server binaries and nginx are preinstalled on the runner image; the rehearsal starts its own throw-away
+      # cluster inside a network namespace that has no route to the internet.
+      - name: Install rehearsal tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-16 nginx python3 curl
+          sudo systemctl stop postgresql nginx || true
+
+      - name: Rehearse install, upgrade, failed upgrade, rollback and restore drill with NO network
+        if: github.event_name == 'pull_request'
+        run: |
+          sudo bash scripts/release/rehearse-offline-install.sh \
+            --v1 "release/jaryan-ma-${VERSION}-linux-x64.tar.xz" \
+            --v2 "release/jaryan-ma-${VERSION}-b-linux-x64.tar.xz"
+
+      - name: nginx isolation tests (public media, API/admin split)
+        if: github.event_name == 'pull_request'
+        run: npx vitest run server/deploy
+
+      - name: Keep the package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jaryan-ma-${{ env.VERSION }}
+          path: |
+            release/*.tar.xz
+            release/*.sha256
+          retention-days: 30
+          if-no-files-found: error

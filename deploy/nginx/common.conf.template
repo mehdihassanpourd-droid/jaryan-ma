@@ -1,0 +1,10 @@
+# Included once, in the http{} context (conf.d/jaryan-common.conf). Shared zones and global hardening.
+server_tokens off;
+
+limit_req_zone $binary_remote_addr zone=jm_login:10m   rate=10r/m;   # administrator sign-in
+limit_req_zone $binary_remote_addr zone=jm_sms:10m     rate=6r/m;    # customer SMS codes (each one costs money)
+limit_req_zone $binary_remote_addr zone=jm_api:10m     rate=20r/s;   # everything else on the API hosts
+limit_req_zone $binary_remote_addr zone=jm_media:10m   rate=30r/s;   # public media
+limit_req_zone $binary_remote_addr zone=jm_shop:10m    rate=30r/s;   # static storefront
+limit_req_status 429;
+limit_conn_zone $binary_remote_addr zone=jm_conn:10m;

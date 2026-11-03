@@ -1,0 +1,19 @@
+# Public API host: ONLY the customer and public endpoints, plus health. Administrator endpoints and the admin PWA are not
+# reachable here (they live on the admin host), so a bug on one side cannot expose the other.
+server {
+  @LISTEN@
+  server_name @API_DOMAIN@;
+  @TLS@
+  include @CONF_DIR@/jaryan-security-headers.conf;
+  limit_req zone=jm_api burst=40 nodelay;
+  limit_conn jm_conn 40;
+
+  # every SMS code costs money: much stricter than the rest
+  location = /api/v1/customer/auth/request-code { limit_req zone=jm_sms burst=3 nodelay; include @CONF_DIR@/jaryan-proxy-api.conf; }
+  location ^~ /api/v1/customer/ { include @CONF_DIR@/jaryan-proxy-api.conf; }
+  location ^~ /api/v1/public/   { include @CONF_DIR@/jaryan-proxy-api.conf; }
+  location = /health            { include @CONF_DIR@/jaryan-proxy-api.conf; }
+  # readiness is for the local watchdog and the monitoring host only
+  location = /readyz            { @READYZ_ALLOW@ deny all; include @CONF_DIR@/jaryan-proxy-api.conf; }
+  location / { return 404; }
+}

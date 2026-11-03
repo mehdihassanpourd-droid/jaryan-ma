@@ -30,12 +30,15 @@ if [ -n "${DATABASE_URL:-}" ] && [ "$(host_of "$RESTORE_TEST_ADMIN_URL")" = "$(h
   die "the scratch server is the production server; use a separate one (or set ALLOW_SAME_SERVER=yes to accept the extra load, the restore still goes into a new throw-away database)"
 fi
 
+# JARYAN_OPS = the installed release's wrapper (offline package); from a source checkout it is `npm run ops`
+ops() { if [ -n "${JARYAN_OPS:-}" ]; then "$JARYAN_OPS" "$@"; else npm run --silent ops -- "$@"; fi; }
+
 echo "== 1/2 offline verification =="
-npm run --silent ops -- backup-verify
+ops backup-verify
 echo "== 2/2 restore into a throw-away database =="
 if [ "${ALLOW_SAME_SERVER:-}" = "yes" ]; then
-  npm run --silent ops -- restore-test --allow-same-server
+  ops restore-test --allow-same-server
 else
-  npm run --silent ops -- restore-test
+  ops restore-test
 fi
-echo "restore-drill: finished. Check \`npm run ops -- backup-status\` for the recorded state."
+echo "restore-drill: finished. Check \`jaryan-ops backup-status\` for the recorded state."
