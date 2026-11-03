@@ -8,7 +8,8 @@
 # Order of work (an upgrade stops at the first problem and changes nothing before the migration step):
 #   1 verify the archive checksum  2 unpack + verify every file  3 validate the environment  4 backup + verify it (upgrades)
 #   5 list pending migrations (dry run)  6 apply migrations  7 switch to the new release  8 restart  9 health verification
-#   10 if the new release is not healthy: switch back to the previous release automatically (the database is never reversed).
+#   10 if the new release is not healthy: switch back to the previous release automatically ONLY when the database is known to be
+#      compatible with it (exit 2). Otherwise nothing is switched and manual recovery is required (exit 4). The database is never reversed.
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)"
 # shellcheck source=lib.sh
@@ -132,7 +133,18 @@ fi
 
 warn "release $VERSION is NOT healthy"
 if [ -n "$PREVIOUS" ] && [ "$PREVIOUS" != "$VERSION" ]; then
-  warn "rolling the application back to $PREVIOUS (the database keeps the new migrations; read ROLLBACK-FA.md before doing anything to it)"
+  # Automatic rollback is only allowed when the database is KNOWN to be compatible with the previous release. The migrations this
+  # upgrade applied are still in the database; if the previous release does not know them (or the state cannot be read) nothing is
+  # switched and a person must decide. The override of rollback.sh is never used from here.
+  PREV_RC=0; schema_check "$JM_APP_ROOT/releases/$PREVIOUS" || PREV_RC=$?
+  if [ "$PREV_RC" != 0 ]; then
+    record "deploy $VERSION FAILED health verification; automatic rollback to $PREVIOUS REFUSED (schema $SCHEMA_STATE: $SCHEMA_DETAIL); MANUAL RECOVERY REQUIRED"
+    warn "AUTOMATIC ROLLBACK REFUSED: $(schema_explain "$SCHEMA_STATE")"
+    warn "release $VERSION is still the active (unhealthy) release; the previous release $PREVIOUS was NOT activated; the database and the history were left untouched."
+    warn "MANUAL RECOVERY REQUIRED. Preferred: fix the problem and install a corrected release (forward-fix). Alternatively, once a person has verified that $PREVIOUS works with this database: ./deploy/rollback.sh --to $PREVIOUS --accept-newer-schema. See docs/maintenance/ROLLBACK-FA.md."
+    die "DEPLOYMENT FAILED: release $VERSION is not healthy and cannot be rolled back automatically" 4
+  fi
+  warn "rolling the application back to $PREVIOUS (schema is compatible with it; the database is not changed)"
   point_to_release "$PREVIOUS"; svc restart || true
   if wait_ready; then record "deploy $VERSION FAILED, rolled back to $PREVIOUS"; die "upgrade failed and the previous release $PREVIOUS is running again" 2; fi
   record "deploy $VERSION FAILED, rollback to $PREVIOUS ALSO unhealthy"; die "upgrade failed AND the previous release is not healthy either; manual recovery needed (see ROLLBACK-FA.md)" 3

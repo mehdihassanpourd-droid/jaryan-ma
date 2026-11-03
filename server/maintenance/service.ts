@@ -118,7 +118,9 @@ export class MaintenanceService {
   async runReadiness(): Promise<{ ready: boolean; checkedAt: Date; checks: Array<Pick<CheckResult, "name" | "status">> }> {
     const database = await timed("database", () => this.probes.database(), "database reachable");
     const migrations = database.status === "ok" ? await timed("migrations", () => this.probes.migrations(), "all migrations applied") : { name: "migrations", status: "fail" as const };
-    const checks = [database, migrations].map(({ name, status }) => ({ name, status }));
+    // Public output: pass/fail only. A "warn" (for example a database that is ahead of this release) keeps the service
+    // ready and is shown as ok here; the explicit degraded state lives in /health (status only) and in the owner's report.
+    const checks = [database, migrations].map(({ name, status }) => ({ name, status: status === "warn" ? ("ok" as const) : status }));
     return { ready: checks.every((c) => c.status !== "fail"), checkedAt: this.clock(), checks };
   }
 
@@ -181,6 +183,11 @@ export class MaintenanceService {
       await this.store.log({ actor: "system", action: "incident.auto_resolved", target: `incident:${open.number}`, outcome: "success", detail: {} }, now);
       await this.alerts.notify({ priority: priorityForSeverity(open.severity), key: "health.unhealthy", state: "resolved", title: open.title, message: `All health checks pass again (incident #${open.number})`, source: "health_check" });
     }
+    // The database is ahead of the running release (typically after an application rollback): an explicit, repeated alert until a
+    // person has decided (upgrade, forward-fix, or a verified acceptance). Names of migrations are never put in the alert.
+    const ahead = report.checks.find((c) => c.name === "migrations" && c.status === "warn");
+    if (ahead) await this.alerts.notify({ priority: "P1", key: "schema.ahead", title: "پایگاه‌داده از نسخهٔ در حال اجرا جلوتر است", message: ahead.message, source: "health_check" });
+    else await this.alerts.notify({ priority: "P1", key: "schema.ahead", state: "resolved", title: "پایگاه‌داده با نسخهٔ در حال اجرا سازگار شد", message: "schema is no longer ahead of the running release", source: "health_check" });
     return report;
   }
 

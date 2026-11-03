@@ -85,6 +85,31 @@ esac
 HOOK
 chmod +x "$T/hook.sh"
 
+# craft <src.tar.xz> <new-version> <out.tar.xz> [--migration NAME SQL] [--broken]   (test packages derived from a real one, with fresh checksums)
+craft() {
+  local src="$1" ver="$2" out="$3"; shift 3
+  local d="$T/craft-$ver"; mkdir -p "$d"; tar -xJf "$src" -C "$d"
+  local top; top="$(find "$d" -mindepth 1 -maxdepth 1 -type d | head -1)"
+  sed -i "0,/\"version\": \"[^\"]*\"/s//\"version\": \"$ver\"/" "$top/RELEASE.json"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --migration) mkdir -p "$top/app/prisma/migrations/$2"; printf '%s\n' "$3" > "$top/app/prisma/migrations/$2/migration.sql"; shift 3 ;;
+      --broken) printf 'process.exit(1);\n' > "$top/app/dist/server/main.mjs"; shift ;;
+      *) echo "craft: bad option $1"; return 1 ;;
+    esac
+  done
+  ( cd "$top" && find . -type f ! -name SHA256SUMS | sort | sed 's#^\./##' | xargs -d '\n' sha256sum > SHA256SUMS )
+  XZ_OPT=-1 tar -cJf "$out" -C "$d" "$(basename "$top")"
+  ( cd "$(dirname "$out")" && sha256sum "$(basename "$out")" > "$(basename "$out").sha256" )
+  rm -rf "${d:?}"
+}
+code_of() { "$@" >"$T/last.log" 2>&1; echo $?; }
+expect_code() { local name="$1" want="$2"; shift 2; local got; got="$(code_of "$@")"; if [ "$got" = "$want" ]; then ok "$name (exit $got)"; else bad "$name (exit $got, wanted $want)"; sed 's/^/        /' "$T/last.log" | tail -12; fi; }
+cur() { readlink "$ROOT/opt/jaryan-ma/current" | sed 's#^releases/##'; }
+health_status() { curl -s http://127.0.0.1:3101/health | sed -n 's/.*"status":"\([a-z]*\)".*/\1/p'; }
+# the status of the "migrations" check in the owner's health report (the overall status can be degraded for unrelated reasons, e.g. an untested backup)
+migrations_health() { "$ROOT/opt/jaryan-ma/current/bin/jaryan-ops" health 2>/dev/null | tr -d ' \n' | grep -o '"name":"migrations","status":"[a-z]*"' | sed 's/.*"status":"\([a-z]*\)"/\1/'; }
+
 INSTALL="$REPO/deploy/install.sh"
 expect_ok "install.sh --init-env writes a template and stops" bash "$INSTALL" --package "$V1" --init-env
 ENVF="$ROOT/etc/jaryan-ma/api.env"
@@ -104,6 +129,7 @@ s = s.replace("https://media.example.ir", "https://media.jaryan.test").replace("
 open(path, "w").write(s)
 PY
 mkdir -p "$T/backups"; chmod 700 "$T/backups"
+sed "s#127.0.0.1:$PGPORT#127.0.0.1:1#" "$ENVF" > "$ROOT/unreachable.env"
 expect_ok "dry run verifies the package and lists migrations, changing nothing" bash "$INSTALL" --package "$V1" --dry-run
 [ ! -e "$ROOT/opt/jaryan-ma/current" ] && ok "dry run installed nothing" || bad "dry run left a release behind"
 
@@ -140,7 +166,7 @@ mkdir -p "$T/tamper" && tar -xJf "$V2" -C "$T/tamper"
 TD="$(find "$T/tamper" -mindepth 1 -maxdepth 1 -type d | head -1)"
 echo "// injected" >> "$TD/app/dist/server/main.mjs"
 sed -i "s/\"version\": \"$V2NAME\"/\"version\": \"$V2NAME-tampered\"/" "$TD/RELEASE.json"
-tar -cJf "$T/tampered.tar.xz" -C "$T/tamper" "$(basename "$TD")"; sha256sum "$T/tampered.tar.xz" | sed "s#$T/##" > "$T/tampered.tar.xz.sha256"
+XZ_OPT=-1 tar -cJf "$T/tampered.tar.xz" -C "$T/tamper" "$(basename "$TD")"; sha256sum "$T/tampered.tar.xz" | sed "s#$T/##" > "$T/tampered.tar.xz.sha256"
 expect_fail "a package with a modified file is refused (file checksum)" bash "$INSTALL" --package "$T/tampered.tar.xz"
 expect_fail "a package without a checksum is refused" bash "$INSTALL" --package "$T/tampered.tar.xz" --sha256 ""
 [ "$(readlink "$ROOT/opt/jaryan-ma/current")" = "$BEFORE" ] && ok "the running release did not change" || bad "a refused package changed the current release"
@@ -152,7 +178,7 @@ BD="$(find "$T/broken" -mindepth 1 -maxdepth 1 -type d | head -1)"
 printf 'process.exit(1);\n' > "$BD/app/dist/server/main.mjs"
 sed -i "s/\"version\": \"$V2NAME\"/\"version\": \"$V2NAME-broken\"/" "$BD/RELEASE.json"
 ( cd "$BD" && find . -type f ! -name SHA256SUMS | sort | sed 's#^\./##' | xargs sha256sum > SHA256SUMS )
-tar -cJf "$T/broken.tar.xz" -C "$T/broken" "$(basename "$BD")"; ( cd "$T" && sha256sum broken.tar.xz > broken.tar.xz.sha256 )
+XZ_OPT=-1 tar -cJf "$T/broken.tar.xz" -C "$T/broken" "$(basename "$BD")"; ( cd "$T" && sha256sum broken.tar.xz > broken.tar.xz.sha256 )
 JM_HEALTH_TIMEOUT=10 bash "$INSTALL" --package "$T/broken.tar.xz" >"$T/broken.log" 2>&1; CODE=$?
 sed 's/^/        /' "$T/broken.log" | tail -8
 [ "$CODE" = 2 ] && ok "installer exits 2 (upgrade failed, previous release running again)" || bad "installer exit code $CODE (expected 2)"
@@ -164,13 +190,75 @@ echo "== manual rollback =="
 expect_ok "rollback.sh --list" bash "$REPO/deploy/rollback.sh" --list
 expect_ok "rollback to v1" bash "$REPO/deploy/rollback.sh" --to "$V1NAME"
 expect_ok "v1 is current and healthy after rollback" bash -c "[ \"\$(readlink '$ROOT/opt/jaryan-ma/current')\" = releases/$V1NAME ] && [ \"\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/readyz)\" = 200 ]"
-echo "// damaged after install" >> "$ROOT/opt/jaryan-ma/releases/$V2NAME/app/dist/server/main.mjs"
-expect_fail "rollback refuses to switch to an installed release that fails its checksums" bash "$REPO/deploy/rollback.sh" --to "$V2NAME"
-expect_fail "verify.sh detects a damaged current release" bash -c "echo '// x' >> '$ROOT/opt/jaryan-ma/releases/$V1NAME/app/dist/server/main.mjs'; bash '$REPO/deploy/verify.sh'"
+echo "== schema compatibility: a release whose migrations the previous release does not know =="
+V3NAME="$V2NAME-schema1"; V4NAME="$V2NAME-schema2-broken"; V5NAME="$V2NAME-schema2-fixed"
+craft "$V2" "$V3NAME" "$T/v3.tar.xz" --migration 29990101000000_rehearsal_extra_one "CREATE TABLE jm_rehearsal_extra_one(id int);"
+craft "$V2" "$V4NAME" "$T/v4.tar.xz" --migration 29990101000000_rehearsal_extra_one "CREATE TABLE jm_rehearsal_extra_one(id int);" --migration 29990102000000_rehearsal_extra_two "CREATE TABLE jm_rehearsal_extra_two(id int);" --broken
+craft "$V2" "$V5NAME" "$T/v5.tar.xz" --migration 29990101000000_rehearsal_extra_one "CREATE TABLE jm_rehearsal_extra_one(id int);" --migration 29990102000000_rehearsal_extra_two "CREATE TABLE jm_rehearsal_extra_two(id int);"
+HIST="$ROOT/var/lib/jaryan-ma/history.log"
+PSQL="psql -h 127.0.0.1 -p $PGPORT -U jaryan -d jaryan"
+expect_ok "install v3 (adds one migration that v1 and v2 do not contain)" bash "$INSTALL" --package "$T/v3.tar.xz"
+expect_ok "schema is compatible while v3 runs" bash "$REPO/deploy/verify.sh"
+expect_ok "the migrations health check is ok while compatible" test "$(migrations_health)" = ok
+
+echo "-- rollback is refused by default"
+expect_code "rollback to v1 is REFUSED (database has a migration v1 does not know)" 65 bash "$REPO/deploy/rollback.sh" --to "$V1NAME"
+expect_code "rollback to v2 is REFUSED as well" 65 bash "$REPO/deploy/rollback.sh" --to "$V2NAME"
+[ "$(cur)" = "$V3NAME" ] && ok "a refused rollback changed nothing: v3 is still current" || bad "current changed to $(cur)"
+expect_ok "service still healthy after the refusal" test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/readyz)" = 200
+expect_ok "the refusal is in the deployment history" grep -q "REFUSED: schema newer_unknown" "$HIST"
+
+echo "-- automatic rollback never overrides and never activates an unverified release"
+expect_code "install v4 (adds another migration and does not start): exit 4, manual recovery required" 4 env JM_HEALTH_TIMEOUT=10 bash "$INSTALL" --package "$T/v4.tar.xz"
+cp "$T/last.log" "$T/v4-install.log"; sed 's/^/        /' "$T/v4-install.log" | tail -6
+[ "$(cur)" = "$V4NAME" ] && ok "the previous release was NOT silently activated (v4 stays the active, unhealthy release)" || bad "current is $(cur)"
+grep -q "MANUAL RECOVERY REQUIRED" "$T/v4-install.log" && ok "the output says that manual recovery is required" || bad "no manual-recovery message"
+if grep -q "deploy $V4NAME ok" "$HIST"; then bad "history reports success for a failed deployment"; else ok "no success was recorded for the failed deployment"; fi
+expect_ok "history records the refused automatic rollback" grep -q "automatic rollback to $V3NAME REFUSED (schema newer_unknown" "$HIST"
+expect_ok "the database was preserved (both extra tables still exist)" bash -c "[ \"\$($PSQL -tAc \"select count(*) from information_schema.tables where table_name in ('jm_rehearsal_extra_one','jm_rehearsal_extra_two')\")\" = 2 ]"
+if grep -qi "accepted by operator" "$HIST"; then bad "the installer used the override"; else ok "the override was never used by the installer"; fi
+expect_code "verify.sh reports the broken service as a general problem (exit 1, not a schema code)" 1 bash "$REPO/deploy/verify.sh"
+
+echo "-- explicit override: a database ahead of the running release is allowed only on request, and is reported as degraded"
+expect_code "rollback to v3 is REFUSED too (v3 does not know migration two)" 65 bash "$REPO/deploy/rollback.sh" --to "$V3NAME"
+expect_code "undetermined compatibility can never be overridden (database unreachable)" 68 env JM_ENV_FILE=/unreachable.env bash "$REPO/deploy/rollback.sh" --to "$V3NAME" --accept-newer-schema
+expect_ok "rollback to v3 WITH --accept-newer-schema is performed" bash "$REPO/deploy/rollback.sh" --to "$V3NAME" --accept-newer-schema
+grep -q "SCHEMA AHEAD ACCEPTED" "$T/last.log" && ok "the override is announced loudly" || bad "override not announced"
+expect_ok "the override is recorded in the history" grep -q "newer schema ACCEPTED by operator" "$HIST"
+expect_ok "v3 runs and answers /readyz (service stays ready)" test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/readyz)" = 200
+expect_ok "the migrations health check is WARN (schema ahead) and the public /health says degraded" bash -c "[ \"$(migrations_health)\" = warn ] && [ \"$(health_status)\" = degraded ]"
+expect_ok "ops health names the cause: schema ahead of this release" bash -c "'$ROOT/opt/jaryan-ma/current/bin/jaryan-ops' health | grep -q 'schema ahead of this release'"
+expect_ok "the public endpoints reveal no migration name" bash -c "! curl -s http://127.0.0.1:3101/health http://127.0.0.1:3101/readyz | grep -q 'rehearsal_extra'"
+expect_ok "public /readyz stays pass/fail only" bash -c "curl -s http://127.0.0.1:3101/readyz | grep -q '\"name\":\"migrations\",\"status\":\"ok\"'"
+expect_code "verify.sh reports NEWER UNKNOWN MIGRATIONS with its own exit code" 65 bash "$REPO/deploy/verify.sh"
+grep -q "NEWER UNKNOWN MIGRATIONS" "$T/last.log" && ok "verify.sh names the state" || bad "verify.sh did not name the state"
+
+echo "-- the other states are told apart"
+$PSQL -qc "INSERT INTO _prisma_migrations (id, checksum, migration_name, started_at) VALUES ('stuck-rehearsal','x','29990109000000_stuck',now())"
+expect_code "state FAILED: an unfinished migration gets its own verify.sh exit code" 66 bash "$REPO/deploy/verify.sh"
+expect_code "rollback can never be overridden while a migration is unfinished" 66 bash "$REPO/deploy/rollback.sh" --to "$V2NAME" --accept-newer-schema
+$PSQL -qc "DELETE FROM _prisma_migrations WHERE id = 'stuck-rehearsal'"
+
+echo "-- forward-fix: the corrected release contains the migrations, everything is compatible again"
+expect_ok "install v5 (the fixed v4): no pending migrations, healthy" bash "$INSTALL" --package "$T/v5.tar.xz"
+expect_ok "verify.sh passes: schema compatible" bash "$REPO/deploy/verify.sh"
+expect_ok "the migrations health check is ok again" test "$(migrations_health)" = ok
+expect_code "rollback to v3 is again refused (v5 added migration two)" 65 bash "$REPO/deploy/rollback.sh" --to "$V3NAME"
+rm -rf "$T/missing-app"; mkdir -p "$T/missing-app/prisma"
+cp -a "$ROOT/opt/jaryan-ma/current/app/dist" "$T/missing-app/dist"; cp -a "$ROOT/opt/jaryan-ma/current/app/prisma/migrations" "$T/missing-app/prisma/migrations"; ln -s "$ROOT/opt/jaryan-ma/current/app/node_modules" "$T/missing-app/node_modules"
+mkdir -p "$T/missing-app/prisma/migrations/29990103000000_not_applied_yet"; echo 'select 1;' > "$T/missing-app/prisma/migrations/29990103000000_not_applied_yet/migration.sql"
+M_RC="$(bash -c ". '$REPO/deploy/lib.sh'; load_env '$ENVF'; cd '$T/missing-app' && '$ROOT/opt/jaryan-ma/current/runtime/node' dist/server/cli/migrate.mjs check >/dev/null 2>&1; echo \$?")"
+[ "$M_RC" = 67 ] && ok "state MISSING: migrate check exits 67 for a release with an unapplied migration" || bad "missing state gave $M_RC"
+
+
+PREVNAME="$(cat "$ROOT/var/lib/jaryan-ma/previous")"
+echo "// damaged after install" >> "$ROOT/opt/jaryan-ma/releases/$PREVNAME/app/dist/server/main.mjs"
+expect_fail "rollback refuses to switch to an installed release that fails its checksums" bash "$REPO/deploy/rollback.sh" --to "$PREVNAME"
+expect_fail "verify.sh detects a damaged current release" bash -c "echo '// x' >> '$ROOT/opt/jaryan-ma/releases/$(cur)/app/dist/server/main.mjs'; bash '$REPO/deploy/verify.sh'"
 
 echo "== restore drill with the packaged tools (scratch database on the same disposable server) =="
 printf '' > "$T/last.log"
-expect_ok "backup-verify and restore-test run from the package (no npm)" bash -c ". '$REPO/deploy/lib.sh'; load_env '$ENVF'; export RESTORE_TEST_ADMIN_URL='postgresql://postgres@127.0.0.1:$PGPORT/postgres' ALLOW_SAME_SERVER=yes JARYAN_OPS='$ROOT/opt/jaryan-ma/releases/$V2NAME/bin/jaryan-ops'; bash '$ROOT/opt/jaryan-ma/releases/$V2NAME/scripts/maintenance/restore-drill.sh'"
+expect_ok "backup-verify and restore-test run from the package (no npm)" bash -c ". '$REPO/deploy/lib.sh'; load_env '$ENVF'; export RESTORE_TEST_ADMIN_URL='postgresql://postgres@127.0.0.1:$PGPORT/postgres' ALLOW_SAME_SERVER=yes JARYAN_OPS='$ROOT/opt/jaryan-ma/current/bin/jaryan-ops'; bash '$ROOT/opt/jaryan-ma/current/scripts/maintenance/restore-drill.sh'"
 
 echo
 echo "RESULT: $PASS passed, $FAIL failed"

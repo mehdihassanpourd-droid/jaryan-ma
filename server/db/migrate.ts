@@ -38,6 +38,28 @@ export interface MigrationStatus {
   ok: boolean;
 }
 
+/**
+ * How a database relates to a release's migration files. The four states are deliberately separate because they call for
+ * different reactions:
+ *  - compatible     every migration the release has is applied, and the database has nothing the release does not know
+ *  - newer_unknown  the database has applied migrations this release does not contain (typical right after an application
+ *                   rollback). This does NOT prove the release is incompatible, but nobody can know that from here, so it
+ *                   blocks anything automatic until a person has decided
+ *  - missing        the release has migrations that are not applied yet (an upgrade has not run its migrations)
+ *  - failed         a migration was left unfinished, or an applied migration's file differs from the release's
+ */
+export type SchemaState = "compatible" | "newer_unknown" | "missing" | "failed";
+
+/** Process exit codes of `migrate check` (and, mapped the same way, of rollback.sh / verify.sh). */
+export const SCHEMA_EXIT: Record<SchemaState, number> = { compatible: 0, newer_unknown: 65, failed: 66, missing: 67 };
+
+export function classifySchema(status: MigrationStatus): SchemaState {
+  if (status.unfinished.length > 0 || status.modified.length > 0) return "failed";
+  if (status.unknownToRelease.length > 0) return "newer_unknown";
+  if (status.pending.length > 0) return "missing";
+  return "compatible";
+}
+
 export const checksumOf = (sql: string): string => createHash("sha256").update(sql).digest("hex");
 
 const LOCK_KEY = 7_104_220_411; // arbitrary constant: "jaryan-ma migrate"

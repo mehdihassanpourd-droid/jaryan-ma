@@ -101,3 +101,39 @@ cleanup_old_releases() {
     fi
   done
 }
+
+# --- schema compatibility ---------------------------------------------------------------------------------------
+# How does the CURRENT database relate to the migration files of a given release? Read-only (uses `migrate check` of that release).
+#   schema_check <release dir>   sets SCHEMA_STATE and SCHEMA_DETAIL (migration names only), returns:
+#     0  compatible      every migration of the release is applied and the database has nothing the release does not know
+#     65 newer_unknown   the database has applied migrations the release does not contain. NOT proof of incompatibility,
+#                        but compatibility cannot be established from here, so anything automatic must stop
+#     66 failed          an unfinished migration, or an applied migration whose file differs
+#     67 missing         the release has migrations that are not applied yet
+#     68 undetermined    the database could not be read (so compatibility is unknown: treated like "not compatible")
+SCHEMA_STATE="" SCHEMA_DETAIL=""
+schema_check() {
+  local rel="${1:?release dir}" node out code
+  node="$rel/runtime/node"; [ -x "$node" ] || node="$(command -v node || true)"
+  SCHEMA_STATE="undetermined"; SCHEMA_DETAIL=""
+  [ -n "$node" ] && [ -f "$rel/app/dist/server/cli/migrate.mjs" ] || return 68
+  out="$( ( load_env "$JM_ENV_FILE"; cd "$rel/app" && "$node" dist/server/cli/migrate.mjs check ) 2>/dev/null )"; code=$?
+  SCHEMA_DETAIL="$(printf '%s' "$out" | tr -d '\n')"
+  case "$code" in
+    0)  SCHEMA_STATE="compatible"; return 0 ;;
+    65) SCHEMA_STATE="newer_unknown"; return 65 ;;
+    66) SCHEMA_STATE="failed"; return 66 ;;
+    67) SCHEMA_STATE="missing"; return 67 ;;
+    *)  SCHEMA_STATE="undetermined"; return 68 ;;
+  esac
+}
+
+# Plain-language explanation for a non-compatible state (used by rollback.sh, install.sh and verify.sh)
+schema_explain() {
+  case "$1" in
+    newer_unknown) echo "the database has applied migrations that this release does not contain: $SCHEMA_DETAIL. That does not prove the release is incompatible (an additive change may be harmless), but it cannot be established automatically." ;;
+    failed)        echo "a migration is unfinished or an applied migration differs from this release's file: $SCHEMA_DETAIL" ;;
+    missing)       echo "this release contains migrations that are not applied to the database yet: $SCHEMA_DETAIL" ;;
+    *)             echo "the database could not be read, so compatibility is unknown" ;;
+  esac
+}

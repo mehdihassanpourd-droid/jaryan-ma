@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { checksumOf, deployMigrations, MigrationError, migrationStatus, planMigrations, type AppliedRow } from "./migrate";
+import { checksumOf, classifySchema, deployMigrations, MigrationError, migrationStatus, planMigrations, SCHEMA_EXIT, type AppliedRow } from "./migrate";
 import { findMigrationsDir, readMigrations } from "./migrations";
 
 const m = (name: string, sql: string) => ({ name, sql });
@@ -24,6 +24,29 @@ describe("planMigrations (pure)", () => {
   });
   it("reports a database that is newer than the release without failing", () => {
     expect(planMigrations([a], [row(a.name, a.sql), row("003_future", "x")])).toMatchObject({ unknownToRelease: ["003_future"], ok: true });
+  });
+});
+
+describe("classifySchema: four distinct relationships between a database and a release", () => {
+  const a = m("001_a", "CREATE TABLE a(id int);");
+  const b = m("002_b", "CREATE TABLE b(id int);");
+  it("compatible: everything applied, nothing unknown", () => {
+    expect(classifySchema(planMigrations([a, b], [row(a.name, a.sql), row(b.name, b.sql)]))).toBe("compatible");
+  });
+  it("newer_unknown: the database has migrations the release does not contain (also when others are pending)", () => {
+    expect(classifySchema(planMigrations([a], [row(a.name, a.sql), row("003_future", "x")]))).toBe("newer_unknown");
+    expect(classifySchema(planMigrations([a, b], [row(a.name, a.sql), row("003_future", "x")]))).toBe("newer_unknown");
+  });
+  it("missing: the release has migrations that are not applied", () => {
+    expect(classifySchema(planMigrations([a, b], [row(a.name, a.sql)]))).toBe("missing");
+  });
+  it("failed: unfinished or modified outranks everything", () => {
+    expect(classifySchema(planMigrations([a], [row(a.name, a.sql, { finished_at: null })]))).toBe("failed");
+    expect(classifySchema(planMigrations([a], [row(a.name, "CREATE TABLE a(id bigint);"), row("003_future", "x")]))).toBe("failed");
+  });
+  it("uses distinct process exit codes", () => {
+    expect(new Set(Object.values(SCHEMA_EXIT)).size).toBe(4);
+    expect(SCHEMA_EXIT).toEqual({ compatible: 0, newer_unknown: 65, failed: 66, missing: 67 });
   });
 });
 
@@ -112,6 +135,43 @@ describe.skipIf(!external)("deployMigrations against a real PostgreSQL", () => {
       await c.end();
     }
   }, 60_000);
+
+  it("the `check` command reports each relationship with its own exit code and never prints connection details", async () => {
+    const { spawnSync } = await import("node:child_process");
+    const files = readMigrations();
+    const c = await open();
+    try {
+      const run = () => spawnSync("npx", ["tsx", "server/cli/migrate.ts", "check"], { cwd: process.cwd(), env: { ...process.env, DATABASE_URL: url }, encoding: "utf8" });
+      // earlier tests left the database fully migrated: compatible
+      await deployMigrations(c, files);
+      let r = run();
+      expect(r.status, r.stderr).toBe(0);
+      expect(JSON.parse(r.stdout)).toMatchObject({ state: "compatible" });
+      // newer_unknown
+      await c.query(`INSERT INTO _prisma_migrations (id, checksum, migration_name, started_at, finished_at, applied_steps_count) VALUES ('newer', 'x', '29990101000000_from_a_newer_release', now(), now(), 1)`);
+      r = run();
+      expect(r.status).toBe(65);
+      expect(JSON.parse(r.stdout)).toMatchObject({ state: "newer_unknown", unknownToRelease: ["29990101000000_from_a_newer_release"] });
+      expect(r.stdout + r.stderr).not.toContain("postgresql://");
+      await c.query(`DELETE FROM _prisma_migrations WHERE id = 'newer'`);
+      // missing
+      const last = files.at(-1)?.name ?? "";
+      const saved = (await c.query(`SELECT * FROM _prisma_migrations WHERE migration_name = $1`, [last])).rows[0];
+      await c.query(`DELETE FROM _prisma_migrations WHERE migration_name = $1`, [last]);
+      r = run();
+      expect(r.status).toBe(67);
+      expect(JSON.parse(r.stdout)).toMatchObject({ state: "missing", pending: [last] });
+      await c.query(`INSERT INTO _prisma_migrations (id, checksum, migration_name, started_at, finished_at, applied_steps_count) VALUES ($1,$2,$3,$4,$5,$6)`, [saved.id, saved.checksum, saved.migration_name, saved.started_at, saved.finished_at, saved.applied_steps_count]);
+      // failed
+      await c.query(`INSERT INTO _prisma_migrations (id, checksum, migration_name, started_at) VALUES ('stuck2', 'x', '77777777777777_stuck', now())`);
+      r = run();
+      expect(r.status).toBe(66);
+      expect(JSON.parse(r.stdout)).toMatchObject({ state: "failed", unfinished: ["77777777777777_stuck"] });
+      await c.query(`DELETE FROM _prisma_migrations WHERE id = 'stuck2'`);
+    } finally {
+      await c.end();
+    }
+  }, 120_000);
 
   it("holds an advisory lock: a second run at the same time is refused", async () => {
     const files = readMigrations();

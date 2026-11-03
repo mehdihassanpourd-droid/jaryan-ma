@@ -545,10 +545,44 @@ describe("offline deployment package (Phase 2A)", () => {
     expect(install).not.toMatch(/prisma migrate|migrate reset|DROP DATABASE|DROP TABLE/i);
   });
 
-  it("rollback changes only the application: it checks the target's checksums and never touches the database", () => {
-    const rollback = sh("deploy/rollback.sh");
+  it("rollback changes only the application: it checks the target's checksums and the schema, and never touches the database", () => {
+    const rollback = sh("deploy/rollback.sh").split("\n").filter((l) => !l.trim().startsWith("#")).join("\n");
     expect(rollback).toContain("sha256sum --check");
-    expect(rollback).not.toMatch(/migrate|psql|pg_restore|DROP|TRUNCATE/i);
+    expect(rollback).toContain("schema_check");
+    expect(rollback).not.toMatch(/migrate\.mjs|deploy --dry-run|psql|pg_restore|pg_dump|DROP|TRUNCATE|DELETE FROM/i);
+  });
+
+  it("schema compatibility: rollback refuses by default, the override only ever covers one state, and the installer never uses it", () => {
+    const rollback = sh("deploy/rollback.sh");
+    const install = sh("deploy/install.sh");
+    // refuses with distinct codes before switching anything
+    expect(rollback.indexOf("schema_check")).toBeLessThan(rollback.indexOf("point_to_release"));
+    expect(rollback).toMatch(/exit "\$SCHEMA_RC"/);
+    // the override is honoured only for "newer unknown" (65), never for failed (66), missing (67) or undetermined (68)
+    expect(rollback).toMatch(/\[ "\$SCHEMA_RC" = 65 \] && \[ "\$ACCEPT_NEWER" = 1 \]/);
+    // the installer's automatic rollback checks compatibility first, never activates the previous release without it, and never mentions the override as an action
+    const auto = install.slice(install.indexOf("warn \"release $VERSION is NOT healthy\""));
+    expect(auto.indexOf("schema_check")).toBeGreaterThan(-1);
+    expect(auto.indexOf("schema_check")).toBeLessThan(auto.indexOf("point_to_release"));
+    expect(auto).toContain("MANUAL RECOVERY REQUIRED");
+    expect(auto).toContain("die \"DEPLOYMENT FAILED");
+    expect(install).not.toContain("ACCEPT_NEWER");
+    // the only places that mention rollback.sh or the override are comments and warn messages (text for the person), never a command
+    expect(install.split("\n").filter((l) => /rollback\.sh|accept-newer-schema/.test(l) && !/^\s*(warn |#)/.test(l))).toEqual([]);
+  });
+
+  it("verify.sh tells the four schema states apart and exits with their own codes", () => {
+    const verify = sh("deploy/verify.sh");
+    for (const marker of ["NEWER UNKNOWN MIGRATIONS", "FAILED MIGRATIONS", "MISSING MIGRATIONS", "UNDETERMINED", "SCHEMA_EXIT=65", "SCHEMA_EXIT=66", "SCHEMA_EXIT=67", "SCHEMA_EXIT=68"]) expect(verify, marker).toContain(marker);
+  });
+
+  it("the health check reports a database ahead of the release as an explicit warning, with counts and never names", () => {
+    const runtime = read("server/runtime.ts");
+    expect(runtime).toContain("schema ahead of this release");
+    const message = runtime.slice(runtime.indexOf("schema ahead of this release"), runtime.indexOf("schema ahead of this release") + 260);
+    expect(message).toContain("unknownToRelease.length");
+    expect(message).not.toMatch(/unknownToRelease\.(join|map|\[)/);
+    expect(read("server/maintenance/service.ts")).toContain('key: "schema.ahead"');
   });
 
   it("the migrator never reverses, drops or resets", () => {
