@@ -1,0 +1,2 @@
+date,time_local,tester_code,operator,network,vpn,vpn_name,city,browser,verdict,page,image,catalog,apiPing,apiCatalog,session,cart,order,stability,payment,notes
+2026-11-04,09:30,T1,mci,mobile,off,,تهران,chrome,pass,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,نمونهٔ پر شده؛ این سطر را پاک کنید
