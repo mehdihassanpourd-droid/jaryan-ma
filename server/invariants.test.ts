@@ -503,6 +503,18 @@ describe("store reliability tooling stays read-only, local and redacted (Phase 1
   });
 });
 
+describe("GitHub workflow files are valid YAML (a broken file silently never runs)", () => {
+  for (const file of readdirSync(join(ROOT, ".github/workflows")).filter((f) => f.endsWith(".yml"))) {
+    it(`${file}: no unquoted value contains ": " or " #" in a way YAML rejects`, () => {
+      const lines = read(`.github/workflows/${file}`).split("\n");
+      lines.forEach((line, i) => {
+        const m = /^\s*(?:-\s+)?(name|description|group|if|run-name):\s+([^"'|>\s{\[&*!%@`].*)$/.exec(line);
+        if (m && /:\s/.test(m[2] as string)) throw new Error(`${file}:${i + 1}: an unquoted value contains ": " (YAML parse error, the workflow would never run): ${line.trim()}`);
+      });
+    });
+  }
+});
+
 describe("offline deployment package (Phase 2A)", () => {
   const sh = (file: string) => read(file);
 

@@ -59,7 +59,7 @@ jobs:
           node-version-file: .node-version
           cache: npm
 
-      - name: Install dependencies (build time only: the package itself needs no network)
+      - name: "Install dependencies (build time only; the package itself needs no network)"
         run: npm ci
 
       - name: Build the package
