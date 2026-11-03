@@ -1,3 +1,5 @@
+import { AlertManager, alertSinksFromEnv } from "./alerts/alerts";
+import { createLogger, type Logger } from "./observability/logger";
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -28,12 +30,10 @@ import { LocalDiskStorage } from "./storage/local-disk";
 import { createS3Client, S3Storage } from "./storage/s3";
 import type { ObjectStorage } from "../src/domain/product/ports";
 
-export type Logger = (level: "info" | "warn" | "error", event: string, detail?: Record<string, unknown>) => void;
+export type { Logger } from "./observability/logger";
 
-/** One JSON object per line: easy to ship to any log collector. Never pass secrets in `detail`. */
-export const jsonLogger: Logger = (level, event, detail) => {
-  console.log(JSON.stringify({ time: new Date().toISOString(), level, event, ...detail }));
-};
+/** One JSON object per line, redacted (server/observability/logger.ts): easy to ship to any log collector. Never pass secrets in `detail` anyway. */
+export const jsonLogger: Logger = createLogger({ base: { service: "jaryan-api" } });
 
 export interface Database {
   db: Db;
@@ -187,6 +187,7 @@ export async function createRuntime(config: Config, log: Logger = jsonLogger): P
     // An order that takes (or gives back) stock can sell a piece out (or bring it back): refresh what the storefront sees.
     onStockChanged: (ids) => background(publisher.sync(ids.map((id) => ({ id }))).catch((error) => log("warn", "snapshot_sync_failed", { error: String(error) }))),
     shipmentSms: config.shipmentSmsEnabled,
+    alerts: new AlertManager(alertSinksFromEnv(process.env), { onSinkError: (sink) => log("warn", "alert_sink_failed", { sink }) }),
     background,
     log: (event, detail) => log("warn", event, detail),
     otpPolicy: { ...DEFAULT_OTP_POLICY, dailyBudget: config.sms.dailyLimit },

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readMigrations } from "../db/migrations";
-import { decryptFile, encryptFile, parseBackupKey, pgEnv, pruneBackups, restoreTest, sha256File, takeBackup } from "./backup-tools";
+import { decryptFile, encryptFile, parseBackupKey, pgEnv, pruneBackups, restoreTest, sha256File, takeBackup, verifyBackup } from "./backup-tools";
 
 let dir: string;
 beforeAll(async () => void (dir = await mkdtemp(join(tmpdir(), "jm-backup-test-"))));
@@ -109,8 +109,19 @@ describe.skipIf(!external || !haveTools)("backup and restore test against a real
     const result = await restoreTest({ file: backup.file, manifestFile: backup.manifestFile, scratchAdminUrl: external as string, encryptionKey: key });
     expect(result).toMatchObject({ ok: true });
     expect(result.notes.join(" ")).toContain("match the manifest");
+    expect(result.notes.join(" ")).toContain("table contents");
+    expect(Object.keys(backup.manifest.contentChecksums ?? {})).toEqual(Object.keys(backup.manifest.tables));
     const left = await admin.query(`SELECT datname FROM pg_database WHERE datname LIKE 'jm_restore_test_%'`);
     expect(left.rows).toEqual([]); // scratch database dropped
+  }, 120_000);
+
+  it("verifies a real backup offline at the 'full' level, and never calls it restored", async () => {
+    const backup = await takeBackup({ databaseUrl: sourceUrl, directory: dir, encryptionKey: key });
+    const r = await verifyBackup({ file: backup.file, manifestFile: backup.manifestFile, encryptionKey: key });
+    expect(r).toMatchObject({ ok: true, level: "full" });
+    expect(r.notes.join(" ")).toContain("readable by pg_restore");
+    expect((await readdir(dir)).filter((n) => n.endsWith(".tmp"))).toEqual([]);
+    expect((await verifyBackup({ file: backup.file, manifestFile: backup.manifestFile, encryptionKey: randomBytes(32).toString("base64") })).ok).toBe(false);
   }, 120_000);
 
   it("fails the restore test for a corrupted file, a wrong key and a manifest mismatch", async () => {
@@ -134,6 +145,25 @@ describe.skipIf(!external || !haveTools)("backup and restore test against a real
     expect(corrupted).toMatchObject({ ok: false });
     expect(corrupted.notes.join(" ")).toContain("checksum");
     expect((await admin.query(`SELECT datname FROM pg_database WHERE datname LIKE 'jm_restore_test_%'`)).rows).toEqual([]);
+  }, 120_000);
+
+  it("detects changed data that keeps the same row count (content fingerprints), and still accepts an older manifest without them", async () => {
+    const backup = await takeBackup({ databaseUrl: sourceUrl, directory: dir, encryptionKey: key });
+    const manifest = JSON.parse(await readFile(backup.manifestFile, "utf8"));
+    manifest.contentChecksums.Vendor = "123";
+    const tampered = join(dir, "content.manifest.json");
+    await writeFile(tampered, JSON.stringify(manifest));
+    const bad = await restoreTest({ file: backup.file, manifestFile: tampered, scratchAdminUrl: external as string, encryptionKey: key });
+    expect(bad.ok).toBe(false);
+    expect(bad.notes.join(" ")).toContain("table Vendor: content differs");
+    delete manifest.contentChecksums;
+    const legacy = join(dir, "legacy.manifest.json");
+    await writeFile(legacy, JSON.stringify(manifest));
+    const old = await restoreTest({ file: backup.file, manifestFile: legacy, scratchAdminUrl: external as string, encryptionKey: key });
+    expect(old.ok).toBe(true);
+    expect(old.notes.join(" ")).toContain("older manifest");
+    const off = await takeBackup({ databaseUrl: sourceUrl, directory: dir, encryptionKey: key, contentChecksums: false });
+    expect(off.manifest.contentChecksums).toBeUndefined();
   }, 120_000);
 
   it("refuses to back up without an encryption key unless explicitly allowed", async () => {

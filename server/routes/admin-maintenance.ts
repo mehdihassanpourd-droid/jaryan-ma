@@ -31,6 +31,7 @@ export function createMaintenanceAdminRoutes(maintenance: MaintenanceService): A
     if (sub === "/health" && method === "GET") {
       return json(await maintenance.healthFor(op));
     }
+    if (sub === "/reconciliation" && method === "GET") return json(await maintenance.reconciliationFor(op));
     if (sub === "/backup-status" && method === "GET") {
       return json(await maintenance.backupStatusFor(op));
     }

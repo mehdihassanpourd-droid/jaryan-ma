@@ -17,6 +17,8 @@ import { PrismaAccountStore } from "./customers/prisma-account-store";
 import { PrismaCustomerStore } from "./customers/prisma-store";
 import type { Db } from "./db/client";
 import { PrismaMaintenanceStore } from "./maintenance/prisma-store";
+import type { AlertPublisher } from "./alerts/alerts";
+import { buildReconciliationReport } from "./maintenance/reconciliation";
 import { MaintenanceService, type HealthProbes, type MaintenanceSettings, DEFAULT_MAINTENANCE_SETTINGS } from "./maintenance/service";
 import { createMaintenanceAdminRoutes } from "./routes/admin-maintenance";
 import { createOrderAdminRoutes } from "./routes/admin-orders";
@@ -54,7 +56,9 @@ export interface PlatformOptions {
   otpPolicy?: OtpPolicy;
   customerAuth?: Partial<CustomerAuthSettings>;
   maintenance?: Partial<MaintenanceSettings>;
-  probes: Omit<HealthProbes, "overdueDeletions">;
+  probes: Omit<HealthProbes, "overdueDeletions" | "reconciliation">;
+  /** Where maintenance alerts go (server/alerts). Default: nowhere. */
+  alerts?: AlertPublisher;
 }
 
 /** Wires customers, support and maintenance on top of one database. Shared by the server and the tests. */
@@ -81,9 +85,10 @@ export function createPlatformServices(o: PlatformOptions) {
   const orderAdmin = new OrderAdminService(o.db, shipmentNotifier.enabled);
   const maintenance = new MaintenanceService(
     maintenanceStore,
-    { ...o.probes, overdueDeletions: async () => (await accountStore.listDueDeletions(new Date(clock().getTime() - 24 * 3600_000), 1000)).length },
+    { ...o.probes, reconciliation: (now, scan) => buildReconciliationReport(o.db, { now, ...scan }), overdueDeletions: async () => (await accountStore.listDueDeletions(new Date(clock().getTime() - 24 * 3600_000), 1000)).length },
     { ...DEFAULT_MAINTENANCE_SETTINGS, ...o.maintenance },
     clock,
+    o.alerts,
   );
 
   const adminRoutes: AdminRouter[] = [createSupportAdminRoutes(support), createMaintenanceAdminRoutes(maintenance), createOrderAdminRoutes(orderAdmin, orderLifecycle, shipmentNotifier), createShippingAdminRoutes(shippingConfig, clock)];

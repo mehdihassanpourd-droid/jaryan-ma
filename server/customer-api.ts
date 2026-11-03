@@ -41,6 +41,11 @@ export interface CustomerApiDeps {
   limiter: RateLimiter;
   /** Cache for the public health status so the endpoint cannot be used to hammer the probes. */
   healthCacheMs?: number;
+  /** /readyz: how long a READY answer is reused (default 3 s). A not-ready answer is reused for `readyFailureCacheMs` only (default 1 s), so recovery shows quickly. */
+  readyCacheMs?: number;
+  readyFailureCacheMs?: number;
+  /** /readyz requests allowed per client address per minute before 429 (default 300). */
+  readyPerMinute?: number;
   clock?: () => Date;
   log?: (event: string, detail?: Record<string, unknown>) => void;
 }
@@ -67,7 +72,7 @@ function profileView(c: CustomerRecord) {
 }
 
 /** True when the request path belongs to this module. */
-export const isCustomerApiPath = (pathname: string) => pathname === "/health" || pathname.startsWith(`${PREFIX}customer/`) || pathname.startsWith(`${PREFIX}public/`);
+export const isCustomerApiPath = (pathname: string) => pathname === "/health" || pathname === "/readyz" || pathname.startsWith(`${PREFIX}customer/`) || pathname.startsWith(`${PREFIX}public/`);
 
 /**
  * Customer-facing and public API (the admin API is separate, with its own cookie, origins and CSRF token).
@@ -79,6 +84,20 @@ export function createCustomerApi(deps: CustomerApiDeps) {
   const clock = deps.clock ?? (() => new Date());
   const allowedOrigins = deps.customerOrigins.split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean);
   let healthCache: { at: number; report: HealthReport } | null = null;
+  type Readiness = Awaited<ReturnType<MaintenanceService["runReadiness"]>>;
+  let readyCache: { at: number; value: Readiness } | null = null;
+  let readyInFlight: Promise<Readiness> | null = null;
+  /** At most one database probe at a time, and at most one per TTL: a burst of requests costs one probe, not one each. */
+  async function readiness(): Promise<Readiness> {
+    const now = clock().getTime();
+    const ttl = readyCache?.value.ready ? (deps.readyCacheMs ?? 3000) : (deps.readyFailureCacheMs ?? 1000);
+    if (readyCache && now - readyCache.at < ttl) return readyCache.value;
+    readyInFlight ??= deps.maintenance
+      .runReadiness()
+      .then((value) => (readyCache = { at: clock().getTime(), value }).value)
+      .finally(() => void (readyInFlight = null));
+    return readyInFlight;
+  }
 
   const corsFor = (request: Request, credentials: boolean): Record<string, string> => {
     const origin = request.headers.get("origin")?.replace(/\/+$/, "");
@@ -108,6 +127,14 @@ export function createCustomerApi(deps: CustomerApiDeps) {
       if (!healthCache || now - healthCache.at > (deps.healthCacheMs ?? 30_000)) healthCache = { at: now, report: await deps.maintenance.runHealth() };
       const view = publicHealth(healthCache.report);
       return json(view, view.status === "down" ? 503 : 200);
+    }
+    if (url.pathname === "/readyz" && method === "GET") {
+      // Readiness for load balancers / watchdogs: 200 only when the database answers and all migrations are applied.
+      // Public, so it is throttled per client and answered from a very short cache (see `readiness`); clients/proxies must not cache it.
+      const limit = deps.limiter.hit(`readyz:${ip(request)}`, deps.readyPerMinute ?? 300, 60_000);
+      if (!limit.allowed) return json({ error: "rate_limited" }, 429, { "retry-after": String(limit.retryAfterSeconds) });
+      const ready = await readiness();
+      return json({ ready: ready.ready, checkedAt: ready.checkedAt.toISOString(), checks: ready.checks }, ready.ready ? 200 : 503);
     }
     if (url.pathname === `${PREFIX}public/faq` && method === "GET") {
       const response = json({ categories: await deps.support.publicFaq() }, 200, { "cache-control": "public, max-age=300" });

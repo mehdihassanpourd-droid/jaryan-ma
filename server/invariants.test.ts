@@ -411,3 +411,94 @@ describe("the visual identity follows the official logo", () => {
     expect(read("src/components/layout/Logo.tsx")).toContain("/brand/jaryan-ma-mark-");
   });
 });
+
+describe("store reliability tooling stays read-only, local and redacted (Phase 1)", () => {
+  const WRITES = /\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(|\$executeRaw|\$queryRawUnsafe|\bINSERT\b|\bUPDATE\b\s+\w|\bDELETE\s+FROM\b|\bTRUNCATE\b/;
+
+  it("the reconciliation modules never write to the database", () => {
+    for (const file of ["src/domain/maintenance/reconciliation.ts", "server/maintenance/reconciliation.ts"]) {
+      expect(read(file), file).not.toMatch(WRITES);
+      expect(read(file), file).not.toMatch(/from "node:(fs|child_process|http|https|net)/);
+    }
+  });
+
+  it("every reconciliation query is bounded (take) and uses keyset paging", () => {
+    const source = read("server/maintenance/reconciliation.ts");
+    const finds = source.match(/\.(findMany|findFirst)\(/g) ?? [];
+    expect(finds.length).toBeGreaterThanOrEqual(4);
+    expect(source.match(/take: Math\.max\(1, Math\.min\(page\.take, MAX_PAGE_SIZE\)\)/g)).toHaveLength(2); // orders and products are both read a bounded page at a time
+    expect(source).toMatch(/number: \{ lt: /);
+    expect(source).toMatch(/id: \{ gt: /);
+    expect(source).toContain("MAX_PAGE_SIZE");
+  });
+
+  it("the reconciliation query selects no personal column", () => {
+    const source = read("server/maintenance/reconciliation.ts");
+    expect(source).not.toMatch(/\b(customer|shipping|customerNote|phone|firstName|lastName|email|address|recipient)\b\s*:/);
+  });
+
+  it("only the optional webhook sink may reach the network, and the restore drill refuses the production server", () => {
+    const alerts = read("server/alerts/alerts.ts");
+    expect(alerts.match(/fetchImpl\(|fetch\(/g)?.length).toBe(1);
+    expect(alerts).not.toMatch(/https?:\/\/[a-z0-9.-]+\.[a-z]{2,}/i);
+    const drill = read("scripts/maintenance/restore-drill.sh");
+    expect(drill).toContain("the scratch server is the production server");
+    expect(drill).not.toMatch(/\bDROP\b|pg_restore\b.*DATABASE_URL/);
+  });
+
+  it("the HTTP entry point wraps the handler with request ids and redacted logging", () => {
+    expect(read("server/main.ts")).toContain("observeRequests(runtime.handle");
+    expect(read("server/runtime.ts")).toContain("createLogger");
+  });
+
+  it("request bodies, headers and cookies are never passed to the logger by the request wrapper", () => {
+    const wrapper = read("server/observability/logger.ts");
+    expect(wrapper).not.toMatch(/request\.(text|json|formData|arrayBuffer|body)\b/);
+    expect(wrapper).not.toMatch(/headers\.get\("(cookie|authorization)"\)/i);
+  });
+
+  describe("systemd templates and runbooks", () => {
+    const units = readdirSync(join(ROOT, "ops/systemd")).filter((f) => /\.(service|timer)$/.test(f));
+
+    it("ship a service and a timer for backup, verification and restore drill", () => {
+      for (const name of ["jaryan-backup", "jaryan-backup-verify", "jaryan-restore-drill"]) {
+        expect(units, name).toContain(`${name}.service`);
+        expect(units, name).toContain(`${name}.timer`);
+        expect(read(`ops/systemd/${name}.timer`)).toMatch(/OnCalendar=.+\nRandomizedDelaySec=\d+\nPersistent=true/);
+      }
+    });
+
+    it("run unprivileged and hardened, read secrets from environment files, and hold no secret themselves", () => {
+      for (const file of units.filter((f) => f.endsWith(".service"))) {
+        const text = read(`ops/systemd/${file}`);
+        expect(text, file).toMatch(/^User=jaryan$/m);
+        expect(text, file).not.toMatch(/^User=root/m);
+        expect(text, file).toMatch(/^EnvironmentFile=\/etc\/jaryan-ma\//m);
+        for (const hardening of ["NoNewPrivileges=yes", "ProtectSystem=strict", "PrivateTmp=yes", "UMask=0077"]) expect(text, `${file} ${hardening}`).toContain(hardening);
+        expect(text, file).not.toMatch(/postgres(ql)?:\/\/[^\s]*:[^\s@]+@|BACKUP_ENCRYPTION_KEY=\S|PASSWORD=\S/);
+      }
+    });
+
+    it("the restore-drill unit can only run the guarded script against the scratch server", () => {
+      const text = read("ops/systemd/jaryan-restore-drill.service");
+      expect(text).toContain("ExecStart=/opt/jaryan-ma/scripts/maintenance/restore-drill.sh");
+      expect(text).toContain("EnvironmentFile=/etc/jaryan-ma/restore-drill.env");
+      expect(text).not.toContain("ALLOW_SAME_SERVER");
+      expect(read("ops/systemd/restore-drill.env.example")).toContain("RESTORE_TEST_ADMIN_URL=");
+      expect(read("ops/systemd/restore-drill.env.example")).not.toMatch(/DATABASE_URL/);
+    });
+
+    it("example environment files contain no real secret and real ones are not tracked", () => {
+      expect(read("ops/systemd/ops.env.example")).toMatch(/^BACKUP_ENCRYPTION_KEY=$/m);
+      const tracked = execFileSync("git", ["ls-files", "ops"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
+      expect(tracked.filter((f) => /\.env$/.test(f))).toEqual([]);
+    });
+
+    it("the runbooks cover rollback, failed deployments, migrations and the proxy request-id rule", () => {
+      const rollback = read("docs/maintenance/ROLLBACK-FA.md");
+      for (const must of ["بازگشت برنامه", "استقرار ناموفق", "forward-fix", "هرگز کورکورانه معکوس نکنید", "prisma migrate resolve --rolled-back"]) expect(rollback, must).toContain(must);
+      expect(read("docs/maintenance/SYSTEMD-FA.md")).toContain("0700");
+      expect(read("docs/maintenance/INCIDENT-RESPONSE-FA.md")).toContain("TRUST_PROXY=true");
+    });
+  });
+});
