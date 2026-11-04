@@ -10,7 +10,7 @@ import { lookup } from "node:dns/promises";
 import { randomBytes } from "node:crypto";
 import { createClient, DEFAULT_BASE } from "./lib/arvan.mjs";
 import { CONFIRM_PHRASE, costCeiling } from "./lib/cost.mjs";
-import { collect, deploy, destroy, dryRun, hosts } from "./lib/orchestrator.mjs";
+import { collect, deploy, destroy, dryRun, explainAuth, hosts, regionCodeOf } from "./lib/orchestrator.mjs";
 import { createSshRemote } from "./lib/remote.mjs";
 import { describe, sweep } from "./lib/reaper.mjs";
 import { loadCriteria } from "../scripts/summarize.mjs";
@@ -26,7 +26,7 @@ function stagePackage() {
 async function regionCodes(client, region) {
   if (region) return [region];
   const list = await client.regions();
-  const codes = list.map((r) => r.code ?? r.region ?? r.slug ?? r.id ?? r.name).filter(Boolean);
+  const codes = list.map(regionCodeOf).filter(Boolean).map(String);
   if (codes.length === 0) throw new Error("the account has no regions to look in");
   return codes;
 }
@@ -66,6 +66,14 @@ export async function main(env, deps = {}) {
   };
   const remoteFactory = deps.remoteFactory ?? (({ ip, identity }) => createSshRemote({ ip, identity }));
   try {
+    if (action !== "dry-run") {
+      // every other action first finds the header form the server accepts (read-only requests); a failure here is loud
+      const auth = await client.detectAuth();
+      if (!auth.ok) {
+        out.error = `authentication failed: ${explainAuth(auth)}`;
+        return finish(1, `ERROR: ${out.error}`);
+      }
+    }
     if (action === "dry-run") {
       Object.assign(out, await dryRun({ client, region }));
       return finish(out.ok ? 0 : 1, out.checks.map((c) => `${c.ok ? "OK  " : "FAIL"} ${c.name}: ${c.detail}`).join("\n"));
