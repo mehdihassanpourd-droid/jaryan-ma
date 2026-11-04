@@ -32,22 +32,54 @@ export function pickImage(list) {
 export const findIpv4 = (server) => JSON.stringify(server.addresses ?? server.ips ?? server.ip ?? server.floating_ip ?? "").match(/\b(?!10\.|127\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)\d{1,3}(?:\.\d{1,3}){3}\b/)?.[0] ?? null;
 
 // ---- dry run: READ ONLY -------------------------------------------------------------------------------------------------
+export const regionCodeOf = (r) => r.code ?? r.region ?? r.slug ?? r.id ?? r.name;
+
+export function explainAuth(auth) {
+  const tried = auth.tried.map((t) => `${t.scheme}=${t.status || "no answer"}`).join(", ");
+  if (auth.ok) return `accepted with header form "${auth.scheme}"`;
+  if (auth.diagnosis === "forbidden") return `HTTP 403 with header form "${auth.scheme}": the key IS recognised, but its role does not allow reading this. Check the machine user's role in the panel (this tool never changes permissions).`;
+  if (auth.diagnosis === "unreachable") return `no HTTP answer from the API (${tried}); a network or DNS problem, not a key problem`;
+  return `HTTP 401 for every known header form (${tried}). The server does not recognise the key. A missing role would give 403, not 401. Likely: a wrong, revoked or not-yet-active key, a key from another account, or a key restricted to certain IP addresses.`;
+}
+
 export async function dryRun({ client, region }) {
   const out = { action: "dry-run", ok: true, region, checks: [] };
+  const add = (name, ok, detail) => {
+    out.checks.push({ name, ok, detail });
+    if (!ok) out.ok = false;
+  };
   const check = async (name, fn) => {
     try {
-      out.checks.push({ name, ok: true, detail: await fn() });
+      add(name, true, await fn());
     } catch (e) {
-      out.ok = false;
-      out.checks.push({ name, ok: false, detail: e.message });
+      add(name, false, e.message);
     }
   };
-  await check("regions", async () => `${(await client.regions()).length} region(s)`);
+
+  const auth = await client.detectAuth();
+  out.auth = { ok: auth.ok, scheme: auth.scheme ?? null, diagnosis: auth.diagnosis ?? null, tried: auth.tried, keyNotes: auth.keyNotes, shape: auth.shape };
+  add("authentication", auth.ok, explainAuth(auth));
+  add("key shape", true, `${auth.shape.length} characters, ${auth.shape.uuidLike ? "UUID-like" : "not UUID-like"}${auth.keyNotes.length ? `; cleaned: ${auth.keyNotes.join("; ")}` : ""}`);
+  if (!auth.ok) return out; // nothing else can work: do not make more calls
+
+  let regions = [];
+  await check("regions", async () => {
+    regions = await client.regions();
+    return `${regions.length} region(s): ${regions.map(regionCodeOf).join(", ")}`;
+  });
+  if (!out.ok) return out;
+  if (!region) {
+    if (regions.length === 1) region = String(regionCodeOf(regions[0]));
+    else {
+      add("region", false, `choose one and run again with the region input: ${regions.map(regionCodeOf).join(", ")}`);
+      return out;
+    }
+    out.region = region;
+  }
   for (const kind of KINDS) await check(`list ${kind}`, async () => `${(await client.list(region, kind)).length} existing`);
   await check("flavor 1 vCPU / 1 GB / 25 GB", async () => `selected ${pickFlavor(await client.list(region, "sizes")).id ?? "?"}`);
   await check("image Ubuntu 24.04", async () => `selected ${pickImage(await client.list(region, "images")).name}`);
-  const mutating = client.log.calls.filter((c) => c.method !== "GET");
-  if (mutating.length) throw new Error("dry-run attempted a non-read call");
+  if (client.log.calls.some((c) => c.method !== "GET")) throw new Error("dry-run attempted a non-read call");
   return out;
 }
 

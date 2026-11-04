@@ -3,7 +3,7 @@
 // against the real API is what verifies the shapes. No network except 127.0.0.1.
 import { createServer } from "node:http";
 
-export async function startMockArvan({ apiKey = "test-key-0123456789abcdef" } = {}) {
+export async function startMockArvan({ apiKey = "test-key-0123456789abcdef", authFormat = (k) => `Apikey ${k}` } = {}) {
   const state = {
     regions: [{ code: "ir-test-1", name: "Test DC" }],
     store: { servers: [], "floating-ips": [], volumes: [], snapshots: [], "ssh-keys": [] },
@@ -11,7 +11,7 @@ export async function startMockArvan({ apiKey = "test-key-0123456789abcdef" } = 
     images: [{ id: "img-1", name: "Ubuntu 24.04", version: "24.04" }, { id: "img-2", name: "Debian 12" }],
     dns: [],
     calls: [],
-    faults: { failNext: new Map(), permanentDelete: new Set(), failList: new Set(), noIp: false },
+    faults: { failNext: new Map(), permanentDelete: new Set(), failList: new Set(), noIp: false, forbidAll: false },
     nextId: 1,
   };
   const server = createServer((req, res) => {
@@ -22,7 +22,8 @@ export async function startMockArvan({ apiKey = "test-key-0123456789abcdef" } = 
       const key = `${req.method} ${url.pathname}`;
       state.calls.push({ method: req.method, path: url.pathname, auth: req.headers.authorization, body });
       const send = (status, obj) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
-      if (req.headers.authorization !== `Apikey ${apiKey}`) return send(401, { message: "unauthorized" });
+      if (req.headers.authorization !== authFormat(apiKey)) return send(401, { message: "unauthorized" });
+      if (state.faults.forbidAll) return send(403, { message: "forbidden" });
       const left = state.faults.failNext.get(key);
       if (left > 0) { state.faults.failNext.set(key, left - 1); return send(500, { message: "boom" }); }
       if (url.pathname === "/ecc/v1/regions") return send(200, { data: state.regions });
