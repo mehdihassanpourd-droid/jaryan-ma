@@ -11,7 +11,7 @@ export async function startMockArvan({ apiKey = "test-key-0123456789abcdef", aut
     images: [{ id: "img-1", name: "Ubuntu 24.04", version: "24.04" }, { id: "img-2", name: "Debian 12" }],
     dns: [],
     calls: [],
-    faults: { failNext: new Map(), permanentDelete: new Set(), failList: new Set(), noIp: false, forbidAll: false },
+    faults: { failNext: new Map(), permanentDelete: new Set(), failList: new Set(), noIp: false, forbidAll: false, kindStatus: new Map() },
     nextId: 1,
   };
   const server = createServer((req, res) => {
@@ -33,6 +33,7 @@ export async function startMockArvan({ apiKey = "test-key-0123456789abcdef", aut
         if (kind === "sizes" || kind === "images") return send(200, { data: state[kind] });
         const list = state.store[kind];
         if (!list) return send(404, {});
+        if (req.method === "GET" && state.faults.kindStatus.has(kind)) return send(state.faults.kindStatus.get(kind), { message: "refused" });
         if (req.method === "GET") return state.faults.failList.has(kind) ? send(500, { message: "list down" }) : send(200, { data: list });
         if (req.method === "POST") {
           const b = JSON.parse(body || "{}");

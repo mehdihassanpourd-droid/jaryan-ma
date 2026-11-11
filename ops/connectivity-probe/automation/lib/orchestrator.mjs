@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { KINDS } from "./arvan.mjs";
+import { KINDS, OPTIONAL_KINDS } from "./arvan.mjs";
 import { buildUserData } from "./cloudinit.mjs";
 import { costCeiling, estimateCost, makeName, parseName, validatePlan } from "./cost.mjs";
 import { sweep } from "./reaper.mjs";
@@ -76,7 +76,14 @@ export async function dryRun({ client, region }) {
     }
     out.region = region;
   }
-  for (const kind of KINDS) await check(`list ${kind}`, async () => `${(await client.list(region, kind)).length} existing`);
+  for (const kind of KINDS) {
+    try {
+      add(`list ${kind}`, true, `${(await client.list(region, kind)).length} existing`);
+    } catch (e) {
+      if (OPTIONAL_KINDS.has(kind) && (e.status === 403 || e.status === 404)) add(`list ${kind}`, true, `NOT CHECKED (HTTP ${e.status}): not needed, this tool never creates it`);
+      else add(`list ${kind}`, false, e.message);
+    }
+  }
   await check("flavor 1 vCPU / 1 GB / 25 GB", async () => `selected ${pickFlavor(await client.list(region, "sizes")).id ?? "?"}`);
   await check("image Ubuntu 24.04", async () => `selected ${pickImage(await client.list(region, "images")).name}`);
   if (client.log.calls.some((c) => c.method !== "GET")) throw new Error("dry-run attempted a non-read call");

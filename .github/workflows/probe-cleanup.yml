@@ -48,6 +48,7 @@ jobs:
         id: sweep
         run: node ops/connectivity-probe/automation/cli.mjs
 
+      # One issue, not one comment every 3 hours: a new comment is added only when the last activity is more than 20 hours old.
       - name: Tell the owner when the clean-up could not be confirmed
         if: ${{ failure() }}
         env:
@@ -55,12 +56,29 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           title="هشدار: پاکسازی سرور آزمایشی تأیید نشد"
-          body="پاکسازی خودکار نتوانست تأیید کند که همهٔ منابع آزمایشی (نام‌هایی که با jm-probe- شروع می‌شوند) حذف شده‌اند. ممکن است هزینه ادامه پیدا کند. لطفاً در پنل ابر آروان هر سرور، IP، دیسک یا اسنپ‌شات با این پیشوند را حذف کنید. جزئیات: $RUN_URL"
+          body="پاکسازی خودکار نتوانست تأیید کند که همهٔ منابع آزمایشی (نام‌هایی که با jm-probe- شروع می‌شوند) حذف شده‌اند. ممکن است هزینه ادامه پیدا کند. لطفاً در پنل ابر آروان هر سرور، دیسک یا اسنپ‌شات با این پیشوند را حذف کنید. جزئیات: $RUN_URL"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq '.[0].number // empty')
+          if [ -z "$existing" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          else
+            updated=$(gh issue view "$existing" --repo "$GITHUB_REPOSITORY" --json updatedAt --jq .updatedAt)
+            age=$(( $(date +%s) - $(date -d "$updated" +%s) ))
+            if [ "$age" -gt 72000 ]; then gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"; fi
+          fi
+
+      # A confirmed-clean sweep closes the open alert, so the alert never stays up after the cause is gone.
+      - name: Close the alert once a sweep is confirmed clean
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="هشدار: پاکسازی سرور آزمایشی تأیید نشد"
+          # a run that was skipped (no secret) confirmed nothing, so it must not close the alert
+          if grep -q '"skipped"' probe-out/report.json; then exit 0; fi
           existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
-            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
-          else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+            gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --comment "پاکسازی خودکار دوباره تأیید کرد که منبعی با پیشوند jm-probe- باقی نمانده است ($RUN_URL). این هشدار بسته شد."
           fi
 
       - name: Keep the report
