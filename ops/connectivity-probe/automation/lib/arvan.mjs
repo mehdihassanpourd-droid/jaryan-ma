@@ -10,7 +10,12 @@ export const ENDPOINTS = {
   remove: (region, kind, id) => `/ecc/v1/regions/${region}/${kind}/${id}`,
   dnsRecords: (domain) => `/cdn/4.0/domains/${domain}/dns-records`,
 };
-export const KINDS = ["servers", "floating-ips", "volumes", "snapshots", "ssh-keys"]; // deletion order: servers first
+export const KINDS = ["servers", "volumes", "snapshots", "floating-ips", "ssh-keys"]; // deletion order: servers first
+// What the deploy actually CREATES and what costs money: a server (and the disks and snapshots that can outlive it). These MUST be
+// listable for a sweep to count as verified. Floating IPs and SSH keys are never created by this tool (the SSH key travels in the
+// cloud-init data); a real run showed the floating-ips path does not exist (404) and the SSH-key list needs a permission the
+// read-only role lacks (403). For those two, "cannot be listed" is reported as NOT CHECKED, not as a failure. See reaper.mjs.
+export const OPTIONAL_KINDS = new Set(["floating-ips", "ssh-keys"]);
 
 export class ArvanError extends Error {
   constructor(message, { status = 0, retryable = false } = {}) {
